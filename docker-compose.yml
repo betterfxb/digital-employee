@@ -1,0 +1,7 @@
+services:
+  web:
+    build: ./apps/web
+    ports: ["3001:3001"]
+    env_file: ./apps/web/.env.example
+    command: sh -c "pnpm install && pnpm build && pnpm start"
+    # P0仅跑单体；PG/Redis待S5后按01-architecture接入

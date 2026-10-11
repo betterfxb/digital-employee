@@ -1,0 +1,21 @@
+# 依赖与构建产物
+node_modules/
+apps/web/node_modules/
+.next/
+apps/web/.next/
+out/
+dist/
+
+# 本地运行日志与测试产物
+*.log
+apps/web/scripts/.tmp-crypto/
+.playwright-mcp/
+
+# 本地环境变量（真实密钥永不进仓；只提交 .env.example 模板）
+.env
+.env.local
+.env.*.local
+
+# 系统文件
+.DS_Store
+Thumbs.db

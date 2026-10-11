@@ -1,0 +1,43 @@
+export const dynamic = 'force-dynamic'; // S18: 设置读接口禁静态预渲染
+import { ok, fail } from '@/lib/response';
+import { getRepos } from '@/lib/repo';
+import { settingsConfig } from '@/config/settings.config';
+
+/** GET /api/settings（系统设置全量，shop_name取当前主账号展示名） */
+export async function GET() {
+  return ok(getRepos().settings.get());
+}
+
+/** PATCH /api/settings（shop_name改主账号展示名；font/theme白名单校验；前端保存后即时applySettings） */
+export async function PATCH(req: Request) {
+  const body = await req.json().catch(() => null);
+  if (!body) return fail('FATAL', '请求体非法');
+  const repos = getRepos();
+  if (body.shop_name !== undefined) {
+    const name = String(body.shop_name).trim();
+    if (name.length < settingsConfig.shopNameMinLen || name.length > settingsConfig.shopNameMaxLen) {
+      return fail('FATAL', `店铺名称长度需${settingsConfig.shopNameMinLen}-${settingsConfig.shopNameMaxLen}字`);
+    }
+    repos.accounts.rename(repos.accounts.getActive(), name);
+  }
+  if (body.service_name !== undefined) {
+    const name = String(body.service_name).trim();
+    if (name.length === 0 || name.length > settingsConfig.serviceNameMaxLen) {
+      return fail('FATAL', `服务名称长度需1-${settingsConfig.serviceNameMaxLen}字`);
+    }
+  }
+  if (body.font_size !== undefined) {
+    const n = Number(body.font_size);
+    if (!Number.isInteger(n) || n < settingsConfig.fontSizeMin || n > settingsConfig.fontSizeMax) {
+      return fail('FATAL', `字号需${settingsConfig.fontSizeMin}-${settingsConfig.fontSizeMax}整数`);
+    }
+  }
+  if (body.theme_color !== undefined) {
+    if (!settingsConfig.themePresets.some((t) => t.value === body.theme_color)) return fail('FATAL', '主题色不在候选内');
+  }
+  const patch: { service_name?: string; font_size?: number; theme_color?: string } = {};
+  if (body.service_name !== undefined) patch.service_name = String(body.service_name).trim();
+  if (body.font_size !== undefined) patch.font_size = Number(body.font_size);
+  if (body.theme_color !== undefined) patch.theme_color = body.theme_color;
+  return ok(repos.settings.update(patch));
+}

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>抖音获客中台 · P0原型</title>
+<style>
+:root{
+  --bg:#FAFAF8; --surface:#FFFFFF; --border:#E8E6E1; --border-strong:#D8D5CF;
+  --t1:#1A1A18; --t2:#6B6862; --t3:#A8A5A0;
+  --accent:#1A1A18; --accent-ink:#fff; --warn-bg:#FBF3E4; --danger:#B42318; --amber:#9A6B2F;
+  --r:4px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:13px/1.6 "Inter","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+.app{display:flex;min-height:100vh}
+/* sidebar */
+.side{width:208px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.logo{padding:18px 18px 14px;font-size:14px;font-weight:700;letter-spacing:.2px}
+.logo small{display:block;font-size:11px;color:var(--t3);font-weight:400;letter-spacing:.4px}
+.nav{padding:6px 10px;display:flex;flex-direction:column;gap:2px}
+.nav button{border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:var(--r);font-size:13px;color:var(--t2);cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.nav button.active{background:#F1EFEA;color:var(--t1);font-weight:600}
+.nav button .bdg{background:var(--accent);color:#fff;font-size:11px;border-radius:20px;padding:0 7px;line-height:18px}
+.upgrade{margin:auto 12px 12px;border:1px solid var(--border);border-radius:var(--r);padding:12px;background:#FCFBF9}
+.upgrade b{font-size:12px}.upgrade p{margin:6px 0 10px;color:var(--t2);font-size:12px}
+/* main */
+.main{flex:1;min-width:0}
+.top{position:sticky;top:0;z-index:5;background:rgba(250,250,248,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px}
+.top h1{font-size:15px;margin:0;font-weight:700}
+.top .sub{font-size:12px;color:var(--t3)}
+.top .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.pill{border:1px solid var(--border);background:#fff;border-radius:20px;padding:5px 12px;font-size:12px;color:var(--t2)}
+.btn{border:1px solid var(--border-strong);background:var(--accent);color:var(--accent-ink);border-radius:var(--r);padding:8px 14px;font-size:13px;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--t1)}
+.btn.small{padding:6px 10px;font-size:12px}
+.content{padding:20px 24px 60px;max-width:1240px}
+.notice{border:1px solid var(--border);background:var(--warn-bg);border-radius:var(--r);padding:10px 14px;font-size:12px;color:#6b5a2e;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+/* metric strip */
+.strip{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px}
+.strip>div{flex:1;padding:16px 20px}
+.strip>div+div{border-left:1px solid var(--border)}
+.strip .k{font-size:12px;color:var(--t2)}
+.strip .v{font-size:28px;font-weight:700;letter-spacing:-.5px;margin:2px 0}
+.strip .d{font-size:12px;color:var(--t2)} .up{color:#1a7f37}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:12px 14px;border-bottom:1px solid #F0EEEA;vertical-align:middle}
+tr:hover td{background:#F5F4F1}
+.vtitle{display:flex;gap:12px;align-items:center}
+.cover{width:42px;height:56px;border-radius:4px;background:#E9E6E0;flex:none;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:11px}
+.mini{width:90px;height:28px}
+/* comments layout */
+.work{display:grid;grid-template-columns:240px 1fr 320px;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;min-height:560px}
+.wl{border-right:1px solid var(--border);overflow:auto}
+.wl .item{padding:12px 14px;border-bottom:1px solid #F0EEEA;cursor:pointer;display:flex;gap:10px}
+.wl .item.active{background:#F5F4F1}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;margin-left:6px;vertical-align:middle}
+.wm{border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0}
+.toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;position:sticky;top:0;background:#fff}
+.toolbar input,.toolbar select{border:1px solid var(--border-strong);border-radius:4px;padding:7px 10px;font-size:13px;background:#fff}
+.citem{padding:14px 16px 14px 18px;border-bottom:1px solid #F0EEEA;position:relative;cursor:pointer}
+.citem:hover{background:#FCFBF9}
+.citem::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:#D8D5CF}
+.citem.hot::before{background:var(--amber)} .citem.bad::before{background:var(--danger)}
+.cmeta{display:flex;gap:8px;color:var(--t3);font-size:12px;margin-bottom:4px}
+.ctag{font-size:11px;color:var(--t2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:#FCFBF9}
+.ctag.hot{color:#7a5417;border-color:#E4CFA3;background:#FBF3E4}
+.unread{width:8px;height:8px;border:1.5px solid var(--t3);border-radius:50%;display:inline-block}
+.unread.on{border-color:var(--t3);background:transparent} .unread.done{background:#D8D5CF;border-color:#D8D5CF}
+.wr{padding:16px;overflow:auto;background:#FCFBF9}
+.kv{font-size:12px;color:var(--t2)} .kv b{color:var(--t1)}
+.script{border:1px solid var(--border);background:#fff;border-radius:4px;padding:10px 12px;margin-top:10px;font-size:13px}
+/* misc */
+.row{display:flex;gap:12px}.grow{flex:1}
+.skel{background:linear-gradient(90deg,#EEE 25%,#F7F7F7 50%,#EEE 75%);background-size:200% 100%;animation:sh 1.2s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.page{display:none}.page.active{display:block}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:420px;background:#fff;border-left:1px solid var(--border);box-shadow:-12px 0 32px rgba(0,0,0,.06);padding:20px;display:none;z-index:20}
+.drawer.open{display:block}
+.qr{width:180px;height:180px;border:1px dashed var(--border-strong);display:flex;align-items:center;justify-content:center;color:var(--t3);border-radius:6px;background:#fff}
+@media(max-width:1100px){.work{grid-template-columns:200px 1fr}.wr{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo">获客中台<small>DOUYIN · P0 PROTOTYPE</small></div>
+    <nav class="nav">
+      <button data-p="auth" class="active">授权管理</button>
+      <button data-p="dash">数据看板</button>
+      <button data-p="comments">评论工作台 <span class="bdg">12</span></button>
+      <button data-p="msg">私信辅助</button>
+    </nav>
+    <div class="upgrade"><b>升级蓝V后解锁</b><p>私信自动同步 · 一键留资 · 员工号挂靠</p><button class="btn ghost small" onclick="go('msg')">查看指南</button></div>
+  </aside>
+  <div class="main">
+    <div class="top">
+      <div><h1 id="ptitle">授权管理</h1><div class="sub" id="psub">个人号 · 昨日数据 · 本地协作</div></div>
+      <div class="right"><span class="pill num">账号：萌络网络-三角洲跑刀 · personal</span><span class="pill num">昨日数据 · 今晨6点更新</span><button class="btn ghost small">手动同步</button></div>
+    </div>
+    <div class="content">
+
+      <!-- AUTH -->
+      <section id="p-auth" class="page active">
+        <div class="notice">当前为个人号授权：可看自己视频数据 + 管评论，<b>无法同步私信</b>（需蓝V）。已读/意图均为本地协作状态，不反写抖音。</div>
+        <div class="row">
+          <div class="card grow" style="padding:18px">
+            <div style="display:flex;gap:18px;align-items:center">
+              <div style="width:52px;height:52px;border-radius:6px;background:#1A1A18;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">萌</div>
+              <div><div style="font-weight:700">萌络网络-三角洲跑刀 <span class="ctag">个人号</span></div><div class="kv">open_id 8f3a…9c21 · 有效期至 2026-11-08 · 剩 30 天</div></div>
+              <div style="margin-left:auto;display:flex;gap:8px"><button class="btn ghost small">操作日志</button><button class="btn small">重新授权</button></div>
+            </div>
+            <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:24px">
+              <div class="kv">✔ 流量看板 <b>T+1</b></div><div class="kv">✔ 评论管理 <b>实时推送+对账</b></div><div class="kv">✕ 私信同步 <b>需蓝V</b></div>
+            </div>
+          </div>
+          <div class="card" style="padding:18px;width:320px">
+            <b>扫码授权（演示）</b><div class="kv" style="margin:6px 0 12px">抖音扫码 · 60s过期 · 只勾选必要scope</div>
+            <div class="qr">QR · state 8f3a</div>
+            <div class="kv num" style="margin-top:10px">轮询中… 42s</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <table><thead><tr><th>时间</th><th>操作</th><th>操作人</th><th>结果</th></tr></thead>
+          <tbody class="num">
+            <tr><td>10-09 09:41</td><td>扫码授权成功</td><td>店长</td><td>有效期30天</td></tr>
+            <tr><td>10-08 06:02</td><td>每日STAT同步</td><td>系统</td><td>38视频 · 成功</td></tr>
+            <tr><td>10-07 22:14</td><td>token预刷新</td><td>系统</td><td>成功</td></tr>
+          </tbody></table>
+        </div>
+      </section>
+
+      <!-- DASH -->
+      <section id="p-dash" class="page">
+        <div class="strip num">
+          <div><div class="k">总播放（昨日）</div><div class="v">128,430</div><div class="d"><span class="up">↑ 12.4%</span> vs 前日</div></div>
+          <div><div class="k">总点赞</div><div class="v">9,812</div><div class="d"><span class="up">↑ 6.1%</span></div></div>
+          <div><div class="k">总评论</div><div class="v">1,204</div><div class="d">待处理 12</div></div>
+          <div><div class="k">净增粉</div><div class="v">+342</div><div class="d">粉丝总数 48,201</div></div>
+        </div>
+        <div class="card">
+          <table><thead><tr><th>作品</th><th>发布时间</th><th>播放</th><th>点赞</th><th>评论</th><th>转发</th><th>7天趋势</th><th></th></tr></thead>
+          <tbody class="num" id="vtable"></tbody></table>
+          <div style="padding:12px 14px;color:var(--t3);font-size:12px">服务端分页 · 20/页 · 默认按发布时间倒序</div>
+        </div>
+        <div class="card" style="margin-top:16px;padding:16px;background:#F7F6F3">
+          <b>竞品手动导入</b> <span class="kv">官方不给全平台数据，此区与自有数据隔离</span>
+          <table style="margin-top:10px;background:#fff;border:1px solid var(--border);border-radius:4px"><thead><tr><th>来源</th><th>链接/备注</th><th>播放</th><th>点赞</th></tr></thead>
+          <tbody class="num"><tr><td>飞瓜</td><td>竞品A · 跑刀代练</td><td>890,000</td><td>42,000</td></tr><tr><td>手动</td><td>同城店B · 契约陪玩</td><td>120,000</td><td>5,400</td></tr></tbody></table>
+        </div>
+      </section>
+
+      <!-- COMMENTS -->
+      <section id="p-comments" class="page">
+        <div class="work">
+          <div class="wl" id="vlist"></div>
+          <div class="wm">
+            <div class="toolbar"><input id="q" placeholder="搜索关键词，如 电话/价格" style="width:220px"/><select><option>全部意图</option><option>高意向</option><option>咨询</option><option>垃圾</option></select><label class="kv"><input type="checkbox" checked/> 只看未读</label><span style="flex:1"></span><button class="btn ghost small" onclick="batchRead()">批量标已读</button></div>
+            <div id="clist" style="overflow:auto"></div>
+          </div>
+          <div class="wr" id="detail"><div class="kv">点击一条评论查看详情、复制话术、登记跟进。</div></div>
+        </div>
+      </section>
+
+      <!-- MSG -->
+      <section id="p-msg" class="page">
+        <div class="card" style="padding:28px;background:#FCFBF9">
+          <div style="font-size:15px;font-weight:700">私信需蓝V后开通</div>
+          <p style="color:var(--t2);max-width:640px">个人号官方不开放IM接口，无法同步会话列表与已读。P0只提供话术库 + 手动跟进台账。升级后本页直接切换为官方会话，无需改表结构（im_enabled=false 预留）。</p>
+          <div style="display:flex;gap:8px"><button class="btn small">查看蓝V开通指南</button><button class="btn ghost small">先用话术库</button></div>
+        </div>
+        <div class="row" style="margin-top:16px">
+          <div class="card grow" style="padding:16px"><b>话术库</b><div class="script">欢迎语：在的兄弟，直接发段位+想跑的图，给你安排刀手。<button class="btn ghost small" style="float:right">复制</button></div><div class="script">报价：跑刀单件9折，今天下单送保险，契约代练按段位报价。<button class="btn ghost small" style="float:right">复制</button></div><div class="script">留资引导：方便留个联系方式吗，发你跑刀实录和价目表。<button class="btn ghost small" style="float:right">复制</button></div></div>
+          <div class="card grow" style="padding:16px"><b>手动跟进台账</b><table><thead><tr><th>对方</th><th>来源视频</th><th>下次提醒</th><th>状态</th></tr></thead><tbody><tr><td>刀友老陈</td><td>跑刀实录</td><td class="num">今天 18:00</td><td>待回访</td></tr><tr><td>熬夜选手Lin</td><td>跑刀教学</td><td class="num">明天</td><td>已手动回复</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<div class="drawer" id="drawer"><b id="dtitle">趋势</b><div class="kv">近7天 · T+1</div><svg class="mini" viewBox="0 0 90 28" style="width:100%;height:120px;margin-top:12px"><polyline points="0,22 15,18 30,19 45,12 60,14 75,8 90,6" fill="none" stroke="#1A1A18" stroke-width="2"/></svg><div style="margin-top:12px"><button class="btn ghost small" onclick="document.getElementById('drawer').classList.remove('open')">关闭</button> <button class="btn small" onclick="go('comments')">看评论 →</button></div></div>
+<script>
+const videos=[
+ {t:"三角洲跑刀实录 · 一局爆仓",d:"10-08",p:"48,201",l:"4,102",c:312,s:410},
+ {t:"跑刀教学 · 零氪开荒路线",d:"10-07",p:"32,118",l:"2,340",c:188,s:220},
+ {t:"无畏契约定制定位赛 · 十连胜",d:"10-06",p:"21,440",l:"1,502",c:141,s:98},
+];
+document.getElementById('vtable').innerHTML=videos.map(v=>`<tr><td><div class="vtitle"><div class="cover">封面</div><div>${v.t}</div></div></td><td class="num">${v.d}</td><td class="num">${v.p}</td><td class="num">${v.l}</td><td class="num">${v.c}</td><td class="num">${v.s}</td><td><svg class="mini" viewBox="0 0 90 28"><polyline points="0,22 15,18 30,19 45,12 60,14 75,8 90,6" fill="none" stroke="#1A1A18" stroke-width="1.6"/></svg></td><td><button class="btn ghost small" onclick="openTrend('${v.t}')">趋势</button></td></tr>`).join('');
+const vlist=["跑刀实录(8) ","跑刀教学(3) ","契约定制(1) "];
+document.getElementById('vlist').innerHTML=vlist.map((v,i)=>`<div class="item ${i==0?'active':''}" onclick="pickVideo(this)"><div class="cover" style="width:36px;height:44px">封</div><div><div style="font-size:13px">${v}</div><div class="kv">最新 2小时前</div></div></div>`).join('');
+let comments=[
+ {n:"刀友老陈",t:"2小时前",c:"跑刀一单多少钱？怎么下单？",tag:"高意向",hot:1,un:1,s:12},
+ {n:"熬夜选手Lin",t:"3小时前",c:"求带跑，留个联系方式",tag:"留电话",hot:1,un:1,s:4},
+ {n:"路人甲",t:"5小时前",c:"跑刀要什么段位才能接",tag:"咨询",hot:0,un:1,s:0},
+ {n:"刷单小哥",t:"昨天",c:"加V低价代练，量大从优",tag:"垃圾",hot:0,un:0,s:1},
+];
+function renderComments(){
+  const q=document.getElementById('q').value;
+  document.getElementById('clist').innerHTML=comments.filter(x=>!q||x.c.includes(q)).map((x,i)=>`<div class="citem ${x.hot?'hot':x.tag=='垃圾'?'bad':''}" onclick="showDetail(${i},this)"><div class="cmeta"><span class="unread ${x.un?'on':'done'}"></span><b style="color:var(--t1)">${x.n}</b><span>${x.t}</span><span>赞 ${x.s}</span><span style="margin-left:auto" class="ctag ${x.hot?'hot':''}">${x.tag}</span></div><div>${x.c}</div></div>`).join('');
+}
+function showDetail(i,el){
+  document.querySelectorAll('.citem').forEach(e=>e.style.background='');el.style.background='#F5F4F1';
+  const x=comments[i];x.un=0;
+  document.getElementById('detail').innerHTML=`<b>${x.n}</b><div class="kv">${x.t} · 归属 跑刀实录</div><div class="card" style="padding:12px;margin:10px 0">${x.c}</div><div class="kv">用户历史：3条评论 · 1次咨询</div><div class="script">在的兄弟，直接发段位+想跑的图给你安排 <button class="btn ghost small" style="float:right">复制</button></div><div class="script">今天下单送保险，跑刀9折 <button class="btn ghost small" style="float:right">复制</button></div><div style="margin-top:12px;display:flex;gap:8px"><button class="btn small" onclick="renderComments();showDone()">已去App回复</button><button class="btn ghost small">忽略</button></div>`;
+  setTimeout(renderComments,50);
+}
+function showDone(){document.getElementById('detail').innerHTML+='<div class="kv" style="margin-top:8px">已登记跟进 · 明天18点提醒</div>'}
+function batchRead(){comments.forEach(c=>c.un=0);renderComments()}
+function pickVideo(el){document.querySelectorAll('.wl .item').forEach(e=>e.classList.remove('active'));el.classList.add('active')}
+document.getElementById('q').addEventListener('input',renderComments);renderComments();
+function openTrend(t){document.getElementById('dtitle').innerText=t;document.getElementById('drawer').classList.add('open')}
+const titles={auth:["授权管理","个人号 · 昨日数据 · 本地协作"],dash:["数据看板","昨日数据 · 今晨6点更新"],comments:["评论工作台","只看自己视频 · 本地已读"],msg:["私信辅助","需蓝V · 当前仅话术+台账"]};
+function go(p){document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.p==p));document.querySelectorAll('.page').forEach(s=>s.classList.remove('active'));document.getElementById('p-'+p).classList.add('active');document.getElementById('ptitle').innerText=titles[p][0];document.getElementById('psub').innerText=titles[p][1];window.scrollTo(0,0)}
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.p));
+</script>
+</body>
+</html>

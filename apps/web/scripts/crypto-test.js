@@ -1,0 +1,45 @@
+/** crypto真单测：tsc编译lib/crypto+lib/tokenVault后import真模块（零新增依赖，用仓内typescript） */
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+process.env.TOKEN_MASTER_KEY = 'test-master-key-32bytes-padding!!';
+let fail = 0;
+const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) fail++; };
+
+// 0) 编译真模块
+const tmp = path.join(__dirname, '.tmp-crypto');
+fs.rmSync(tmp, { recursive: true, force: true });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
+const vault = require('./.tmp-crypto/tokenVault.js');
+
+// 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
+const secret = 'access-token-敏感内容-123';
+check(decryptToken(encryptToken(secret)) === secret, 'crypto roundtrip（真模块）');
+check(encryptToken(secret).cipher !== encryptToken(secret).cipher, 'crypto iv随机（真模块）');
+let wrongKey = false;
+const savedKey = process.env.TOKEN_MASTER_KEY;
+try {
+  const p = encryptToken(secret);
+  process.env.TOKEN_MASTER_KEY = 'wrong-key-xxxxxxxxxxxxxxxxxxxxxxxx';
+  decryptToken(p);
+} catch { wrongKey = true; } finally { process.env.TOKEN_MASTER_KEY = savedKey; }
+check(wrongKey, 'crypto 错key解密失败（真模块）');
+
+// 2) vault接线（poll→save / me→has 的同一实现）
+vault.saveToken('acc_test', secret);
+check(vault.hasToken('acc_test') === true, 'vault save/has');
+check(vault.loadToken('acc_test') === secret, 'vault load解密');
+check(vault.loadToken('nope') === null, 'vault 缺失返回null');
+
+// 3) 源码一致性（防实现漂移）
+const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'crypto.ts'), 'utf8');
+check(src.includes('aes-256-gcm'), 'crypto.ts aes-256-gcm');
+check(src.includes("createHash('sha256')"), 'crypto.ts sha256(master)');
+check(src.includes('randomBytes(12)'), 'crypto.ts 12B iv');
+check(src.includes('getAuthTag') && src.includes('setAuthTag'), 'crypto.ts tag编解');
+check(src.includes("NODE_ENV === 'production'"), 'crypto 缺key生产fail-fast');
+
+fs.rmSync(tmp, { recursive: true, force: true });
+console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);
+process.exit(fail === 0 ? 0 : 1);

@@ -1,0 +1,107 @@
+// S9目标态：PG表结构（设计产物，待DB落地后执行 migrate；当前运行仍走内存Repository，见apps/web/lib/repo.ts）
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 账号（token加密存，key_version用于轮换，见01-architecture）
+model Account {
+  id            String   @id @default(cuid())
+  openId        String   @unique
+  nickname      String
+  authType      String   @default("personal")
+  tokenEnc      String
+  keyVersion    Int      @default(1)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  videos        Video[]
+}
+
+// 作品（aweme_id唯一）
+model Video {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  awemeId     String   @unique
+  title       String
+  cover       String   @default("")
+  publishTime String
+  stats       VideoStatDaily[]
+  comments    Comment[]
+}
+
+// 每日指标（video_id+date唯一，T+1）
+model VideoStatDaily {
+  id        String @id @default(cuid())
+  videoId   String
+  video     Video  @relation(fields: [videoId], references: [id])
+  date      String
+  play      Int    @default(0)
+  like      Int    @default(0)
+  comment   Int    @default(0)
+  share     Int    @default(0)
+  fansTotal Int    @default(0)
+
+  @@unique([videoId, date])
+}
+
+// 评论（comment_id唯一；已读/意图仅本地，不反写抖音）
+model Comment {
+  id          String  @id @default(cuid())
+  videoId     String
+  video       Video   @relation(fields: [videoId], references: [id])
+  commentId   String  @unique
+  userNick    String
+  content     String
+  likeCount   Int     @default(0)
+  createTime  String
+  isReadLocal Boolean @default(false)
+  intent      String  @default("普通")
+  ignore      Boolean @default(false)
+
+  @@index([videoId, createTime])
+}
+
+// 手动跟进台账（私信辅助占位，无IM会话）
+model Follow {
+  id            String @id @default(cuid())
+  peerNick      String
+  sourceVideoId String
+  nextRemindAt  String
+  status        String @default("待回访")
+}
+
+// 竞品手动导入
+model Competitor {
+  id     String @id @default(cuid())
+  source String
+  url    String
+  play   Int    @default(0)
+  like   Int    @default(0)
+  remark String @default("")
+}
+
+// webhook已处理事件（幂等）
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique
+  createdAt DateTime @default(now())
+}
+
+// 死信队列
+model Dlq {
+  id        String   @id @default(cuid())
+  reason    String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// 同步任务
+model SyncJob {
+  taskId    String   @id
+  createdAt DateTime @default(now())
+}

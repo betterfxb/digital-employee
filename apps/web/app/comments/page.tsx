@@ -1,0 +1,204 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { commentsConfig } from '@/config/comments.config';
+import { downloadCsv } from '@/lib/csv';
+import type { Video, CommentItem, ScriptItem, TemplateItem } from '@/lib/types';
+
+/** S8 评论工作台三栏：左作品（含未读）/中评论流/右详情（意图PATCH+跟进），快捷键j/k/e/1/2/3/c */
+export default function Comments() {
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [selVideo, setSelVideo] = useState('');
+  const [intent, setIntent] = useState('');
+  const [items, setItems] = useState<CommentItem[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [kw, setKw] = useState('');
+  const [hot, setHot] = useState<string[]>(commentsConfig.hotKeywords);
+  const [unreadOnly, setUnreadOnly] = useState(commentsConfig.onlyUnreadDefault);
+  const [selId, setSelId] = useState<string | null>(null);
+  const [scripts, setScripts] = useState<(ScriptItem | TemplateItem)[]>([]);
+  const [replies, setReplies] = useState<{ id: string; comment_id: string; content: string; at: string }[]>([]);
+  const [replyText, setReplyText] = useState('');
+  const [product, setProduct] = useState('跑刀代跑');
+  const [msg, setMsg] = useState('');
+
+  const load = (o?: { v?: string; it?: string; k?: string; uo?: boolean }) => {
+    const v = o?.v ?? selVideo, it = o?.it ?? intent, k = o?.k ?? kw, uo = o?.uo ?? unreadOnly;
+    const q = new URLSearchParams({ keyword: k, unread_only: uo ? '1' : '0' });
+    if (v) q.set('video_id', v);
+    if (it) q.set('intent', it);
+    fetch(`/api/comments?${q}`).then((r) => r.json()).then((d) => {
+      setItems(d.items || []);
+      setSelId((prev) => (d.items || []).some((x: CommentItem) => x.id === prev) ? prev : ((d.items || [])[0]?.id || null));
+    }).catch(() => flash('列表加载失败，请重试'));
+    fetch('/api/comments?unread_only=1').then((r) => r.json()).then((d) => {
+      const c: Record<string, number> = {};
+      (d.items || []).forEach((x: CommentItem) => { c[x.video_id] = (c[x.video_id] || 0) + 1; });
+      setCounts(c);
+    }).catch(() => { /* 角标非关键路径，失败静默，下轮刷新自愈 */ });
+  };
+
+  useEffect(() => {
+    fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
+    fetch('/api/settings').then((r) => r.json()).then((s) => { if (s?.service_name) setProduct(s.service_name); }).catch(() => {});
+    load();
+    fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw)); }).catch(() => {});
+    fetch('/api/scripts/templates?intent=普通').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {
+      fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(''), 2500); };
+  /** 网络请求统一出口：业务错/网络错都转用户可见提示，返回null表示失败 */
+  const call = async (p: Promise<Response>, what = '操作') => {
+    try {
+      const j = await (await p).json().catch(() => null);
+      if (!j || j.code) { flash(j?.message || `${what}失败，请重试`); return null; }
+      return j;
+    } catch { flash('网络异常，请重试'); return null; }
+  };
+  const markRead = async (id: string) => {
+    const j = await call(fetch('/api/comments/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) }), '标已读');
+    if (j) load();
+  };
+  const setIntentOf = async (id: string, v: string) => {
+    const j = await call(fetch(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intent: v }) }), '改意图');
+    if (j) load();
+  };
+  const toggleIgnore = async (c: CommentItem) => {
+    const j = await call(fetch(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ignore: !c.ignore }) }), '忽略操作');
+    if (j) load();
+  };
+  const batchRead = async () => {
+    const ids = items.filter((x) => !x.is_read_local).map((x) => x.id).slice(0, commentsConfig.batchReadMax);
+    if (ids.length === 0) return;
+    const j = await call(fetch('/api/comments/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }), '批量标已读');
+    if (j) load();
+  };
+  const exportComments = () => {
+    if (items.length === 0) { flash('暂无数据可导出'); return; }
+    downloadCsv('评论线索.csv', ['用户', '时间', '意图', '已读', '内容'], items.map((x) => [x.user_nick, x.create_time, x.intent, x.is_read_local ? '是' : '否', x.content]));
+  };
+  const replied = async (c: CommentItem) => {
+    const f = await call(fetch('/api/follows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ peer_nick: c.user_nick, source_video_id: c.video_id }) }), '登记跟进');
+    if (!f) return;
+    await call(fetch('/api/comments/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [c.id] }) }), '标已读');
+    flash('已登记跟进'); load();
+  };
+  const copy = async (t: string) => {
+    try { await navigator.clipboard.writeText(t); flash('已复制'); } catch { flash('复制失败，请手动复制'); }
+  };
+  const loadReplies = (id: string) => fetch(`/api/comments/${id}/replies`).then((r) => r.json()).then((d) => setReplies(d.items || [])).catch(() => {});
+  const sendReply = async () => {
+    if (!sel || !replyText.trim()) { flash('先写回评内容'); return; }
+    const j = await call(fetch(`/api/comments/${sel.id}/replies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: replyText.trim() }) }), '发送回评');
+    if (!j) return;
+    setReplyText(''); loadReplies(sel.id);
+  };
+
+  // 快捷键：输入框内不触发
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
+      const idx = items.findIndex((x) => x.id === selId);
+      if (e.key === 'j' || e.key === 'k') {
+        const n = e.key === 'j' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
+        if (items[n]) setSelId(items[n].id);
+      } else if (e.key === 'e' && selId) markRead(selId);
+      else if (['1', '2', '3'].includes(e.key) && selId) {
+        const v = commentsConfig.intentOptions[Number(e.key) - 1];
+        if (v) setIntentOf(selId, v);
+      } else if (e.key === 'c') {
+        const c = items.find((x) => x.id === selId);
+        if (c) copy(c.content);
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, selId]);
+
+  const sel = items.find((x) => x.id === selId) || null;
+  // 选中变化时按意图+昵称+产品重取话术模板
+  useEffect(() => {
+    if (!sel) return;
+    loadReplies(sel.id);
+    fetch(`/api/scripts/templates?intent=${encodeURIComponent(sel.intent)}&nick=${encodeURIComponent(sel.user_nick)}&product=${encodeURIComponent(product)}`).then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.id, sel?.intent]);
+  const totalUnread = Object.values(counts).reduce((a, b) => a + b, 0);
+  const colorOf = (it: string) => commentsConfig.intentColors[it as keyof typeof commentsConfig.intentColors] || commentsConfig.intentColors['默认'];
+
+  return (
+    <div>
+      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>评论工作台</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>只看自己视频 · 本地已读 · 快捷键 j/k/e/1/2/3/c</div></div>
+      <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
+        <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <input value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load({ k: kw }); }} placeholder="搜索关键词" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: 200 }} />
+          <select value={intent} onChange={(e) => { setIntent(e.target.value); load({ it: e.target.value }); }} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px' }}>
+            <option value="">全部意图</option>
+            {commentsConfig.intentOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <label style={{ fontSize: 12, color: '#6B6862' }}><input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); load({ uo: e.target.checked }); }} /> 只看未读</label>
+          <span style={{ flex: 1 }} />
+          {msg && <span style={{ fontSize: 12, color: '#6B6862' }}>{msg}</span>}
+          <button className="btn ghost small" onClick={batchRead}>批量标已读</button>
+          <button className="btn ghost small" onClick={exportComments}>导出CSV</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          {hot.map((k) => <button key={k} className="btn ghost small" onClick={() => { setKw(k); load({ k }); }}>{k}</button>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0,1fr) 340px', gap: 0, border: '1px solid #E8E6E1', borderRadius: 6, background: '#fff', minHeight: 'calc(100vh - 300px)' }}>
+          <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>
+            <div onClick={() => { setSelVideo(''); load({ v: '' }); }} style={{ padding: '12px 14px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selVideo === '' ? '#F5F4F1' : 'transparent', fontWeight: selVideo === '' ? 600 : 400 }}>
+              全部视频 <span className="num" style={{ fontSize: 12, color: '#A8A5A0' }}>{totalUnread}未读</span>
+            </div>
+            {videos.map((v) => (
+              <div key={v.id} onClick={() => { setSelVideo(v.id); load({ v: v.id }); }} style={{ padding: '12px 14px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selVideo === v.id ? '#F5F4F1' : 'transparent' }}>
+                <div style={{ fontSize: 13, fontWeight: selVideo === v.id ? 600 : 400 }}>{v.title}{counts[v.id] ? <span style={{ display: 'inline-block', minWidth: 18, textAlign: 'center', background: '#1A1A18', color: '#fff', fontSize: 11, borderRadius: 10, padding: '0 5px', marginLeft: 6 }} className="num">{counts[v.id]}</span> : null}</div>
+                <div className="num" style={{ fontSize: 12, color: '#A8A5A0' }}>{v.publish_time}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>
+            {items.length === 0 ? <div style={{ padding: 24, color: '#A8A5A0' }}>暂无数据</div> : items.map((c) => (
+              <div key={c.id} onClick={() => setSelId(c.id)} style={{ padding: '12px 14px 12px 16px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selId === c.id ? '#F5F4F1' : 'transparent', borderLeft: `2px solid ${colorOf(c.intent)}` }}>
+                <div style={{ fontSize: 12, color: '#A8A5A0' }}><b style={{ color: '#1A1A18' }}>{c.user_nick}</b> · {c.create_time} · {c.intent} · {c.is_read_local ? '已读' : '未读'}{c.ignore ? ' ·已忽略' : ''}</div>
+                <div>{c.content}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: 16, overflow: 'auto', background: '#FCFBF9' }}>
+            {!sel ? <div style={{ fontSize: 12, color: '#A8A5A0' }}>点击一条评论查看详情（j/k 移动，e 标已读，1/2/3 改意图，c 复制）。</div> : (
+              <div>
+                <b>{sel.user_nick}</b>
+                <div className="num" style={{ fontSize: 12, color: '#A8A5A0' }}>{sel.create_time} · 赞{sel.like_count}</div>
+                <div className="card" style={{ padding: 12, margin: '10px 0' }}>{sel.content}</div>
+                <div style={{ fontSize: 12, color: '#6B6862' }}>意图</div>
+                <select value={sel.intent} onChange={(e) => setIntentOf(sel.id, e.target.value)} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: '100%', marginTop: 4 }}>
+                  {commentsConfig.intentOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  {!sel.is_read_local && <button className="btn ghost small" onClick={() => markRead(sel.id)}>标已读(e)</button>}
+                  <button className="btn ghost small" onClick={() => copy(sel.content)}>复制(c)</button>
+                  <button className="btn ghost small" onClick={() => toggleIgnore(sel)}>{sel.ignore ? '取消忽略' : '忽略'}</button>
+                </div>
+                <div style={{ fontSize: 12, color: '#6B6862', marginTop: 14 }}>快捷话术 · 按意图生成</div>
+                <input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="产品名，用于填充话术" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: '100%', marginTop: 6 }} />
+                {scripts.map((s: ScriptItem | TemplateItem) => <div key={s.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{s.content}<div><button className="btn ghost small" style={{ marginTop: 6 }} onClick={() => copy(s.content)}>复制</button></div></div>)}
+                <button className="btn small" style={{ marginTop: 12 }} onClick={() => replied(sel)}>已去App回复，登记跟进</button>
+                <div style={{ fontSize: 12, color: '#6B6862', marginTop: 14 }}>作者回评（记账，可多条）</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="写下你的回评…" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', flex: 1 }} />
+                  <button className="btn small" onClick={sendReply}>发送</button>
+                </div>
+                {replies.map((r) => <div key={r.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{r.content}<div className="num" style={{ fontSize: 11, color: '#A8A5A0', marginTop: 4 }}>{r.at}</div></div>)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

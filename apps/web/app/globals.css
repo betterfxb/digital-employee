@@ -1,0 +1,26 @@
+/* 设计tokens与 docs/02-ui-spec.md、config/ui.config.ts 同步，改一处需同步两处 */
+:root{
+  --bg:#FAFAF8; --surface:#FFFFFF; --border:#E8E6E1; --border-strong:#D8D5CF;
+  --t1:#1A1A18; --t2:#6B6862; --t3:#A8A5A0;
+  --accent:#1A1A18; --accent-ink:#FFFFFF; --danger:#B42318; --warn-bg:#FBF3E4; --amber:#9A6B2F;
+  --r:4px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.6 Inter,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+a{color:inherit}
+.app{display:flex;min-height:100vh}
+.side{width:208px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.nav button{border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:4px;font-size:13px;color:var(--t2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;text-decoration:none}
+.nav a{border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:4px;font-size:13px;color:var(--t2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;text-decoration:none}
+.nav a.active{background:#F1EFEA;color:var(--t1);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px}
+.btn{border:1px solid var(--border-strong);background:var(--accent);color:var(--accent-ink);border-radius:4px;padding:8px 14px;font-size:13px;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--t1)}
+.btn.small{padding:6px 10px;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:12px 14px;border-bottom:1px solid #F0EEEA}
+tr:hover td{background:#F5F4F1}
+.skel{background:linear-gradient(90deg,#EEE 25%,#F7F7F7 50%,#EEE 75%);background-size:200% 100%;animation:sh 1.2s infinite;border-radius:4px;color:transparent !important}
+@keyframes sh{to{background-position:-200% 0}}
