@@ -1,6 +1,6 @@
 # 项目记忆（给后续开发/Agent看，勿删）
 
-更新：2026-10-09 / 路径：D:\_project / 状态：S1-S20完成（截图A+B全交付e2e 0错；C类CK/指纹/群发封存，需双签才评估）。质检：test11+verify57+冒烟62+journey4全绿。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。
+更新：2026-10-09 / 路径：D:\_project / 状态：S1-S21完成，已推送github私有仓betterfxb/digital-employee（main同步，commit 3f3a5a6）。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
 
 ## 1. 一句话
 非蓝V抖音中台：流量T+1看自己号 + 评论管自己视频 + 私信只辅助。禁爬虫/RPA自动私信。
