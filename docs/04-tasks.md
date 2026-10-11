@@ -23,8 +23,9 @@
 | S18 系统设置 | 改密/店名/服务名/字号全局zoom/主题CSS变量，保存持久化即时生效 | S17 | P0 | e2e(调节/保存/重载/改密)+全绿 |
 | S19 设置页改版 | 刻度滑杆（重点标记+大读数）+主题预览卡片（微缩UI+说明+选中态） | S18 | P1 | 截图验收+全绿 |
 | S20 截图功能合规落地 | 视频任务队列/采集四槽/手动清单/休眠规则/自定义话术/评论回评；C封存docs/10 | 客户截图 | P0 | A+B交付e2e 0错，C不编码 |
+| S22 买断制授权方案 | 校验/绑定/检测/边界/对比+落地路线，见docs/11 | 授权规划 | P1 | 框架落盘，不含代码 |
 | S21 GitHub同步 | 本地commit+私有仓digital-employee，SSH推送 | 上线 | P1 | 已推送，远端main同步 |
 | S14 代码质量评审 | 全仓评审+报告docs/09（5 Major+7 Minor+行动项） | S13 | P1 | 报告落盘 |
 
 - S1阻塞S2/S3/S4，S2/S3可并行
-- 当前状态（2026-10-09）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅（mock态，test11+verify57+冒烟62+journey4全绿；已推送github私有仓betterfxb/digital-employee）
+- 当前状态（2026-10-09）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅（mock态，test11+verify57+冒烟62+journey4全绿；已推送github私有仓betterfxb/digital-employee）
