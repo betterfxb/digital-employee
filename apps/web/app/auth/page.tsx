@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { appConfig } from '@/config/app.config';
 import { authConfig } from '@/config/auth.config';
 import type { Account, AuthLogItem } from '@/lib/types';
+import type { LicenseState } from '@/lib/license';
 
 /** S1 授权页：扫码轮询→看板闭环 + 掉线/加载/空态 */
 export default function AuthPage() {
@@ -12,6 +13,7 @@ export default function AuthPage() {
   const [logs, setLogs] = useState<AuthLogItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [usage, setUsage] = useState<{ usedToday: number; cap: number; left: number } | null>(null);
+  const [lic, setLic] = useState<LicenseState | null>(null);
   const [msg, setMsg] = useState('');
   const [nick, setNick] = useState('');
 
@@ -21,6 +23,7 @@ export default function AuthPage() {
     fetch('/api/auth/logs').then((r) => r.json()).then((d) => setLogs(d.items || [])).catch(() => {});
     fetch('/api/accounts').then((r) => r.json()).then((d) => setAccounts(d.items || [])).catch(() => {});
     fetch('/api/stats/usage').then((r) => r.json()).then(setUsage).catch(() => {});
+    fetch('/api/license/status').then((r) => r.json()).then(setLic).catch(() => {});
     const p = new URLSearchParams(window.location.search);
     const bind = p.get('bind');
     const err = p.get('err');
@@ -64,6 +67,10 @@ export default function AuthPage() {
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>今日同步余量</div><b className="num">{usage ? `${usage.left}/${usage.cap}` : '—'}</b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>违规提醒</div><b>0 · 正常</b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>蓝V</div><b>未认证 · <a href="/messages#upgrade">去升级</a></b></div>
+          <div><div style={{ fontSize: 12, color: '#6B6862' }}>系统授权</div><b>
+            {lic ? (lic.mode === 'licensed' ? `正式授权${lic.valid ? '' : '（异常）'}` : '演示模式') : '—'}
+            {lic && <span style={{ fontWeight: 400, color: '#A8A5A0' }}> · {lic.watermark}{lic.customer ? ` · ${lic.customer}` : ''}</span>}
+          </b></div>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <div className="card" style={{ padding: 18, flex: 1 }}>

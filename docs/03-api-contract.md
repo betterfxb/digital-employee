@@ -6,20 +6,23 @@
 
 ## Auth
 ```
-GET /api/auth/douyin/qrcode -> {qrcode_url, state, expire_in:60}
+GET /api/auth/douyin/qrcode -> {qrcode_url, state, expire_in:60, mode:mock|live} // mode见docs/10（S23）
 GET /api/auth/poll?state&t -> {status:pending/success}（t为演示轮询计数器，生产换真授权码）
 GET /api/accounts/me -> Account{id, open_id_mask, nickname, avatar, auth_type:personal, expires_at}
-POST /api/auth/refresh -> {expires_at}
-GET /api/auth/logs -> AuthLog[{at,op,by,result}]（P0 mock恒3行，分页待真实DB）
+POST /api/auth/refresh -> {expires_at} // live模式走refresh_token（S23）
+GET /api/auth/logs -> AuthLog[{at,op,by,result}] // 初始3条+绑定/导入实时追加，保留90天（S23起动态）
+GET /api/auth/douyin/authorize?nick -> 302→callback?state=...（S23：mock占位密钥本地闭环，live跳抖音官方授权页）
+GET /api/auth/douyin/callback?state&code -> 302 /auth?bind=ok|err（open_id按昵称哈希幂等，绑定后自动切为当前账号）
 ```
 
 ## Stats / Videos
 ```
 GET /api/videos?account_id&start&end&page,sort,order -> Video[]
-GET /api/stats/overview?account_id&date -> {play,like,comment,fans,环比}
-GET /api/stats/trend?ids=a,b,c&days=7 -> {[id]:[{date,play,like}]}（键为请求传入id，mock传aweme_id）
+GET /api/stats/overview?account_id&date -> {play,like,comment,fans,环比,note}（S23b：作品指标按当前账号实时聚合，fans/mom仍mock口径，note=口径标注）
+GET /api/stats/trend?ids=a,b,c&days=7 -> {[id]:[{date,play,like}]}（键为请求传入id；imp_导入作品返回[]不画假线，S23b）
 POST /api/stats/sync -> {task_id}
 GET/POST /api/competitors -> {url,source,play,like,remark} // 手动导入区
+POST /api/import {kind:videos|comments, csv} -> {created,updated,skipped?} | {code:FATAL}（S23：按账号+标题/昵称upsert，imp_前缀，首行表头，≤200行）
 ```
 
 ## Comments / Follows
@@ -28,6 +31,7 @@ GET /api/comments?video_id&intent&keyword&unread_only&cursor,count=20
 POST /api/comments/read {ids[] | all_video_id}
 PATCH /api/comments/:id {intent:高/中/低/垃圾, ignore:bool}
 GET /api/comments/keywords/hot?days=7 -> [{kw,count}]
+GET /api/comments/:id/replies -> {items} / POST /api/comments/:id/replies {content} // 回评记录（S19，S25补进契约）
 POST /api/follows {comment_id, note} / GET /api/follows?status
 PATCH /api/follows/:id {status} // 状态流转，非法状态/未知id→FATAL（S13新增）
 ```
@@ -54,6 +58,15 @@ GET /api/tasks -> {items[{no,type,label,paused,lastRun,nextInMin,priority}]} // 
 POST /api/tasks/control {type, action:pause|resume} // 非法type→FATAL
 GET /api/scripts/templates?intent&nick&product -> {items} // 变量填充；垃圾意图返回处理建议
 GET /api/stats/usage -> {usedToday,cap,left} // 频控余量
+```
+
+## License（S25新增）
+```
+GET /api/license/status -> {mode:demo|licensed, valid, customer, expires_at, features[], seats, machine_slots, watermark, error}
+// demo无license文件→宽松不锁功能（红线docs/11§5）；验签Ed25519，canonical=key排序JSON
+// 溯源水印：响应头 X-Vendor-Watermark + HTML meta[name=x-vendor]，来源=license.watermark或WATERMARK_ID env
+// 发证：node scripts/license-gen.js keypair|issue --customer ...（私钥data/license_key.pem不进仓）
+// 功能闸挂载点 lib/license.ts requireLicense(feature)，live接真实API时启用
 ```
 
 ## 表结构要点
