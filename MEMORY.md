@@ -1,6 +1,6 @@
 # 项目记忆（给后续开发/Agent看，勿删）
 
-更新：2026-10-12 / 路径：D:\_project / 状态：S1-S23完成（S23预真机A+B：DOUYIN_MODE=mock占位密钥全流程跑通，live等企业资质密钥即切；CSV真实数据导入落data/local.json重启不丢）。质检：test11+verify60+冒烟68+journey4全绿。真机前置：企业营业执照入驻开放平台（个人主体只能建小玩法）+客户端密钥+联调HTTPS。已推送github私有仓betterfxb/digital-employee。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
+更新：2026-10-12 / 路径：D:\_project / 状态：S1-S24完成（S23预真机A+B：DOUYIN_MODE=mock占位密钥全流程跑通，live等企业资质密钥即切；CSV真实数据导入落data/local.json重启不丢。S24蓝V升级路径docs/12：客户后续可能申请蓝V，届时按B1-B5解锁清单+开关位置走，imEnabled翻转需verify同步改+版本升级）。质检：test11+verify60+冒烟68+journey4全绿。真机前置：企业营业执照入驻开放平台（个人主体只能建小玩法）+客户端密钥+联调HTTPS。已推送github私有仓betterfxb/digital-employee。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
 
 ## 1. 一句话
 非蓝V抖音中台：流量T+1看自己号 + 评论管自己视频 + 私信只辅助。禁爬虫/RPA自动私信。
@@ -20,7 +20,7 @@ Token见 docs/02-ui-spec.md。禁紫蓝渐变/大圆角彩卡/装饰icon/居中�
 接口/表见 docs/03-api-contract.md。分页 `{items,next_cursor,has_more}`，错误带trace_id，评论keyset，comment_id幂等。**铁律：读内存态的GET必须 `force-dynamic`（S12：无参GET会被构建期静态快照，verify-config含路由审计）。**
 
 ## 5. 任务状态
-S0文档✅（docs/00-07）→ S1✅骨架+授权（apps/web/app/auth+API+AES-GCM）→ S2✅看板（含TaskBar+趋势抽屉+竞品导入） → S3✅评论三栏（作品角标+流+详情，快捷键，意图PATCH/跟进登记） → S4✅私信占位（话术/台账走API+分批展示） → S5✅（build✅ smoke✅ compose+Dockerfile就绪）→ S6✅（tasks.config+06总表合并）→ S7✅（refresh/webhook桩/verify-config）→ S8✅（三栏补足S3验收）→ S9✅（lib/repo.ts抽象，有态路由全切，prisma/schema.prisma目标态，DATA_BACKEND预留）→ S10✅（e2e修私信崩溃/话术源/+342/抽屉遮挡）→ S11✅（授权刷新+日志/同步重载/迷你线/忽略/新增跟进/crypto单测）。下一步：接真实开放平台授权、PG+migrate、Redis队列、webhook真验签。
+S0文档✅（docs/00-07）→ S1✅骨架+授权（apps/web/app/auth+API+AES-GCM）→ S2✅看板（含TaskBar+趋势抽屉+竞品导入） → S3✅评论三栏（作品角标+流+详情，快捷键，意图PATCH/跟进登记） → S4✅私信占位（话术/台账走API+分批展示） → S5✅（build✅ smoke✅ compose+Dockerfile就绪）→ S6✅（tasks.config+06总表合并）→ S7✅（refresh/webhook桩/verify-config）→ S8✅（三栏补足S3验收）→ S9✅（lib/repo.ts抽象，有态路由全切，prisma/schema.prisma目标态，DATA_BACKEND预留）→ S10✅（e2e修私信崩溃/话术源/+342/抽屉遮挡）→ S11✅（授权刷新+日志/同步重载/迷你线/忽略/新增跟进/crypto单测）→ S12✅（路由审计+force-dynamic铁律）→ S13-S14✅（骨架补足+全仓评审docs/09）→ S15-S19✅（契约双视角/账号数据/UI改版/设置页/滑杆主题卡）→ S20✅（客户截图A+B合规落地，C封存docs/10）→ S21✅（GitHub私有仓SSH同步）→ S22✅（买断制授权方案docs/11，只规划）→ S23✅（预真机A+B：占位密钥授权全流程+token落盘+CSV真实数据导入data/local.json）→ S24✅（蓝V升级路径docs/12，只规划）。下一步：接真实开放平台授权（等企业资质）、PG+migrate、Redis队列、webhook真验签。
 
 ## 6. 风险红线
 scope申请按自用客服写；token提前3天预刷新；webhook验签+DLQ；电话脱敏；合同写明不支持个人号自动私信。
