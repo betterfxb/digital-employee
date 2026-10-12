@@ -1,4 +1,5 @@
 /** 内存态存储（P0 mock：同进程有效，重启清空；生产替换为Prisma，见01-architecture） */
+import './localData'; // S23: 启动即水合data/local.json（绑定账号/导入数据重启不丢）
 import { mockComments } from './mock';
 
 /** 已读comment_id集合（本地协作态，不反写抖音） */

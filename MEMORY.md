@@ -1,6 +1,6 @@
 # 项目记忆（给后续开发/Agent看，勿删）
 
-更新：2026-10-09 / 路径：D:\_project / 状态：S1-S22完成（S22买断制授权方案docs/11框架落盘，不含代码）。已推送github私有仓betterfxb/digital-employee。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
+更新：2026-10-12 / 路径：D:\_project / 状态：S1-S23完成（S23预真机A+B：DOUYIN_MODE=mock占位密钥全流程跑通，live等企业资质密钥即切；CSV真实数据导入落data/local.json重启不丢）。质检：test11+verify60+冒烟68+journey4全绿。真机前置：企业营业执照入驻开放平台（个人主体只能建小玩法）+客户端密钥+联调HTTPS。已推送github私有仓betterfxb/digital-employee。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
 
 ## 1. 一句话
 非蓝V抖音中台：流量T+1看自己号 + 评论管自己视频 + 私信只辅助。禁爬虫/RPA自动私信。

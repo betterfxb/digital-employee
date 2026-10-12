@@ -6,13 +6,14 @@ import type { Account, AuthLogItem } from '@/lib/types';
 
 /** S1 授权页：扫码轮询→看板闭环 + 掉线/加载/空态 */
 export default function AuthPage() {
-  const [qr, setQr] = useState<{ state: string } | null>(null);
+  const [qr, setQr] = useState<{ state: string; mode?: string } | null>(null);
   const [status, setStatus] = useState('pending');
   const [me, setMe] = useState<Account | null>(null);
   const [logs, setLogs] = useState<AuthLogItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [usage, setUsage] = useState<{ usedToday: number; cap: number; left: number } | null>(null);
   const [msg, setMsg] = useState('');
+  const [nick, setNick] = useState('');
 
   useEffect(() => {
     fetch('/api/auth/douyin/qrcode').then((r) => r.json()).then(setQr).catch(() => setMsg('授权服务异常，请刷新重试'));
@@ -20,6 +21,12 @@ export default function AuthPage() {
     fetch('/api/auth/logs').then((r) => r.json()).then((d) => setLogs(d.items || [])).catch(() => {});
     fetch('/api/accounts').then((r) => r.json()).then((d) => setAccounts(d.items || [])).catch(() => {});
     fetch('/api/stats/usage').then((r) => r.json()).then(setUsage).catch(() => {});
+    const p = new URLSearchParams(window.location.search);
+    const bind = p.get('bind');
+    const err = p.get('err');
+    if (bind === 'ok') setMsg(`已绑定「${p.get('nick') || ''}」并切为当前账号，可在看板导入真实数据`);
+    else if (err) setMsg(`绑定失败：${err}`);
+    if (bind || err) history.replaceState(null, '', '/auth');
   }, []);
 
   const switchAcc = async (id: string) => {
@@ -68,9 +75,20 @@ export default function AuthPage() {
             </div>
           </div>
           <div className="card" style={{ padding: 18, width: 320 }}>
-            <b>扫码授权</b><div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 12px' }}>60s过期 · 状态：{status}（轮询{authConfig.pollIntervalMs}ms）</div>
+            <b>扫码授权</b><div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 12px' }}>
+              60s过期 · 状态：{status}（轮询{authConfig.pollIntervalMs}ms） ·
+              <span style={{ marginLeft: 4, color: qr?.mode === 'live' ? '#1A1A18' : '#A8A5A0', fontWeight: 700 }}>{qr?.mode === 'live' ? '真机模式' : '预真机·占位密钥'}</span>
+            </div>
             <div style={{ width: 180, height: 180, border: '1px dashed #D8D5CF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A8A5A0' }}>{qr ? `QR ${qr.state}` : <span className="skel">loading</span>}</div>
             {status === 'success' && <a className="btn small" style={{ display: 'inline-block', marginTop: 12, textDecoration: 'none' }} href="/dashboard">授权成功，去看板 →</a>}
+            <div style={{ borderTop: '1px solid #E8E6E1', marginTop: 14, paddingTop: 12 }}>
+              <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 6 }}>真实授权（S23预真机）</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input value={nick} onChange={(e) => setNick(e.target.value)} placeholder="你的抖音号昵称" maxLength={20} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '6px 8px', fontSize: 12, width: 150 }} />
+                <a className="btn small" style={{ textDecoration: 'none', lineHeight: '26px' }} href={`/api/auth/douyin/authorize?nick=${encodeURIComponent(nick)}`}>授权</a>
+              </div>
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>{qr?.mode === 'live' ? '跳转抖音官方授权页' : '占位密钥本地跑通：回调→换token→落库→切号'}</div>
+            </div>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16, marginTop: 16, alignItems: 'start' }}>

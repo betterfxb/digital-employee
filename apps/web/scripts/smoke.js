@@ -99,6 +99,34 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const bad = await fetch(base + '/api/webhooks/douyin', { method: 'POST', headers: { 'Content-Type': 'text/plain', 'x-signature': 'smoke' }, body: '{oops' });
     pass(bad.status === 400, 'webhook bad-json DLQ');
   } catch (e) { pass(false, 'webhook flow'); }
+  // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
+  try {
+    const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });
+    const loc1 = a1.headers.get('location') || '';
+    pass(a1.status === 302 && loc1.includes('/api/auth/douyin/callback'), 'S23 authorize 302→callback');
+    const cb = await fetch(loc1.startsWith('http') ? loc1 : base + loc1, { redirect: 'manual' });
+    const loc2 = cb.headers.get('location') || '';
+    pass(cb.status === 302 && loc2.includes('bind=ok'), 'S23 callback bind ok');
+    const accs = await get('/api/accounts');
+    const bound = accs.j.items.find((x) => x.nickname === '冒烟绑定');
+    if (!bound) throw new Error('绑定账号未出现在列表');
+    const csvV = '标题,发布时间,播放,点赞,评论,转发\n冒烟真机作品,10-09,1000,88,9,3';
+    const iv1 = await post('/api/import', { kind: 'videos', csv: csvV });
+    const iv2 = await post('/api/import', { kind: 'videos', csv: csvV });
+    const vids = await get('/api/videos');
+    pass(iv1.s === 200 && iv2.s === 200 && iv1.j.created + iv1.j.updated === 1 && iv2.j.created + iv2.j.updated === 1 && vids.j.items.length === 1 && vids.j.items[0].title === '冒烟真机作品', 'S23 import video upsert幂等');
+    const ic = await post('/api/import', { kind: 'comments', csv: '昵称,内容,视频标题,时间,点赞\n烟友,跑刀怎么下单？多少钱,冒烟真机作品,1小时前,2' });
+    const cmts = await get('/api/comments?unread_only=0');
+    const mine = cmts.j.items.find((x) => x.user_nick === '烟友');
+    pass(ic.s === 200 && mine && mine.intent === '高意向' && mine.keywords.includes('下单'), 'S23 import comment+意图分类');
+    const bad1 = await post('/api/import', { kind: 'nope', csv: 'x' });
+    const bad2 = await post('/api/import', { kind: 'videos', csv: '' });
+    const bad3 = await post('/api/import', { kind: 'comments', csv: '昵称,内容\n烟友,没有视频标题列' });
+    pass(bad1.s === 400 && bad1.j.code === 'FATAL' && bad2.s === 400 && bad3.s === 400, 'S23 import invalid FATAL');
+    await post('/api/accounts/switch', { id: 'acc_001' });
+    const back = await get('/api/accounts/me');
+    pass(back.j.id === 'acc_001', 'S23 switch back acc_001');
+  } catch (e) { pass(false, 'S23 flow', ` ${e.message}`); }
   for (const p of ['/auth', '/dashboard', '/comments', '/messages']) {
     try { const r = await fetch(base + p); pass(r.ok, `page ${p}`, ` (${r.status})`); }
     catch (e) { pass(false, `page ${p}`); }

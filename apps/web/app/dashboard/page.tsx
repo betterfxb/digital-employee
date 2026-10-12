@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { statsConfig } from '@/config/stats.config';
+import { downloadCsv } from '@/lib/csv';
 import type { Video, Competitor, Overview, TrendPoint, CommentItem } from '@/lib/types';
 import { TaskBar } from '@/components/TaskBar';
 
@@ -23,6 +24,28 @@ export default function Dashboard() {
   const [ckind, setCkind] = useState('note');
   const KINDS: [string, string][] = [['note', '笔记'], ['author', '作者'], ['comment', '评论'], ['user', '用户']];
   const [cmsg, setCmsg] = useState('');
+  const [impMsg, setImpMsg] = useState('');
+  const vFileRef = useRef<HTMLInputElement>(null);
+  const cFileRef = useRef<HTMLInputElement>(null);
+
+  const doImport = (kind: 'videos' | 'comments', file?: File) => {
+    if (!file) return;
+    file.text().then((csv) => fetch('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, csv }),
+    }).then((r) => r.json()).then((r) => {
+      if (r.code) { setImpMsg(r.message); return; }
+      const n = (r.created || 0) + (r.updated || 0);
+      setImpMsg(`导入${kind === 'videos' ? '作品' : '评论'}成功 ${n}条${r.skipped ? `（跳过${r.skipped}条，视频标题未匹配）` : ''}${r.updated ? ` · 更新${r.updated}` : ''}`);
+      reloadStats();
+    }).catch(() => setImpMsg('导入失败，请重试')));
+  };
+
+  const dlTemplate = (kind: 'videos' | 'comments') => {
+    if (kind === 'videos') downloadCsv('作品导入模板.csv', ['标题', '发布时间', '播放', '点赞', '评论', '转发'], [['三角洲跑刀实录 · 一局爆仓', '10-08', 48201, 4102, 312, 410]]);
+    else downloadCsv('评论导入模板.csv', ['昵称', '内容', '视频标题', '时间', '点赞'], [['刀友老陈', '跑刀一单多少钱？怎么下单？', '三角洲跑刀实录 · 一局爆仓', '2小时前', 12]]);
+  };
 
   const loadComps = () => fetch('/api/competitors').then((r) => r.json()).then((d) => setComps(d.items || [])).catch(() => {});
 
@@ -47,7 +70,12 @@ export default function Dashboard() {
 
   const reloadStats = () => {
     fetch('/api/stats/overview').then((r) => r.json()).then(setOv).catch(() => {});
-    fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
+    fetch('/api/videos').then((r) => r.json()).then((d) => {
+      const vs: Video[] = d.items || [];
+      setVideos(vs);
+      const ids = vs.map((v) => v.aweme_id || v.id).join(',');
+      if (ids) fetch(`/api/stats/trend?ids=${ids}&days=7`).then((r) => r.json()).then(setAllTrend).catch(() => {});
+    }).catch(() => {});
     loadComps();
   };
 
@@ -147,6 +175,19 @@ export default function Dashboard() {
           <table><thead><tr><th>作品</th><th>发布时间</th><th>播放</th><th>点赞</th><th>点赞率</th><th>评论</th><th>转发</th><th>近7天</th><th></th></tr></thead>
             <tbody className="num">{videos.map((v) => { const rows = allTrend[v.aweme_id || v.id] || []; return (<tr key={v.id}><td>{v.title}</td><td>{v.publish_time}</td><td>{v.play.toLocaleString()}</td><td>{v.like.toLocaleString()}</td><td>{v.play ? `${(v.like / v.play * 100).toFixed(1)}%` : '—'}</td><td>{v.comment}</td><td>{v.share}</td><td>{rows.length ? <svg viewBox="0 0 90 28" style={{ width: 90, height: 28 }} aria-hidden="true"><polyline points={spark(rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" /></svg> : '—'}</td><td><button className="btn ghost small" onClick={() => openTrend(v.aweme_id || v.id, v.title, trendDays)}>趋势</button></td></tr>); })}</tbody></table>
           <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0' }}>服务端分页 · 20/页 · 趋势批量上限{statsConfig.trendBatchMax}</div>
+        </div>
+        <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
+          <b>真实数据导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>自己的账号数据手工入台（S23预真机）· 单次≤200行 · 按标题upsert不重复</span>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn small" onClick={() => { if (vFileRef.current) vFileRef.current.value = ''; vFileRef.current?.click(); }}>导入作品CSV</button>
+            <button className="btn ghost small" onClick={() => { if (cFileRef.current) cFileRef.current.value = ''; cFileRef.current?.click(); }}>导入评论CSV</button>
+            <button className="btn ghost small" onClick={() => dlTemplate('videos')}>模板·作品</button>
+            <button className="btn ghost small" onClick={() => dlTemplate('comments')}>模板·评论</button>
+            {impMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{impMsg}</span>}
+            <input ref={vFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => doImport('videos', e.target.files?.[0])} />
+            <input ref={cFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => doImport('comments', e.target.files?.[0])} />
+          </div>
+          <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>数据落本地 data/local.json 重启不丢 · 评论自动分五档意图 · 作品归属当前主账号（授权页绑定后自动切换）</div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
           <b>竞品手动导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>官方不给全平台数据，此区与自有数据隔离</span>
