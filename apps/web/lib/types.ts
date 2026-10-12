@@ -45,4 +45,4 @@ export interface DlqItem { id: string; reason: string; at: string; body: string 
 
 export interface AuthLogItem { at: string; op: string; by: string; result: string }
 
-export interface Overview { play: number; like: number; comment: number; fans_new: number; fans_total: number }
+export interface Overview { play: number; like: number; comment: number; fans_new: number; fans_total: number; note?: string }

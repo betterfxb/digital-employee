@@ -13,7 +13,7 @@ export default function Dashboard() {
   const [syncMsg, setSyncMsg] = useState('');
   const [emsg, setEmsg] = useState('');
   const [derr, setDerr] = useState(false);
-  const [trend, setTrend] = useState<{ id: string; title: string; rows: TrendPoint[] } | null>(null);
+  const [trend, setTrend] = useState<{ id: string; title: string; rows: TrendPoint[] | null } | null>(null);
   const [trendDays, setTrendDays] = useState(7);
   const [comps, setComps] = useState<Competitor[]>([]);
   const [allTrend, setAllTrend] = useState<Record<string, TrendPoint[]>>({});
@@ -90,7 +90,7 @@ export default function Dashboard() {
   };
 
   const openTrend = (id: string, title: string, days = trendDays) => {
-    setTrend({ id, title, rows: [] });
+    setTrend({ id, title, rows: null });
     fetch(`/api/stats/trend?ids=${id}&days=${days}`).then((r) => r.json()).then((d) => setTrend({ id, title, rows: d[id] || [] })).catch(() => { setTrend(null); setEmsg('趋势加载失败，请重试'); });
   };
 
@@ -110,7 +110,7 @@ export default function Dashboard() {
   return (
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}>
-        <div><b style={{ fontSize: 15 }}>数据看板</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>昨日数据・今晨6点更新</div></div>
+        <div><b style={{ fontSize: 15 }}>数据看板</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>{ov?.note || '昨日数据・今晨6点更新'}</div></div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>{emsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{emsg}</span>}<button className="btn ghost small" onClick={sync}>{cool > 0 ? `${cool}s后可同步` : '手动同步'}</button></div>
       </div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
@@ -211,8 +211,10 @@ export default function Dashboard() {
               <select value={trendDays} onChange={(e) => { const d = Number(e.target.value); setTrendDays(d); if (trend) openTrend(trend.id, trend.title, d); }} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '6px 8px', fontSize: 12 }}>
                 {statsConfig.trendDaysOptions.map((d) => <option key={d} value={d}>近{d}天</option>)}
               </select>
-            </div><div style={{ fontSize: 12, color: '#A8A5A0' }}>T+1</div>
-            {trend.rows.length === 0 ? <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div> : (
+            </div>            <div style={{ fontSize: 12, color: '#A8A5A0' }}>T+1</div>
+            {trend.rows === null ? <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div> : trend.rows.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '16px 0' }}>导入作品暂无趋势序列（需同步能力接入后生成），指标以作品表为准</div>
+            ) : (
               <div>
                 <svg viewBox="0 0 100 36" style={{ width: '100%', height: 72, marginTop: 12 }} role="img" aria-label="播放趋势迷你线">
                   <polyline points={spark(trend.rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" />

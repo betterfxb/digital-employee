@@ -10,6 +10,7 @@ export async function GET(req: Request) {
   if (ids.length > statsConfig.trendBatchMax) return fail('FATAL', `批量上限${statsConfig.trendBatchMax}，请分批查询`);
   const out: Record<string, { date: string; play: number; like: number }[]> = {};
   ids.forEach((id, vi) => {
+    if (id.startsWith('imp_')) { out[id] = []; return; } // S23b: 导入作品无同步序列，返回空（UI显示"—"），不画伪随机假线
     const seed = [...id].reduce((a, c) => a + c.charCodeAt(0), 0) + vi * 7;
     out[id] = Array.from({ length: days }, (_, i) => ({
       date: `D-${days - 1 - i}`,

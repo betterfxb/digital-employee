@@ -39,6 +39,28 @@ const tag = Date.now().toString(36);
     const g = await get('/api/scripts/templates?intent=%E5%9E%83%E5%9C%BE');
     pass(g.items.length === 1 && g.items[0].scene === '处理建议', 'J4 垃圾意图建议');
   } catch (e) { pass(false, 'J4 垃圾意图建议', ` ${e.message}`); }
+  // J5 预真机真数据闭环：授权绑定→导入→意图分类→高意向话术→跟进台账→回评（S23b）
+  try {
+    const b1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('旅程绑定'), { redirect: 'manual' });
+    const l1 = b1.headers.get('location') || '';
+    const b2 = await fetch(l1.startsWith('http') ? l1 : base + l1, { redirect: 'manual' });
+    const accs = await get('/api/accounts');
+    const bound = accs.items.find((x) => x.nickname === '旅程绑定');
+    if (!bound) throw new Error('绑定账号缺失');
+    await send('POST', '/api/accounts/switch', { id: bound.id });
+    await send('POST', '/api/import', { kind: 'videos', csv: '标题,发布时间,播放,点赞,评论,转发\n旅程真机作品,10-10,2000,150,20,8' });
+    await send('POST', '/api/import', { kind: 'comments', csv: '昵称,内容,视频标题,时间,点赞\n旅程粉,这跑刀怎么下单？多少钱,旅程真机作品,10分钟前,3' });
+    const vids = await get('/api/videos');
+    const vv = vids.items.find((v) => v.title === '旅程真机作品');
+    const list = await get('/api/comments?unread_only=0');
+    const c = list.items.find((x) => x.user_nick === '旅程粉');
+    const tpl = await get('/api/scripts/templates?intent=' + encodeURIComponent('高意向'));
+    const fol = await send('POST', '/api/follows', { peer_nick: '旅程粉', source_video_id: vv ? vv.id : 'nope' });
+    const rep = await send('POST', `/api/comments/${c ? c.id : 'nope'}/replies`, { content: 'J5回评' });
+    const reps = c ? await get(`/api/comments/${c.id}/replies`) : { items: [] };
+    await send('POST', '/api/accounts/switch', { id: 'acc_001' });
+    pass(b2.status === 302 && !!vv && !!c && c.intent === '高意向' && tpl.items.length > 0 && tpl.items[0].scene !== '处理建议' && fol.j.status === '待回访' && rep.s === 200 && reps.items.some((x) => x.content === 'J5回评'), 'J5 预真机真数据闭环');
+  } catch (e) { pass(false, 'J5 预真机真数据闭环', ` ${e.message}`); }
   console.log(fail === 0 ? 'JOURNEY ALL GREEN' : `JOURNEY ${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();
