@@ -1,6 +1,6 @@
 # 项目记忆（给后续开发/Agent看，勿删）
 
-更新：2026-10-12 / 路径：D:\_project / 状态：S1-S25完成（S23预真机A+B：DOUYIN_MODE=mock占位密钥全流程跑通，live等企业资质密钥即切；CSV真实数据导入落data/local.json重启不丢。S23b：overview按当前账号实时聚合+趋势对imp_不画假线+J5真数据闭环旅程。S24蓝V升级路径docs/12。S25授权落地一期：lib/license.ts Ed25519验签+license-gen.js发证（私钥data/license_key.pem不进仓）+溯源水印构建期注入+auth页授权状态卡；demo无license宽松不锁功能已验）。质检：test11+verify61+冒烟70+journey5全绿。真机前置：企业营业执照入驻开放平台（个人主体只能建小玩法）+客户端密钥+联调HTTPS。已推送github私有仓betterfxb/digital-employee。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
+更新：2026-10-12 / 路径：D:\_project / 状态：S1-S25完成（S23预真机A+B：DOUYIN_MODE=mock占位密钥全流程跑通，live等企业资质密钥即切；CSV真实数据导入落data/local.json重启不丢。S23b：overview按当前账号实时聚合+趋势对imp_不画假线+J5真数据闭环旅程。S24蓝V升级路径docs/12。S25授权落地一期：lib/license.ts Ed25519验签+license-gen.js发证（私钥data/license_key.pem不进仓）+溯源水印构建期注入+auth页授权状态卡；demo无license宽松不锁功能已验。S25b全流程测试整改：修回评目标漂移（评论页操作刷新保持选中）+业务集合持久化（台账/回评等重启不丢，按id去重水合））。质检：test11+verify61+冒烟70+journey5全绿。真机前置：企业营业执照入驻开放平台（个人主体只能建小玩法）+客户端密钥+联调HTTPS。已推送github私有仓betterfxb/digital-employee。运维铁律：停服务确认端口FREE再起，构建后核产物再验UI；工具回执与落盘可能脱钩，关键写后必读验。注意：device-flow client_id在本环境404，GitHub操作走本机SSH（betterfxb）。
 
 ## 1. 一句话
 非蓝V抖音中台：流量T+1看自己号 + 评论管自己视频 + 私信只辅助。禁爬虫/RPA自动私信。

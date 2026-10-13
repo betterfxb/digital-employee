@@ -1,5 +1,6 @@
-/** 内存态存储（P0 mock：同进程有效，重启清空；生产替换为Prisma，见01-architecture） */
-import './localData'; // S23: 启动即水合data/local.json（绑定账号/导入数据重启不丢）
+/** 内存态存储（P0 mock：同进程有效；S23起账号/导入/token持久化，S25b台账/回评等集合持久化；生产替换为Prisma，见01-architecture） */
+import { hydrateCollections } from './localData'; // S23水合+S25b集合水合（模块尾部调用）
+import './localData';
 import { mockComments } from './mock';
 
 /** 已读comment_id集合（本地协作态，不反写抖音） */
@@ -57,3 +58,6 @@ export function viewOf(c: (typeof mockComments)[number]) {
   const ov = intentOverrides.get(c.id);
   return { ...c, is_read_local: isRead(c), intent: ov?.intent || c.intent, ignore: ov?.ignore || false };
 }
+
+// S25b：业务集合水合（模块尾部，数组已定义）；repo变更点调persistCollections落盘
+hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules });

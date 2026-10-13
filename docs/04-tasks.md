@@ -27,6 +27,7 @@
 | S23 预真机A+B | IDouyinPort占位/回调换token/token加密落盘/绑定切号 + CSV真实数据导入（作品/评论upsert+意图分类） | 真机测试前置 | P0 | mock全流程e2e绿，live等密钥即切 |
 | S24 蓝V升级路径 | 解锁清单B1-B5/开关位置/申请顺序/边界，见docs/12 | 客户蓝V规划 | P1 | 框架落盘，不含代码，触发后再立项 |
 | S25 授权落地一期 | license文件格式+Ed25519验签(lib/license)+溯源水印(构建期头+meta)+/api/license/status+授权状态卡+发证工具license-gen.js，见docs/11§7 | S24 | P0 | demo宽松红线已验（无license不锁功能）；含docs/03契约补齐 |
+| S25b 全流程测试整改 | 全页面UI巡检+业务链路实测；修2缺陷：①评论页标已读后选中静默漂移致回评/跟进记错条（操作刷新保持选中+详情缓存）②台账/回评/竞品/队列/设置/话术/规则重启丢失（S25b集合持久化data/local.json+按id去重） | S25 | P0 | test11+verify61+冒烟70+journey5全绿；持久化跨重启验证通过 |
 | S21 GitHub同步 | 本地commit+私有仓digital-employee，SSH推送 | 上线 | P1 | 已推送，远端main同步 |
 | S14 代码质量评审 | 全仓评审+报告docs/09（5 Major+7 Minor+行动项） | S13 | P1 | 报告落盘 |
 

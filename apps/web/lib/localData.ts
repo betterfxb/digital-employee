@@ -18,10 +18,18 @@ export interface StoredToken {
   expires_at?: string;
 }
 
-interface LocalState { accounts: Account[]; videos: Video[]; comments: CommentItem[]; tokens: Record<string, StoredToken> }
+interface LocalState {
+  accounts: Account[]; videos: Video[]; comments: CommentItem[]; tokens: Record<string, StoredToken>;
+  /** S25b 业务集合持久化（台账/回评/竞品/队列/设置/自定义话术/接待规则，重启不丢） */
+  follows: unknown[]; replies: unknown[]; competitors: unknown[]; videoTasks: unknown[];
+  settings: Record<string, unknown> | null; customScripts: unknown[]; replyRules: unknown[];
+}
 
 const FILE = path.join(process.cwd(), 'data', 'local.json');
-const state: LocalState = { accounts: [], videos: [], comments: [], tokens: {} };
+const state: LocalState = {
+  accounts: [], videos: [], comments: [], tokens: {},
+  follows: [], replies: [], competitors: [], videoTasks: [], settings: null, customScripts: [], replyRules: [],
+};
 
 function hydrate() {
   try {
@@ -31,6 +39,13 @@ function hydrate() {
       if (Array.isArray(raw.videos)) state.videos = raw.videos;
       if (Array.isArray(raw.comments)) state.comments = raw.comments;
       if (raw.tokens && typeof raw.tokens === 'object') state.tokens = raw.tokens;
+      if (Array.isArray(raw.follows)) state.follows = raw.follows;
+      if (Array.isArray(raw.replies)) state.replies = raw.replies;
+      if (Array.isArray(raw.competitors)) state.competitors = raw.competitors;
+      if (Array.isArray(raw.videoTasks)) state.videoTasks = raw.videoTasks;
+      if (raw.settings && typeof raw.settings === 'object') state.settings = raw.settings;
+      if (Array.isArray(raw.customScripts)) state.customScripts = raw.customScripts;
+      if (Array.isArray(raw.replyRules)) state.replyRules = raw.replyRules;
     }
   } catch { /* 文件损坏则忽略，保持内存态起跑 */ }
   state.accounts.forEach((a) => { if (!mockAccounts.some((x) => x.id === a.id)) mockAccounts.push(a); });
@@ -38,6 +53,41 @@ function hydrate() {
   state.comments.forEach((c) => { if (!mockComments.some((x) => x.id === c.id)) mockComments.push(c); });
 }
 hydrate();
+
+/** S25b 业务集合引用（store模块体尾部注入水合；repo变更点调persistCollections） */
+export interface CollectionRefs {
+  follows: { id: string }[]; replies: { id: string }[]; competitors: { id: string }[]; videoTasks: { id: string }[];
+  settings: object; customScripts: { id: string }[]; replyRules: { id: string }[];
+}
+let collRefs: CollectionRefs | null = null;
+
+/** store数组定义完成后调用：文件数据注入内存数组（按id去重，防mock初始项与文件副本重复） */
+export function hydrateCollections(refs: CollectionRefs) {
+  collRefs = refs;
+  const merge = <T extends { id: string }>(arr: T[], saved: unknown[]) => {
+    saved.forEach((s) => { const o = s as T; if (o && typeof o.id === 'string' && !arr.some((x) => x.id === o.id)) arr.push(o); });
+  };
+  merge(refs.follows, state.follows);
+  merge(refs.replies, state.replies);
+  merge(refs.competitors, state.competitors);
+  merge(refs.videoTasks, state.videoTasks);
+  if (state.settings) Object.assign(refs.settings, state.settings);
+  merge(refs.customScripts, state.customScripts);
+  merge(refs.replyRules, state.replyRules);
+}
+
+/** repo变更点调用：内存集合→文件（全量序列化） */
+export function persistCollections() {
+  if (!collRefs) return;
+  state.follows = collRefs.follows;
+  state.replies = collRefs.replies;
+  state.competitors = collRefs.competitors;
+  state.videoTasks = collRefs.videoTasks;
+  state.settings = collRefs.settings as Record<string, unknown>;
+  state.customScripts = collRefs.customScripts;
+  state.replyRules = collRefs.replyRules;
+  flushLocal();
+}
 
 export function flushLocal() {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });

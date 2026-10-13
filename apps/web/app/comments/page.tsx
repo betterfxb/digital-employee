@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { commentsConfig } from '@/config/comments.config';
 import { downloadCsv } from '@/lib/csv';
 import type { Video, CommentItem, ScriptItem, TemplateItem } from '@/lib/types';
@@ -28,7 +28,13 @@ export default function Comments() {
     if (it) q.set('intent', it);
     fetch(`/api/comments?${q}`).then((r) => r.json()).then((d) => {
       setItems(d.items || []);
-      setSelId((prev) => (d.items || []).some((x: CommentItem) => x.id === prev) ? prev : ((d.items || [])[0]?.id || null));
+      // 选中保持：业务操作刷新（无参load）不因过滤移除而跳走（防回评/跟进记错条）；用户主动切筛选才重选第一条
+      setSelId((prev) => {
+        const list = (d.items || []) as CommentItem[];
+        if (list.some((x) => x.id === prev)) return prev;
+        const filterChanged = !!o && (o.v !== undefined || o.it !== undefined || o.k !== undefined || o.uo !== undefined);
+        return filterChanged ? (list[0]?.id || null) : prev;
+      });
     }).catch(() => flash('列表加载失败，请重试'));
     fetch('/api/comments?unread_only=1').then((r) => r.json()).then((d) => {
       const c: Record<string, number> = {};
@@ -119,7 +125,10 @@ export default function Comments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, selId]);
 
-  const sel = items.find((x) => x.id === selId) || null;
+  const selCacheRef = useRef<CommentItem | null>(null);
+  const sel = items.find((x) => x.id === selId) || (selCacheRef.current && selCacheRef.current.id === selId ? selCacheRef.current : null);
+  // 详情缓存：选中项被"只看未读"等过滤移除后详情保持显示，防操作目标静默漂移
+  useEffect(() => { if (sel) selCacheRef.current = sel; }, [sel]);
   // 选中变化时按意图+昵称+产品重取话术模板
   useEffect(() => {
     if (!sel) return;

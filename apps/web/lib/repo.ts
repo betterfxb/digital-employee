@@ -4,6 +4,7 @@
  */
 import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, viewOf } from './store';
 import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
+import { persistCollections } from './localData'; // S25b: 业务集合变更落盘
 import type { Account, Video, CommentItem, Follow, Competitor, DlqItem } from './types';
 
 export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string }
@@ -68,12 +69,12 @@ const memory: Repos = {
   },
   follows: {
     list: (status) => (status ? follows.filter((f) => f.status === status) : follows),
-    create: (input) => { const item = { id: `f-${Date.now().toString(36)}`, ...input }; follows.push(item); return item; },
-    update: (id, status) => { const f = follows.find((x) => x.id === id); if (!f) return null; f.status = status; return f; },
+    create: (input) => { const item = { id: `f-${Date.now().toString(36)}`, ...input }; follows.push(item); persistCollections(); return item; },
+    update: (id, status) => { const f = follows.find((x) => x.id === id); if (!f) return null; f.status = status; persistCollections(); return f; },
   },
   competitors: {
     list: () => competitors,
-    create: (input) => { const item = { id: `cp-${Date.now().toString(36)}`, play: 0, like: 0, ...input }; competitors.push(item); return item; },
+    create: (input) => { const item = { id: `cp-${Date.now().toString(36)}`, play: 0, like: 0, ...input }; competitors.push(item); persistCollections(); return item; },
   },
   events: {
     receive: (eventId) => { if (seenEvents.has(eventId)) return false; seenEvents.add(eventId); return true; },
@@ -105,10 +106,11 @@ const memory: Repos = {
       if (typeof patch.service_name === 'string') settings.service_name = patch.service_name;
       if (typeof patch.font_size === 'number') settings.font_size = patch.font_size;
       if (typeof patch.theme_color === 'string') settings.theme_color = patch.theme_color;
+      persistCollections();
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
       return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at };
     },
-    setPassword: () => { settings.password_changed_at = new Date().toISOString(); return settings.password_changed_at as string; },
+    setPassword: () => { settings.password_changed_at = new Date().toISOString(); persistCollections(); return settings.password_changed_at as string; },
   },
   videoTasks: {
     list: () => videoTasks,
@@ -116,6 +118,7 @@ const memory: Repos = {
       if (videoTasks.some((t) => t.video_id === video_id)) return null;
       const item: VideoTask = { id: `vt-${Date.now().toString(36)}`, video_id, title, follow: true, like_done: false, fav_done: false, paused: false, interval_min: 5, last_check: null, created_at: new Date().toISOString().slice(5, 10) };
       videoTasks.push(item);
+      persistCollections();
       return item;
     },
     update: (id, patch) => {
@@ -126,9 +129,10 @@ const memory: Repos = {
       if (typeof patch.fav_done === 'boolean') t.fav_done = patch.fav_done;
       if (typeof patch.paused === 'boolean') t.paused = patch.paused;
       if (typeof patch.interval_min === 'number' && patch.interval_min >= 1 && patch.interval_min <= 120) t.interval_min = Math.floor(patch.interval_min);
+      persistCollections();
       return t;
     },
-    remove: (id) => { const i = videoTasks.findIndex((x) => x.id === id); if (i < 0) return false; videoTasks.splice(i, 1); return true; },
+    remove: (id) => { const i = videoTasks.findIndex((x) => x.id === id); if (i < 0) return false; videoTasks.splice(i, 1); persistCollections(); return true; },
   },
   scripts: {
     list: () => [...mockScripts.map((s) => ({ ...s })), ...customScripts],
@@ -136,9 +140,10 @@ const memory: Repos = {
       if (!title.trim() || !content.trim()) return null;
       const item = { id: `cs-${Date.now().toString(36)}`, category: category || '自定义', title: title.trim(), content: content.trim() };
       customScripts.push(item);
+      persistCollections();
       return item;
     },
-    remove: (id) => { const i = customScripts.findIndex((x) => x.id === id); if (i < 0) return false; customScripts.splice(i, 1); return true; },
+    remove: (id) => { const i = customScripts.findIndex((x) => x.id === id); if (i < 0) return false; customScripts.splice(i, 1); persistCollections(); return true; },
   },
   replyRules: {
     list: () => replyRules,
@@ -146,6 +151,7 @@ const memory: Repos = {
       if (!keyword.trim() || !reply.trim()) return null;
       const item = { id: `rr-${Date.now().toString(36)}`, keyword: keyword.trim(), reply: reply.trim(), enabled: true };
       replyRules.push(item);
+      persistCollections();
       return item;
     },
     update: (id, patch) => {
@@ -153,9 +159,10 @@ const memory: Repos = {
       if (!r) return null;
       if (typeof patch.reply === 'string' && patch.reply.trim()) r.reply = patch.reply.trim();
       if (typeof patch.enabled === 'boolean') r.enabled = patch.enabled;
+      persistCollections();
       return r;
     },
-    remove: (id) => { const i = replyRules.findIndex((x) => x.id === id); if (i < 0) return false; replyRules.splice(i, 1); return true; },
+    remove: (id) => { const i = replyRules.findIndex((x) => x.id === id); if (i < 0) return false; replyRules.splice(i, 1); persistCollections(); return true; },
   },
   replies: {
     list: (comment_id) => replies.filter((r) => r.comment_id === comment_id),
@@ -163,6 +170,7 @@ const memory: Repos = {
       if (!content.trim()) return null;
       const item = { id: `rp-${Date.now().toString(36)}`, comment_id, content: content.trim(), at: new Date().toISOString().slice(5, 16).replace('T', ' ') };
       replies.push(item);
+      persistCollections();
       return item;
     },
   },
