@@ -28,8 +28,9 @@
 | S24 蓝V升级路径 | 解锁清单B1-B5/开关位置/申请顺序/边界，见docs/12 | 客户蓝V规划 | P1 | 框架落盘，不含代码，触发后再立项 |
 | S25 授权落地一期 | license文件格式+Ed25519验签(lib/license)+溯源水印(构建期头+meta)+/api/license/status+授权状态卡+发证工具license-gen.js，见docs/11§7 | S24 | P0 | demo宽松红线已验（无license不锁功能）；含docs/03契约补齐 |
 | S25b 全流程测试整改 | 全页面UI巡检+业务链路实测；修2缺陷：①评论页标已读后选中静默漂移致回评/跟进记错条（操作刷新保持选中+详情缓存）②台账/回评/竞品/队列/设置/话术/规则重启丢失（S25b集合持久化data/local.json+按id去重） | S25 | P0 | test11+verify61+冒烟70+journey5全绿；持久化跨重启验证通过 |
+| S26 live拉取预写 | 开放平台作品/评论拉取（fetchVideoList/fetchCommentList+纯映射douyinMappers）+live同步编排liveSync+sync路由live分支+共享upsert层importData+open_id落盘；密钥一到DOUYIN_MODE=live即通自动同步 | S25b | P0 | port9+test11+verify61+冒烟70+journey5全绿；mock行为不变；端点标注联调复核 |
 | S21 GitHub同步 | 本地commit+私有仓digital-employee，SSH推送 | 上线 | P1 | 已推送，远端main同步 |
 | S14 代码质量评审 | 全仓评审+报告docs/09（5 Major+7 Minor+行动项） | S13 | P1 | 报告落盘 |
 
 - S1阻塞S2/S3/S4，S2/S3可并行
-- 当前状态（2026-10-12）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅ S23✅ S24✅ S25✅（mock态，test11+verify61+冒烟70+journey5全绿；已推送github私有仓betterfxb/digital-employee）
+- 当前状态（2026-10-13）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅ S23✅ S24✅ S25✅ S25b✅ S26✅（mock态，test11+verify61+冒烟70+journey5+port9全绿；已推送github私有仓betterfxb/digital-employee）

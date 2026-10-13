@@ -2,10 +2,8 @@ export const dynamic = 'force-dynamic'; // S23: 写内存态+落盘，禁静态�
 import { fail, ok } from '@/lib/response';
 import { douyinConfig } from '@/config/douyin.config';
 import { getRepos } from '@/lib/repo';
-import { mockVideos, mockComments } from '@/lib/mock';
-import { rememberVideo, rememberComment, pushAuthLog, hash6 } from '@/lib/localData';
-import { classifyIntent } from '@/lib/classify';
-import type { Video, CommentItem } from '@/lib/types';
+import { pushAuthLog } from '@/lib/localData';
+import { upsertVideo, upsertComment } from '@/lib/importData';
 
 /** CSV解析：支持引号转义/逗号换行/BOM，返回二维数组 */
 function parseCsv(text: string): string[][] {
@@ -56,23 +54,16 @@ function importVideos(rows: string[][], aid: string): ImportResult {
     const title = (r[head['标题']] || '').trim();
     if (!title) continue;
     const pt = (head['发布时间'] !== undefined ? (r[head['发布时间']] || '').trim() : '') || `${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
-    const stats = {
+    const c = upsertVideo(aid, {
+      title,
+      publish_time: pt,
       play: num(head['播放'] !== undefined ? r[head['播放']] : ''),
       like: num(head['点赞'] !== undefined ? r[head['点赞']] : ''),
       comment: num(head['评论'] !== undefined ? r[head['评论']] : ''),
       share: num(head['转发'] !== undefined ? r[head['转发']] : ''),
-    };
-    const exist = mockVideos.find((v) => v.id.startsWith('imp-') && v.account_id === aid && v.title === title && v.publish_time === pt);
-    if (exist) {
-      Object.assign(exist, stats);
-      rememberVideo(exist);
-      updated++;
-    } else {
-      const v: Video = { id: `imp-${hash6(aid + title + pt)}`, account_id: aid, aweme_id: `imp_aw_${hash6(aid + title)}`, title, cover: '', publish_time: pt, ...stats };
-      mockVideos.push(v);
-      rememberVideo(v);
-      created++;
-    }
+    });
+    created += c.created;
+    updated += c.updated;
   }
   if (created + updated === 0) return { error: '没有可导入的有效行（检查「标题」列与数据）', created: 0, updated: 0 };
   return { created, updated };
@@ -91,33 +82,16 @@ function importComments(rows: string[][], aid: string): ImportResult {
     const content = (r[head['内容']] || '').trim();
     const vTitle = (r[head['视频标题']] || '').trim();
     if (!nick || !content) continue;
-    const video = mockVideos.find((v) => v.account_id === aid && v.title === vTitle);
-    if (!video) { skipped++; continue; }
-    const { intent, keywords } = classifyIntent(content);
-    const exist = mockComments.find((c) => c.id.startsWith('imp-') && c.video_id === video.id && c.user_nick === nick && c.content === content);
-    if (exist) {
-      exist.like_count = num(head['点赞'] !== undefined ? r[head['点赞']] : '');
-      exist.intent = intent;
-      exist.keywords = keywords;
-      rememberComment(exist);
-      updated++;
-    } else {
-      const c: CommentItem = {
-        id: `imp-${hash6(video.id + nick + content)}`,
-        comment_id: `imp_cm_${hash6(nick + content)}`,
-        video_id: video.id,
-        user_nick: nick,
-        content,
-        like_count: num(head['点赞'] !== undefined ? r[head['点赞']] : ''),
-        create_time: (head['时间'] !== undefined ? (r[head['时间']] || '').trim() : '') || '刚刚',
-        is_read_local: false,
-        intent,
-        keywords,
-      };
-      mockComments.push(c);
-      rememberComment(c);
-      created++;
-    }
+    const c = upsertComment(aid, {
+      video_title: vTitle,
+      nick,
+      content,
+      like: num(head['点赞'] !== undefined ? r[head['点赞']] : ''),
+      time: (head['时间'] !== undefined ? (r[head['时间']] || '').trim() : '') || '刚刚',
+    });
+    created += c.created;
+    updated += c.updated;
+    skipped += c.skipped;
   }
   if (created + updated === 0) return { error: skipped > 0 ? `没有匹配到视频标题的评论（跳过${skipped}条）` : '没有可导入的有效行', created: 0, updated: 0, skipped };
   return { created, updated, skipped };

@@ -20,7 +20,7 @@ GET /api/auth/douyin/callback?state&code -> 302 /auth?bind=ok|err（open_id按�
 GET /api/videos?account_id&start&end&page,sort,order -> Video[]
 GET /api/stats/overview?account_id&date -> {play,like,comment,fans,环比,note}（S23b：作品指标按当前账号实时聚合，fans/mom仍mock口径，note=口径标注）
 GET /api/stats/trend?ids=a,b,c&days=7 -> {[id]:[{date,play,like}]}（键为请求传入id；imp_导入作品返回[]不画假线，S23b）
-POST /api/stats/sync -> {task_id}
+POST /api/stats/sync -> {task_id, live_sync?} // S26: live模式入队后实际拉开放平台作品+评论（mock纯入队不变）；live_sync={mode,videos,comments,pages,error?}
 GET/POST /api/competitors -> {url,source,play,like,remark} // 手动导入区
 POST /api/import {kind:videos|comments, csv} -> {created,updated,skipped?} | {code:FATAL}（S23：按账号+标题/昵称upsert，imp_前缀，首行表头，≤200行）
 ```

@@ -16,6 +16,8 @@ export interface StoredToken {
   plain?: string;
   refreshPlain?: string;
   expires_at?: string;
+  /** S26: 完整open_id（live拉作品/评论API参数；UI仍只展示mask） */
+  open_id?: string;
 }
 
 interface LocalState {
@@ -111,8 +113,8 @@ export function rememberComment(c: CommentItem) {
   flushLocal();
 }
 
-export function recordToken(accountId: string, t: { access: string; refresh?: string; expires_at?: string }) {
-  const rec: StoredToken = { expires_at: t.expires_at };
+export function recordToken(accountId: string, t: { access: string; refresh?: string; expires_at?: string; open_id?: string }) {
+  const rec: StoredToken = { expires_at: t.expires_at, open_id: t.open_id };
   try {
     rec.enc = encryptToken(t.access);
     if (t.refresh) rec.refreshEnc = encryptToken(t.refresh);
@@ -125,7 +127,7 @@ export function recordToken(accountId: string, t: { access: string; refresh?: st
   flushLocal();
 }
 
-export function readToken(accountId: string): { access: string | null; refresh: string | null; expires_at?: string } {
+export function readToken(accountId: string): { access: string | null; refresh: string | null; expires_at?: string; open_id?: string } {
   const r = state.tokens[accountId];
   if (!r) return { access: null, refresh: null };
   try {
@@ -133,8 +135,9 @@ export function readToken(accountId: string): { access: string | null; refresh: 
       access: r.enc ? decryptToken(r.enc) : r.plain || null,
       refresh: r.refreshEnc ? decryptToken(r.refreshEnc) : r.refreshPlain || null,
       expires_at: r.expires_at,
+      open_id: r.open_id,
     };
-  } catch { return { access: null, refresh: null, expires_at: r.expires_at }; }
+  } catch { return { access: null, refresh: null, expires_at: r.expires_at, open_id: r.open_id }; }
 }
 
 export function randomHex(n: number): string { return randomBytes(n).toString('hex'); }

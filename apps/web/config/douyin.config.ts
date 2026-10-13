@@ -14,6 +14,9 @@ export const douyinConfig = {
   tokenUrl: 'https://open.douyin.com/oauth/access_token/',
   refreshUrl: 'https://open.douyin.com/oauth/refresh_token/',
   userInfoUrl: 'https://open.douyin.com/oauth/userinfo/',
+  /** S26 数据拉取端点（需video.data等能力授权；联调时以官方文档复核为准） */
+  videoListUrl: 'https://open.douyin.com/api/douyin/v1/video/list/',
+  commentListUrl: 'https://open.douyin.com/api/douyin/v1/video/comment/list/',
   /** 授权状态一次性有效窗口(毫秒) */
   stateTtlMs: 10 * 60 * 1000,
   /** mock模式默认昵称（授权页可输入自定义） */

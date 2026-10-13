@@ -5,6 +5,7 @@
 import { douyinConfig } from '@/config/douyin.config';
 import { authConfig } from '@/config/auth.config';
 import { randomHex } from './localData';
+import { mapApiVideo, mapApiComment, type MappedVideo, type MappedComment, type ApiVideoRaw, type ApiCommentRaw } from './douyinMappers';
 
 export interface DouyinToken {
   access_token: string;
@@ -106,5 +107,47 @@ export async function refreshAccessToken(refreshToken: string): Promise<DouyinTo
     refresh_token: String(d.refresh_token || refreshToken),
     open_id: String(d.open_id || ''),
     expires_in: Number(d.expires_in || 2592000),
+  };
+}
+
+async function douyinGet(url: string, params: Record<string, string | number>): Promise<Record<string, unknown>> {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => q.set(k, String(v)));
+  let res: Response;
+  try {
+    res = await fetch(`${url}?${q}`, { signal: AbortSignal.timeout(10_000) });
+  } catch {
+    throw new Error('开放平台网络不通（检查服务器出网/代理）');
+  }
+  const j = (await res.json()) as { data?: { error_code?: number; description?: string } & Record<string, unknown> };
+  const d = j.data;
+  if (!d) throw new Error('开放平台响应异常');
+  if (d.error_code !== 0) throw new Error(d.description || `开放平台错误码${d.error_code}`);
+  return d;
+}
+
+export interface Paged<T> { list: T[]; cursor: number; hasMore: boolean }
+
+/** S26 live：授权用户作品列表（需video.data能力；端点/字段联调复核）。mock返回空页 */
+export async function fetchVideoList(accessToken: string, openId: string, cursor = 0, count = 20): Promise<Paged<MappedVideo>> {
+  if (douyinConfig.mode !== 'live') return { list: [], cursor: 0, hasMore: false };
+  const d = await douyinGet(douyinConfig.videoListUrl, { access_token: accessToken, open_id: openId, cursor, count });
+  const raw = (d.list || d.data || []) as ApiVideoRaw[];
+  return {
+    list: raw.map(mapApiVideo).filter((x): x is MappedVideo => x !== null),
+    cursor: Number(d.cursor || 0),
+    hasMore: Boolean(d.has_more),
+  };
+}
+
+/** S26 live：单视频评论列表（需评论读取能力；端点/字段联调复核）。mock返回空页 */
+export async function fetchCommentList(accessToken: string, openId: string, awemeId: string, cursor = 0, count = 50): Promise<Paged<MappedComment>> {
+  if (douyinConfig.mode !== 'live') return { list: [], cursor: 0, hasMore: false };
+  const d = await douyinGet(douyinConfig.commentListUrl, { access_token: accessToken, open_id: openId, aweme_id: awemeId, cursor, count });
+  const raw = (d.list || d.comments || []) as ApiCommentRaw[];
+  return {
+    list: raw.map(mapApiComment).filter((x): x is MappedComment => x !== null),
+    cursor: Number(d.cursor || 0),
+    hasMore: Boolean(d.has_more),
   };
 }
