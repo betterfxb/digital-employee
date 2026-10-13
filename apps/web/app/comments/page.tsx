@@ -21,6 +21,8 @@ export default function Comments() {
   const [replies, setReplies] = useState<{ id: string; comment_id: string; content: string; at: string }[]>([]);
   const [replyText, setReplyText] = useState('');
   const [product, setProduct] = useState('跑刀代跑');
+  const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
+  const [genBusy, setGenBusy] = useState(false);
 
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
 
@@ -103,6 +105,18 @@ export default function Comments() {
     if (!j) return;
     setReplyText(''); loadReplies(sel.id);
   };
+  const genDrafts = async () => {
+    if (!sel) return;
+    setGenBusy(true);
+    try {
+      const r = await fetch('/api/scripts/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: sel.content, intent: sel.intent, nick: sel.user_nick, product, video_title: videos.find((v) => v.id === sel.video_id)?.title || '' }),
+      }).then((x) => x.json()).catch(() => null);
+      if (r?.items?.length) { setDrafts(r.items); flash('已生成候选，挑一条用', true); }
+      else flash('生成失败，请重试');
+    } finally { setGenBusy(false); }
+  };
 
   // 快捷键：输入框/下拉内不触发
   useEffect(() => {
@@ -135,6 +149,7 @@ export default function Comments() {
   // 选中变化时按意图+昵称+产品重取话术模板
   useEffect(() => {
     if (!sel) return;
+    setDrafts([]);
     loadReplies(sel.id);
     fetch(`/api/scripts/templates?intent=${encodeURIComponent(sel.intent)}&nick=${encodeURIComponent(sel.user_nick)}&product=${encodeURIComponent(product)}`).then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,6 +211,20 @@ export default function Comments() {
                 {scripts.map((s: ScriptItem | TemplateItem) => <div key={s.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{s.content}<div><Button size="small" type="text" style={{ marginTop: 6, paddingInline: 0 }} onClick={() => copy(s.content)}>复制</Button></div></div>)}
                 <Button type="primary" size="small" block style={{ marginTop: 12 }} onClick={() => replied(sel)}>已去App回复，登记跟进</Button>
                 <div style={{ fontSize: 12, color: '#6B6862', marginTop: 14 }}>作者回评（记账，可多条）</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  <Button size="small" onClick={genDrafts} loading={genBusy}>智能生成回复</Button>
+                </div>
+                {drafts.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {drafts.map((d) => (
+                      <div key={d.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', fontSize: 13 }}>
+                        <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}>{d.label}</div>
+                        {d.content}
+                        <div><Button size="small" type="text" style={{ marginTop: 6, paddingInline: 0 }} onClick={() => { setReplyText(d.content); setDrafts([]); }}>用这条</Button></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                   <Input size="small" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="写下你的回评…" onPressEnter={sendReply} />
                   <Button size="small" type="primary" onClick={sendReply}>发送</Button>

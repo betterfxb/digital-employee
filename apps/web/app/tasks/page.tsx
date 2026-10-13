@@ -1,9 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Checkbox, Select, Switch, Table } from 'antd';
+import { App, Button, Checkbox, Select, Switch, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { tasksConfig } from '@/config/tasks.config';
 import type { TaskItem, VideoTask, Video } from '@/lib/types';
+
+interface SchedStatus {
+  enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: string | null;
+  todayRunCount: number; nextInSec: number | null; failStreak: number; fused: boolean; minIntervalMin: number;
+}
 
 /** S12a 任务中心：同步类任务队列（编号/对象/状态/上次执行/启停），只管同步节奏，不做自动执行 */
 export default function Tasks() {
@@ -14,9 +19,11 @@ export default function Tasks() {
   const [vsel, setVsel] = useState('');
   const [notify, setNotify] = useState(false);
   const [tmsg, setTmsg] = useState('');
+  const [sched, setSched] = useState<SchedStatus | null>(null);
   const [mounted, setMounted] = useState(false);
   const flash = (t: string) => message.error(t);
   const load = () => fetch('/api/tasks').then((r) => r.json()).then((d) => setItems(d.items || [])).catch(() => setTmsg('任务列表加载失败，请重试'));
+  const loadSched = () => fetch('/api/tasks/status').then((r) => r.json()).then(setSched).catch(() => {});
   const loadV = () => {
     fetch('/api/video-tasks').then((r) => r.json()).then((d) => setVtasks(d.items || [])).catch(() => flash('队列加载失败，请重试'));
     fetch('/api/videos').then((r) => r.json()).then((d) => setVvideos(d.items || [])).catch(() => {});
@@ -25,7 +32,10 @@ export default function Tasks() {
     setMounted(true);
     load();
     loadV();
+    loadSched();
+    const id = setInterval(loadSched, 15_000);
     if (typeof window !== 'undefined') setNotify(localStorage.getItem('notify_new_comment') === '1');
+    return () => clearInterval(id);
   }, []);
   const control = async (type: string, action: 'pause' | 'resume') => {
     const r = await fetch('/api/tasks/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, action }) }).then((x) => x.json()).catch(() => null);
@@ -87,6 +97,27 @@ export default function Tasks() {
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}><div><b style={{ fontSize: 15 }}>任务中心</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>只调度同步类任务 · 自动点赞/评论/私信不在此列</div></div><div style={{ marginLeft: 'auto', fontSize: 12, color: '#6B6862' }}>{tmsg}</div></div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
+        {sched && (
+          <div className="card" style={{ padding: 16, marginBottom: 16, borderLeft: sched.fused ? '3px solid #B42318' : sched.enabled ? '3px solid #1A1A18' : '3px solid #D8D5CF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <b>自动同步调度</b>
+              {sched.fused
+                ? <Tag color="error">已熔断</Tag>
+                : !sched.enabled ? <Tag>已关闭</Tag>
+                : items.find((x) => x.type === 'statsSync')?.paused ? <Tag color="warning">任务已暂停</Tag>
+                : <Tag color="success">运行中</Tag>}
+              <span style={{ flex: 1 }} />
+              <Button size="small" onClick={() => { loadSched(); load(); }}>刷新</Button>
+            </div>
+            <div className="num" style={{ fontSize: 12, color: '#6B6862', marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span>今日已自动同步 {sched.todayRunCount}/{tasksConfig.dailySyncCap} 次 · 最小间隔 {sched.minIntervalMin} 分钟</span>
+              <span>上次同步：{sched.lastSyncAt ? new Date(sched.lastSyncAt).toLocaleString('zh-CN') : '尚未同步'}</span>
+              {sched.nextInSec !== null && sched.nextInSec > 0 && <span>下次自动同步约 {Math.ceil(sched.nextInSec / 60)} 分钟后</span>}
+              {sched.lastResult && <span style={{ color: sched.fused ? '#B42318' : undefined }}>{sched.lastResult}</span>}
+              {sched.fused && <span style={{ color: '#B42318' }}>连续失败{sched.failStreak}次已熔断，点上方「开始」恢复</span>}
+            </div>
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.8fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}>
         <div className="card">
           <Table<TaskItem> size="small" pagination={false} columns={taskCols} dataSource={items} rowKey="type" locale={{ emptyText: '暂无任务' }} />
