@@ -32,5 +32,6 @@
 | S21 GitHub同步 | 本地commit+私有仓digital-employee，SSH推送 | 上线 | P1 | 已推送，远端main同步 |
 | S14 代码质量评审 | 全仓评审+报告docs/09（5 Major+7 Minor+行动项） | S13 | P1 | 报告落盘 |
 
+| S27 组件库改造 | 全面换antd6：6页+侧栏75处原始input/select/button/table→Input/Select/Button/Table/Checkbox/Switch/Slider/Drawer/message(App.useApp)；AntdRegistry SSR + AntdProvider主题token保留羊皮纸风+zhCN；隐藏file input与主题预览卡有意保留 | S26 | P1 | 五套门禁全绿+六页浏览器验收console 0错；First Load JS增至~320KB可接受 |
 - S1阻塞S2/S3/S4，S2/S3可并行
-- 当前状态（2026-10-13）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅ S23✅ S24✅ S25✅ S25b✅ S26✅（mock态，test11+verify61+冒烟70+journey5+port9全绿；已推送github私有仓betterfxb/digital-employee）
+- 当前状态（2026-10-13）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅ S23✅ S24✅ S25✅ S25b✅ S26✅ S27✅（mock态，test11+verify61+冒烟70+journey5+port9全绿；已推送github私有仓betterfxb/digital-employee）

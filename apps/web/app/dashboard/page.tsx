@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { App, Button, Drawer, Input, Select, Table } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
 import type { Video, Competitor, Overview, TrendPoint, CommentItem } from '@/lib/types';
@@ -7,11 +9,11 @@ import { TaskBar } from '@/components/TaskBar';
 
 /** S2 看板：指标条+作品表+趋势抽屉+竞品导入+手动同步冷却 */
 export default function Dashboard() {
+  const { message } = App.useApp();
   const [ov, setOv] = useState<Overview | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [cool, setCool] = useState(0);
   const [syncMsg, setSyncMsg] = useState('');
-  const [emsg, setEmsg] = useState('');
   const [derr, setDerr] = useState(false);
   const [trend, setTrend] = useState<{ id: string; title: string; rows: TrendPoint[] | null } | null>(null);
   const [trendDays, setTrendDays] = useState(7);
@@ -35,11 +37,11 @@ export default function Dashboard() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kind, csv }),
     }).then((r) => r.json()).then((r) => {
-      if (r.code) { setImpMsg(r.message); return; }
+      if (r.code) { message.error(r.message); return; }
       const n = (r.created || 0) + (r.updated || 0);
       setImpMsg(`导入${kind === 'videos' ? '作品' : '评论'}成功 ${n}条${r.skipped ? `（跳过${r.skipped}条，视频标题未匹配）` : ''}${r.updated ? ` · 更新${r.updated}` : ''}`);
       reloadStats();
-    }).catch(() => setImpMsg('导入失败，请重试')));
+    }).catch(() => message.error('导入失败，请重试')));
   };
 
   const dlTemplate = (kind: 'videos' | 'comments') => {
@@ -83,15 +85,15 @@ export default function Dashboard() {
     if (cool > 0) return;
     setSyncMsg('');
     const r = await fetch('/api/stats/sync', { method: 'POST' }).then((x) => x.json()).catch(() => null);
-    if (!r || r.code) { setSyncMsg('同步失败，请重试'); return; }
+    if (!r || r.code) { message.error('同步失败，请重试'); return; }
     reloadStats();
     setCool(statsConfig.manualSyncCooldownSec);
-    const id = setInterval(() => setCool((c) => { if (c <= 1) { clearInterval(id); return 0; } return c - 1; }), 1000);
+    const id = setInterval(() => setCool((c) => { if (c <= 1) { clearInterval(id); return 0; } return c - 1 }), 1000);
   };
 
   const openTrend = (id: string, title: string, days = trendDays) => {
     setTrend({ id, title, rows: null });
-    fetch(`/api/stats/trend?ids=${id}&days=${days}`).then((r) => r.json()).then((d) => setTrend({ id, title, rows: d[id] || [] })).catch(() => { setTrend(null); setEmsg('趋势加载失败，请重试'); });
+    fetch(`/api/stats/trend?ids=${id}&days=${days}`).then((r) => r.json()).then((d) => setTrend({ id, title, rows: d[id] || [] })).catch(() => { setTrend(null); message.error('趋势加载失败，请重试'); });
   };
 
   const addComp = async () => {
@@ -101,21 +103,46 @@ export default function Dashboard() {
     setCurl(''); setCmsg('已加入'); loadComps();
   };
 
-  // 趋势迷你线：rows→100x36折线点串（纯展示，无动画）
   const spark = (rows: TrendPoint[]) => {
     const max = Math.max(...rows.map((r) => r.play), 1);
     return rows.map((r, i: number) => `${(i / Math.max(rows.length - 1, 1)) * 100},${34 - (r.play / max) * 32}`).join(' ');
   };
 
+  const videoCols: ColumnsType<Video> = [
+    { title: '作品', dataIndex: 'title', key: 'title' },
+    { title: '发布时间', dataIndex: 'publish_time', key: 'pt', onCell: () => ({ className: 'num' }) },
+    { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), render: (_, v) => v.play.toLocaleString() },
+    { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), render: (_, v) => v.like.toLocaleString() },
+    { title: '点赞率', key: 'lr', onCell: () => ({ className: 'num' }), render: (_, v) => (v.play ? `${(v.like / v.play * 100).toFixed(1)}%` : '—') },
+    { title: '评论', dataIndex: 'comment', key: 'cm', onCell: () => ({ className: 'num' }) },
+    { title: '转发', dataIndex: 'share', key: 'sh', onCell: () => ({ className: 'num' }) },
+    { title: '近7天', key: 'spark', render: (_, v) => { const rows = allTrend[v.aweme_id || v.id] || []; return rows.length ? <svg viewBox="0 0 90 28" style={{ width: 90, height: 28 }} aria-hidden="true"><polyline points={spark(rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" /></svg> : '—'; } },
+    { title: '', key: 'act', width: 80, render: (_, v) => <Button size="small" onClick={() => openTrend(v.aweme_id || v.id, v.title, trendDays)}>趋势</Button> },
+  ];
+
+  const compCols: ColumnsType<Competitor> = [
+    { title: '来源', dataIndex: 'source', key: 'src', onCell: () => ({ className: 'num' }) },
+    { title: '槽位', key: 'kind', onCell: () => ({ className: 'num' }), render: (_, c) => ({ note: '笔记', author: '作者', comment: '评论', user: '用户' } as Record<string, string>)[c.kind || 'note'] || c.kind },
+    { title: '链接/备注', dataIndex: 'url', key: 'url' },
+    { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), render: (_, c) => c.play.toLocaleString() },
+    { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), render: (_, c) => c.like.toLocaleString() },
+  ];
+
+  const trendRows: ColumnsType<TrendPoint> = [
+    { title: '日期', dataIndex: 'date', key: 'd', onCell: () => ({ className: 'num' }) },
+    { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), render: (_, r) => r.play.toLocaleString() },
+    { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), render: (_, r) => r.like.toLocaleString() },
+  ];
+
   return (
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}>
         <div><b style={{ fontSize: 15 }}>数据看板</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>{ov?.note || '昨日数据・今晨6点更新'}</div></div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>{emsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{emsg}</span>}<button className="btn ghost small" onClick={sync}>{cool > 0 ? `${cool}s后可同步` : '手动同步'}</button></div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>{syncMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{syncMsg}</span>}<Button size="small" onClick={sync} disabled={cool > 0}>{cool > 0 ? `${cool}s后可同步` : '手动同步'}</Button></div>
       </div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
         <TaskBar />
-        {!ov ? (derr ? <div className="card" style={{ padding: 24, marginBottom: 16 }}>数据加载失败 <button className="btn ghost small" style={{ marginLeft: 8 }} onClick={() => { setDerr(false); reloadStats(); }}>重试</button></div> : <div className="skel" style={{ height: 96 }}>loading</div>) : (
+        {!ov ? (derr ? <div className="card" style={{ padding: 24, marginBottom: 16 }}>数据加载失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => { setDerr(false); reloadStats(); }}>重试</Button></div> : <div className="skel" style={{ height: 96 }}>loading</div>) : (
           <div style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
           {(() => {
             const tp = videos.reduce((a, v) => a + v.play, 0);
@@ -172,17 +199,16 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="card">
-          <table><thead><tr><th>作品</th><th>发布时间</th><th>播放</th><th>点赞</th><th>点赞率</th><th>评论</th><th>转发</th><th>近7天</th><th></th></tr></thead>
-            <tbody className="num">{videos.map((v) => { const rows = allTrend[v.aweme_id || v.id] || []; return (<tr key={v.id}><td>{v.title}</td><td>{v.publish_time}</td><td>{v.play.toLocaleString()}</td><td>{v.like.toLocaleString()}</td><td>{v.play ? `${(v.like / v.play * 100).toFixed(1)}%` : '—'}</td><td>{v.comment}</td><td>{v.share}</td><td>{rows.length ? <svg viewBox="0 0 90 28" style={{ width: 90, height: 28 }} aria-hidden="true"><polyline points={spark(rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" /></svg> : '—'}</td><td><button className="btn ghost small" onClick={() => openTrend(v.aweme_id || v.id, v.title, trendDays)}>趋势</button></td></tr>); })}</tbody></table>
+          <Table<Video> size="small" pagination={false} columns={videoCols} dataSource={videos} rowKey="id" locale={{ emptyText: '暂无作品' }} />
           <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0' }}>服务端分页 · 20/页 · 趋势批量上限{statsConfig.trendBatchMax}</div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
           <b>真实数据导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>自己的账号数据手工入台（S23预真机）· 单次≤200行 · 按标题upsert不重复</span>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn small" onClick={() => { if (vFileRef.current) vFileRef.current.value = ''; vFileRef.current?.click(); }}>导入作品CSV</button>
-            <button className="btn ghost small" onClick={() => { if (cFileRef.current) cFileRef.current.value = ''; cFileRef.current?.click(); }}>导入评论CSV</button>
-            <button className="btn ghost small" onClick={() => dlTemplate('videos')}>模板·作品</button>
-            <button className="btn ghost small" onClick={() => dlTemplate('comments')}>模板·评论</button>
+            <Button size="small" type="primary" onClick={() => { if (vFileRef.current) vFileRef.current.value = ''; vFileRef.current?.click(); }}>导入作品CSV</Button>
+            <Button size="small" onClick={() => { if (cFileRef.current) cFileRef.current.value = ''; cFileRef.current?.click(); }}>导入评论CSV</Button>
+            <Button size="small" type="text" onClick={() => dlTemplate('videos')}>模板·作品</Button>
+            <Button size="small" type="text" onClick={() => dlTemplate('comments')}>模板·评论</Button>
             {impMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{impMsg}</span>}
             <input ref={vFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => doImport('videos', e.target.files?.[0])} />
             <input ref={cFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => doImport('comments', e.target.files?.[0])} />
@@ -191,41 +217,32 @@ export default function Dashboard() {
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
           <b>竞品手动导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>官方不给全平台数据，此区与自有数据隔离</span>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <input value={curl} onChange={(e) => setCurl(e.target.value)} placeholder="链接/备注，如 同城店B·契约陪玩" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: 280 }} />
-            <select value={csource} onChange={(e) => setCsource(e.target.value)} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px' }}>
-              {statsConfig.competitorSources.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={ckind} onChange={(e) => setCkind(e.target.value)} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px' }}>
-              {KINDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-            </select>
-            <button className="btn small" onClick={addComp}>加入</button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <Input size="small" value={curl} onChange={(e) => setCurl(e.target.value)} placeholder="链接/备注，如 同城店B·契约陪玩" style={{ width: 280 }} />
+            <Select size="small" value={csource} onChange={setCsource} style={{ width: 110 }} options={statsConfig.competitorSources.map((s) => ({ value: s, label: s }))} />
+            <Select size="small" value={ckind} onChange={setCkind} style={{ width: 100 }} options={KINDS.map(([v, label]) => ({ value: v, label }))} />
+            <Button size="small" type="primary" onClick={addComp}>加入</Button>
             {cmsg && <span style={{ fontSize: 12, color: '#6B6862', alignSelf: 'center' }}>{cmsg}</span>}
           </div>
-          <table style={{ marginTop: 10, background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4 }}><thead><tr><th>来源</th><th>槽位</th><th>链接/备注</th><th>播放</th><th>点赞</th></tr></thead>
-            <tbody className="num">{comps.map((c) => <tr key={c.id}><td>{c.source}</td><td>{({ note: '笔记', author: '作者', comment: '评论', user: '用户' } as Record<string, string>)[c.kind || 'note'] || c.kind}</td><td>{c.url}</td><td>{c.play.toLocaleString()}</td><td>{c.like.toLocaleString()}</td></tr>)}</tbody></table>
+          <Table<Competitor> size="small" pagination={false} style={{ marginTop: 10 }} columns={compCols} dataSource={comps} rowKey="id" locale={{ emptyText: '暂无竞品' }} />
         </div>
-        {trend && (
-          <div style={{ position: 'fixed', right: 0, top: 60, bottom: 0, width: 380, background: '#fff', borderLeft: '1px solid #E8E6E1', borderTop: '1px solid #E8E6E1', padding: 20, zIndex: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><b>{trend.title}</b><span style={{ flex: 1 }} />
-              <select value={trendDays} onChange={(e) => { const d = Number(e.target.value); setTrendDays(d); if (trend) openTrend(trend.id, trend.title, d); }} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '6px 8px', fontSize: 12 }}>
-                {statsConfig.trendDaysOptions.map((d) => <option key={d} value={d}>近{d}天</option>)}
-              </select>
-            </div>            <div style={{ fontSize: 12, color: '#A8A5A0' }}>T+1</div>
-            {trend.rows === null ? <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div> : trend.rows.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '16px 0' }}>导入作品暂无趋势序列（需同步能力接入后生成），指标以作品表为准</div>
-            ) : (
-              <div>
-                <svg viewBox="0 0 100 36" style={{ width: '100%', height: 72, marginTop: 12 }} role="img" aria-label="播放趋势迷你线">
-                  <polyline points={spark(trend.rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" />
-                </svg>
-                <table style={{ marginTop: 8 }}><thead><tr><th>日期</th><th>播放</th><th>点赞</th></tr></thead>
-                  <tbody className="num">{trend.rows.map((r: TrendPoint) => <tr key={r.date}><td>{r.date}</td><td>{r.play.toLocaleString()}</td><td>{r.like.toLocaleString()}</td></tr>)}</tbody></table>
-              </div>
-            )}
-            <div style={{ marginTop: 12 }}><button className="btn ghost small" onClick={() => setTrend(null)}>关闭</button></div>
+        <Drawer title={trend?.title || ''} placement="right" width={380} open={!!trend} onClose={() => setTrend(null)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ flex: 1 }} />
+            <Select size="small" value={trendDays} onChange={(d) => { setTrendDays(d); if (trend) openTrend(trend.id, trend.title, d); }} style={{ width: 110 }} options={statsConfig.trendDaysOptions.map((d) => ({ value: d, label: `近${d}天` }))} />
           </div>
-        )}
+          <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 4 }}>T+1</div>
+          {!trend ? null : trend.rows === null ? <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div> : trend.rows.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '16px 0' }}>导入作品暂无趋势序列（需同步能力接入后生成），指标以作品表为准</div>
+          ) : (
+            <div>
+              <svg viewBox="0 0 100 36" style={{ width: '100%', height: 72, marginTop: 12 }} role="img" aria-label="播放趋势迷你线">
+                <polyline points={spark(trend.rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" />
+              </svg>
+              <Table<TrendPoint> size="small" pagination={false} style={{ marginTop: 8 }} columns={trendRows} dataSource={trend.rows} rowKey="date" />
+            </div>
+          )}
+        </Drawer>
       </div>
     </div>
   );

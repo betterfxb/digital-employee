@@ -1,11 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { App, Button, Checkbox, Input, Select } from 'antd';
 import { commentsConfig } from '@/config/comments.config';
 import { downloadCsv } from '@/lib/csv';
 import type { Video, CommentItem, ScriptItem, TemplateItem } from '@/lib/types';
 
 /** S8 评论工作台三栏：左作品（含未读）/中评论流/右详情（意图PATCH+跟进），快捷键j/k/e/1/2/3/c */
 export default function Comments() {
+  const { message } = App.useApp();
   const [videos, setVideos] = useState<Video[]>([]);
   const [selVideo, setSelVideo] = useState('');
   const [intent, setIntent] = useState('');
@@ -19,7 +21,8 @@ export default function Comments() {
   const [replies, setReplies] = useState<{ id: string; comment_id: string; content: string; at: string }[]>([]);
   const [replyText, setReplyText] = useState('');
   const [product, setProduct] = useState('跑刀代跑');
-  const [msg, setMsg] = useState('');
+
+  const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
 
   const load = (o?: { v?: string; it?: string; k?: string; uo?: boolean }) => {
     const v = o?.v ?? selVideo, it = o?.it ?? intent, k = o?.k ?? kw, uo = o?.uo ?? unreadOnly;
@@ -54,7 +57,6 @@ export default function Comments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(''), 2500); };
   /** 网络请求统一出口：业务错/网络错都转用户可见提示，返回null表示失败 */
   const call = async (p: Promise<Response>, what = '操作') => {
     try {
@@ -89,10 +91,10 @@ export default function Comments() {
     const f = await call(fetch('/api/follows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ peer_nick: c.user_nick, source_video_id: c.video_id }) }), '登记跟进');
     if (!f) return;
     await call(fetch('/api/comments/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [c.id] }) }), '标已读');
-    flash('已登记跟进'); load();
+    flash('已登记跟进', true); load();
   };
   const copy = async (t: string) => {
-    try { await navigator.clipboard.writeText(t); flash('已复制'); } catch { flash('复制失败，请手动复制'); }
+    try { await navigator.clipboard.writeText(t); flash('已复制', true); } catch { flash('复制失败，请手动复制'); }
   };
   const loadReplies = (id: string) => fetch(`/api/comments/${id}/replies`).then((r) => r.json()).then((d) => setReplies(d.items || [])).catch(() => {});
   const sendReply = async () => {
@@ -102,11 +104,12 @@ export default function Comments() {
     setReplyText(''); loadReplies(sel.id);
   };
 
-  // 快捷键：输入框内不触发
+  // 快捷键：输入框/下拉内不触发
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
+      if (t?.closest?.('.ant-select-dropdown, .ant-picker-dropdown')) return;
       const idx = items.findIndex((x) => x.id === selId);
       if (e.key === 'j' || e.key === 'k') {
         const n = e.key === 'j' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
@@ -138,25 +141,22 @@ export default function Comments() {
   }, [sel?.id, sel?.intent]);
   const totalUnread = Object.values(counts).reduce((a, b) => a + b, 0);
   const colorOf = (it: string) => commentsConfig.intentColors[it as keyof typeof commentsConfig.intentColors] || commentsConfig.intentColors['默认'];
+  const intentOpts = [{ value: '', label: '全部意图' }, ...commentsConfig.intentOptions.map((o) => ({ value: o, label: o }))];
 
   return (
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>评论工作台</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>只看自己视频 · 本地已读 · 快捷键 j/k/e/1/2/3/c</div></div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
-        <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-          <input value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load({ k: kw }); }} placeholder="搜索关键词" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: 200 }} />
-          <select value={intent} onChange={(e) => { setIntent(e.target.value); load({ it: e.target.value }); }} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px' }}>
-            <option value="">全部意图</option>
-            {commentsConfig.intentOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <label style={{ fontSize: 12, color: '#6B6862' }}><input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); load({ uo: e.target.checked }); }} /> 只看未读</label>
+        <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Input size="small" value={kw} onChange={(e) => setKw(e.target.value)} onPressEnter={() => load({ k: kw })} placeholder="搜索关键词" style={{ width: 200 }} allowClear />
+          <Select size="small" value={intent} onChange={(v) => { setIntent(v); load({ it: v }); }} style={{ width: 120 }} options={intentOpts} />
+          <Checkbox checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); load({ uo: e.target.checked }); }} style={{ fontSize: 12, color: '#6B6862' }}>只看未读</Checkbox>
           <span style={{ flex: 1 }} />
-          {msg && <span style={{ fontSize: 12, color: '#6B6862' }}>{msg}</span>}
-          <button className="btn ghost small" onClick={batchRead}>批量标已读</button>
-          <button className="btn ghost small" onClick={exportComments}>导出CSV</button>
+          <Button size="small" onClick={batchRead}>批量标已读</Button>
+          <Button size="small" onClick={exportComments}>导出CSV</Button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          {hot.map((k) => <button key={k} className="btn ghost small" onClick={() => { setKw(k); load({ k }); }}>{k}</button>)}
+          {hot.map((k) => <Button key={k} size="small" onClick={() => { setKw(k); load({ k }); }}>{k}</Button>)}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0,1fr) 340px', gap: 0, border: '1px solid #E8E6E1', borderRadius: 6, background: '#fff', minHeight: 'calc(100vh - 300px)' }}>
           <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>
@@ -185,22 +185,20 @@ export default function Comments() {
                 <div className="num" style={{ fontSize: 12, color: '#A8A5A0' }}>{sel.create_time} · 赞{sel.like_count}</div>
                 <div className="card" style={{ padding: 12, margin: '10px 0' }}>{sel.content}</div>
                 <div style={{ fontSize: 12, color: '#6B6862' }}>意图</div>
-                <select value={sel.intent} onChange={(e) => setIntentOf(sel.id, e.target.value)} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: '100%', marginTop: 4 }}>
-                  {commentsConfig.intentOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  {!sel.is_read_local && <button className="btn ghost small" onClick={() => markRead(sel.id)}>标已读(e)</button>}
-                  <button className="btn ghost small" onClick={() => copy(sel.content)}>复制(c)</button>
-                  <button className="btn ghost small" onClick={() => toggleIgnore(sel)}>{sel.ignore ? '取消忽略' : '忽略'}</button>
+                <Select size="small" value={sel.intent} onChange={(v) => setIntentOf(sel.id, v)} style={{ width: '100%', marginTop: 4 }} options={commentsConfig.intentOptions.map((o) => ({ value: o, label: o }))} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  {!sel.is_read_local && <Button size="small" onClick={() => markRead(sel.id)}>标已读(e)</Button>}
+                  <Button size="small" onClick={() => copy(sel.content)}>复制(c)</Button>
+                  <Button size="small" onClick={() => toggleIgnore(sel)}>{sel.ignore ? '取消忽略' : '忽略'}</Button>
                 </div>
                 <div style={{ fontSize: 12, color: '#6B6862', marginTop: 14 }}>快捷话术 · 按意图生成</div>
-                <input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="产品名，用于填充话术" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', width: '100%', marginTop: 6 }} />
-                {scripts.map((s: ScriptItem | TemplateItem) => <div key={s.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{s.content}<div><button className="btn ghost small" style={{ marginTop: 6 }} onClick={() => copy(s.content)}>复制</button></div></div>)}
-                <button className="btn small" style={{ marginTop: 12 }} onClick={() => replied(sel)}>已去App回复，登记跟进</button>
+                <Input size="small" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="产品名，用于填充话术" style={{ marginTop: 6 }} />
+                {scripts.map((s: ScriptItem | TemplateItem) => <div key={s.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{s.content}<div><Button size="small" type="text" style={{ marginTop: 6, paddingInline: 0 }} onClick={() => copy(s.content)}>复制</Button></div></div>)}
+                <Button type="primary" size="small" block style={{ marginTop: 12 }} onClick={() => replied(sel)}>已去App回复，登记跟进</Button>
                 <div style={{ fontSize: 12, color: '#6B6862', marginTop: 14 }}>作者回评（记账，可多条）</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="写下你的回评…" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 10px', flex: 1 }} />
-                  <button className="btn small" onClick={sendReply}>发送</button>
+                  <Input size="small" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="写下你的回评…" onPressEnter={sendReply} />
+                  <Button size="small" type="primary" onClick={sendReply}>发送</Button>
                 </div>
                 {replies.map((r) => <div key={r.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{r.content}<div className="num" style={{ fontSize: 11, color: '#A8A5A0', marginTop: 4 }}>{r.at}</div></div>)}
               </div>

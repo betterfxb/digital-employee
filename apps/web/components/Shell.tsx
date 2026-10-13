@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { Button, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
 
@@ -52,9 +53,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <aside className="side">
         <div style={{ padding: '18px 18px 10px', fontWeight: 700 }}>{appConfig.appName}<small style={{ display: 'block', fontSize: 11, color: '#A8A5A0', fontWeight: 400 }}>DOUYIN · P0</small></div>
         <div style={{ padding: '0 12px 8px' }}>
-          <select value={activeId} onChange={(e) => switchAcc(e.target.value)} style={{ width: '100%', border: '1px solid #D8D5CF', borderRadius: 4, padding: '7px 8px', fontSize: 12, background: '#fff' }}>
-            {mounted ? accounts.map((a) => <option key={a.id} value={a.id}>{a.nickname}{a.days_left <= 15 ? '（即将过期）' : ''}</option>) : <option value="">加载中…</option>}
-          </select>
+          {mounted
+            ? <Select style={{ width: '100%' }} size="small" value={activeId || undefined} onChange={(v) => switchAcc(v)} options={accounts.map((a) => ({ value: a.id, label: `${a.nickname}${a.days_left <= 15 ? '（即将过期）' : ''}` }))} placeholder="选择账号" />
+            : <Select style={{ width: '100%' }} size="small" disabled options={[]} placeholder="加载中…" />}
         </div>
         <nav className="nav" style={{ padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {nav.map((n) => (
@@ -66,7 +67,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </nav>
         <div style={{ margin: 'auto 12px 12px', border: '1px solid #E8E6E1', borderRadius: 4, padding: 12, background: '#FCFBF9', fontSize: 12 }}>
           <b>升级蓝V后解锁</b><div style={{ color: '#6B6862', margin: '6px 0 10px' }}>私信自动同步 · 一键留资</div>
-          <Link href="/messages" className="btn ghost small" style={{ textDecoration: 'none', display: 'inline-block' }}>查看指南</Link>
+          <Button size="small" href="/messages">查看指南</Button>
         </div>
       </aside>
       <div style={{ flex: 1, minWidth: 0 }}>

@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { App, Button, Input, Table } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { appConfig } from '@/config/app.config';
 import { authConfig } from '@/config/auth.config';
 import type { Account, AuthLogItem } from '@/lib/types';
@@ -7,6 +9,7 @@ import type { LicenseState } from '@/lib/license';
 
 /** S1 授权页：扫码轮询→看板闭环 + 掉线/加载/空态 */
 export default function AuthPage() {
+  const { message } = App.useApp();
   const [qr, setQr] = useState<{ state: string; mode?: string } | null>(null);
   const [status, setStatus] = useState('pending');
   const [me, setMe] = useState<Account | null>(null);
@@ -14,12 +17,11 @@ export default function AuthPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [usage, setUsage] = useState<{ usedToday: number; cap: number; left: number } | null>(null);
   const [lic, setLic] = useState<LicenseState | null>(null);
-  const [msg, setMsg] = useState('');
   const [nick, setNick] = useState('');
 
   useEffect(() => {
-    fetch('/api/auth/douyin/qrcode').then((r) => r.json()).then(setQr).catch(() => setMsg('授权服务异常，请刷新重试'));
-    fetch('/api/accounts/me').then((r) => r.json()).then(setMe).catch(() => setMsg('账号信息加载失败，请刷新重试'));
+    fetch('/api/auth/douyin/qrcode').then((r) => r.json()).then(setQr).catch(() => message.error('授权服务异常，请刷新重试'));
+    fetch('/api/accounts/me').then((r) => r.json()).then(setMe).catch(() => message.error('账号信息加载失败，请刷新重试'));
     fetch('/api/auth/logs').then((r) => r.json()).then((d) => setLogs(d.items || [])).catch(() => {});
     fetch('/api/accounts').then((r) => r.json()).then((d) => setAccounts(d.items || [])).catch(() => {});
     fetch('/api/stats/usage').then((r) => r.json()).then(setUsage).catch(() => {});
@@ -27,9 +29,10 @@ export default function AuthPage() {
     const p = new URLSearchParams(window.location.search);
     const bind = p.get('bind');
     const err = p.get('err');
-    if (bind === 'ok') setMsg(`已绑定「${p.get('nick') || ''}」并切为当前账号，可在看板导入真实数据`);
-    else if (err) setMsg(`绑定失败：${err}`);
+    if (bind === 'ok') message.success(`已绑定「${p.get('nick') || ''}」并切为当前账号，可在看板导入真实数据`);
+    else if (err) message.error(`绑定失败：${err}`);
     if (bind || err) history.replaceState(null, '', '/auth');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const switchAcc = async (id: string) => {
@@ -41,8 +44,8 @@ export default function AuthPage() {
     const r = await fetch('/api/auth/refresh', { method: 'POST' }).then((x) => x.json()).catch(() => null);
     if (r?.expires_at) {
       setMe((m: Account | null) => (m ? { ...m, expires_at: r.expires_at } : m));
-      setMsg(`已刷新，有效期至 ${r.expires_at}`);
-    } else setMsg('刷新失败，请重扫');
+      message.success(`已刷新，有效期至 ${r.expires_at}`);
+    } else message.error('刷新失败，请重扫');
   };
 
   useEffect(() => {
@@ -56,6 +59,20 @@ export default function AuthPage() {
     }, authConfig.pollIntervalMs);
     return () => clearInterval(id);
   }, [qr]);
+
+  const logCols: ColumnsType<AuthLogItem> = [
+    { title: '时间', dataIndex: 'at', key: 'at', onCell: () => ({ className: 'num' }) },
+    { title: '操作', dataIndex: 'op', key: 'op' },
+    { title: '操作人', dataIndex: 'by', key: 'by' },
+    { title: '结果', dataIndex: 'result', key: 'result' },
+  ];
+
+  const accCols: ColumnsType<Account> = [
+    { title: '账号', key: 'nick', render: (_, a) => <b>{a.nickname}{a.active ? ' · 主账号' : ''}</b> },
+    { title: '有效期至', dataIndex: 'expires_at', key: 'exp', onCell: () => ({ className: 'num' }) },
+    { title: '剩余天数', key: 'left', onCell: () => ({ className: 'num' }), render: (_, a) => <>{a.days_left}天{a.days_left <= 15 ? '（即将过期）' : ''}</> },
+    { title: '', key: 'act', width: 90, render: (_, a) => (a.active ? null : <Button size="small" onClick={() => switchAcc(a.id)}>切换</Button>) },
+  ];
 
   return (
     <div>
@@ -77,8 +94,7 @@ export default function AuthPage() {
             {!me ? <div className="skel" style={{ height: 52 }}>loading</div> : <b>{me.nickname} · 个人号 · 有效期至 {me.expires_at}</b>}
             <div style={{ marginTop: 12, fontSize: 12, color: '#6B6862' }}>✔ 流量 T+1 ｜ ✔ 评论实时+对账 ｜ ✕ 私信同步需蓝V</div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button className="btn ghost small" onClick={doRefresh}>刷新有效期</button>
-              {msg && <span style={{ fontSize: 12, color: '#6B6862' }}>{msg}</span>}
+              <Button size="small" onClick={doRefresh}>刷新有效期</Button>
             </div>
           </div>
           <div className="card" style={{ padding: 18, width: 320 }}>
@@ -87,12 +103,12 @@ export default function AuthPage() {
               <span style={{ marginLeft: 4, color: qr?.mode === 'live' ? '#1A1A18' : '#A8A5A0', fontWeight: 700 }}>{qr?.mode === 'live' ? '真机模式' : '预真机·占位密钥'}</span>
             </div>
             <div style={{ width: 180, height: 180, border: '1px dashed #D8D5CF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A8A5A0' }}>{qr ? `QR ${qr.state}` : <span className="skel">loading</span>}</div>
-            {status === 'success' && <a className="btn small" style={{ display: 'inline-block', marginTop: 12, textDecoration: 'none' }} href="/dashboard">授权成功，去看板 →</a>}
+            {status === 'success' && <Button type="primary" size="small" style={{ marginTop: 12 }} href="/dashboard">授权成功，去看板 →</Button>}
             <div style={{ borderTop: '1px solid #E8E6E1', marginTop: 14, paddingTop: 12 }}>
               <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 6 }}>真实授权（S23预真机）</div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <input value={nick} onChange={(e) => setNick(e.target.value)} placeholder="你的抖音号昵称" maxLength={20} style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '6px 8px', fontSize: 12, width: 150 }} />
-                <a className="btn small" style={{ textDecoration: 'none', lineHeight: '26px' }} href={`/api/auth/douyin/authorize?nick=${encodeURIComponent(nick)}`}>授权</a>
+                <Input size="small" value={nick} onChange={(e) => setNick(e.target.value)} placeholder="你的抖音号昵称" maxLength={20} style={{ width: 150 }} />
+                <Button size="small" type="primary" href={`/api/auth/douyin/authorize?nick=${encodeURIComponent(nick)}`}>授权</Button>
               </div>
               <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>{qr?.mode === 'live' ? '跳转抖音官方授权页' : '占位密钥本地跑通：回调→换token→落库→切号'}</div>
             </div>
@@ -100,14 +116,12 @@ export default function AuthPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16, marginTop: 16, alignItems: 'start' }}>
         <div className="card">
-          <table><thead><tr><th>时间</th><th>操作</th><th>操作人</th><th>结果</th></tr></thead>
-            <tbody className="num">{logs.length === 0 ? <tr><td colSpan={4} style={{ color: '#A8A5A0' }}>加载中…</td></tr> : logs.map((l, i) => <tr key={i}><td>{l.at}</td><td>{l.op}</td><td>{l.by}</td><td>{l.result}</td></tr>)}</tbody></table>
+          <Table<AuthLogItem> size="small" pagination={false} columns={logCols} dataSource={logs} rowKey={(_, i) => String(i)} locale={{ emptyText: '暂无日志' }} />
           <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0' }}>保留{authConfig.authLogRetentionDays}天 · 超限partial由服务端分页</div>
         </div>
         <div className="card">
           <div style={{ padding: '12px 14px', fontWeight: 700 }}>账号列表 <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400 }}>官方扫码绑定，上限{authConfig.maxAccountsPerTenant}个</span></div>
-          <table><thead><tr><th>账号</th><th>有效期至</th><th>剩余天数</th><th></th></tr></thead>
-            <tbody>{accounts.map((a) => <tr key={a.id}><td><b>{a.nickname}</b>{a.active ? ' · 主账号' : ''}</td><td className="num">{a.expires_at}</td><td className="num">{a.days_left}天{a.days_left <= 15 ? '（即将过期）' : ''}</td><td>{a.active ? null : <button className="btn ghost small" onClick={() => switchAcc(a.id)}>切换</button>}</td></tr>)}</tbody></table>
+          <Table<Account> size="small" pagination={false} columns={accCols} dataSource={accounts} rowKey="id" locale={{ emptyText: '暂无账号' }} />
         </div>
         </div>
       </div>

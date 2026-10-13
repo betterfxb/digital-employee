@@ -1,19 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { App, Button, Input, Slider } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 
 /** S18 系统设置：店铺/服务/字体/主题/密码；调节即时预览，保存持久化并全局生效 */
 export default function Settings() {
+  const { message } = App.useApp();
   const [shop, setShop] = useState('');
   const [service, setService] = useState('');
   const [font, setFont] = useState<number>(settingsConfig.fontSizeDefault);
   const [theme, setTheme] = useState<string>(settingsConfig.themeDefault);
   const [pwdAt, setPwdAt] = useState<string | null>(null);
-  const [msg, setMsg] = useState('');
   const [npw, setNpw] = useState('');
   const [cpw, setCpw] = useState('');
-  const [pmsg, setPmsg] = useState('');
 
   useEffect(() => {
     fetch('/api/settings').then((r) => r.json()).then((s) => {
@@ -21,51 +21,51 @@ export default function Settings() {
       setFont(s.font_size || settingsConfig.fontSizeDefault);
       setTheme(s.theme_color || settingsConfig.themeDefault);
       setPwdAt(s.password_changed_at || null);
-    }).catch(() => setMsg('设置加载失败，请刷新重试'));
+    }).catch(() => message.error('设置加载失败，请刷新重试'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 调节即时预览（不落库），保存后持久化
-  const previewFont = (n: number) => { setFont(n); setMsg(''); applySettings({ font_size: n, theme_color: theme }); };
-  const previewTheme = (v: string) => { setTheme(v); setMsg(''); applySettings({ font_size: font, theme_color: v }); };
+  const previewFont = (n: number) => { setFont(n); applySettings({ font_size: n, theme_color: theme }); };
+  const previewTheme = (v: string) => { setTheme(v); applySettings({ font_size: font, theme_color: v }); };
 
   const save = async () => {
     const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop_name: shop.trim(), service_name: service.trim(), font_size: font, theme_color: theme }) }).then((x) => x.json()).catch(() => null);
-    if (!r || r.code) { setMsg(r?.message || '保存失败，请重试'); return; }
+    if (!r || r.code) { message.error(r?.message || '保存失败，请重试'); return; }
     applySettings({ font_size: r.font_size, theme_color: r.theme_color });
-    setMsg(`已保存${r.shop_name ? `，店铺：${r.shop_name}` : ''}`);
+    message.success(`已保存${r.shop_name ? `，店铺：${r.shop_name}` : ''}`);
   };
 
   const changePwd = async () => {
-    if (npw !== cpw) { setPmsg('两次输入不一致'); return; }
+    if (npw !== cpw) { message.error('两次输入不一致'); return; }
     const r = await fetch('/api/settings/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_password: npw }) }).then((x) => x.json()).catch(() => null);
-    if (!r || r.code) { setPmsg(r?.message || '修改失败，请重试'); return; }
-    setNpw(''); setCpw(''); setPwdAt(r.changed_at); setPmsg('已修改');
+    if (!r || r.code) { message.error(r?.message || '修改失败，请重试'); return; }
+    setNpw(''); setCpw(''); setPwdAt(r.changed_at); message.success('密码已修改');
   };
 
   return (
     <div>
-      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}><div><b style={{ fontSize: 15 }}>系统设置</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>调节即时预览，保存后持久化全局生效</div></div><div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>{msg && <span style={{ fontSize: 12, color: '#6B6862' }}>{msg}</span>}<button className="btn small" onClick={save}>保存全部</button></div></div>
+      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}><div><b style={{ fontSize: 15 }}>系统设置</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>调节即时预览，保存后持久化全局生效</div></div><div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}><Button size="small" type="primary" onClick={save}>保存全部</Button></div></div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}>
         <div>
           <div className="card" style={{ padding: 18 }}>
             <b>店铺信息</b>
             <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>改的是当前主账号展示名（{settingsConfig.shopNameMinLen}-{settingsConfig.shopNameMaxLen}字），侧栏/授权页同步更新</div>
-            <input value={shop} onChange={(e) => setShop(e.target.value)} placeholder="店铺名称" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '8px 12px', width: '100%' }} />
+            <Input value={shop} onChange={(e) => setShop(e.target.value)} placeholder="店铺名称" maxLength={settingsConfig.shopNameMaxLen} />
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>服务信息</b>
             <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>用作话术{'{product}'}默认值（最多{settingsConfig.serviceNameMaxLen}字），评论页自动带入</div>
-            <input value={service} onChange={(e) => setService(e.target.value)} placeholder="服务名称" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '8px 12px', width: '100%' }} />
+            <Input value={service} onChange={(e) => setService(e.target.value)} placeholder="服务名称" maxLength={settingsConfig.serviceNameMaxLen} />
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>安全</b>
             <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>修改登录密码（至少{settingsConfig.passwordMinLen}位）{pwdAt ? ` · 上次修改 ${pwdAt.slice(0, 10)}` : ''}</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input type="password" value={npw} onChange={(e) => setNpw(e.target.value)} placeholder="新密码" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '8px 12px', flex: 1 }} />
-              <input type="password" value={cpw} onChange={(e) => setCpw(e.target.value)} placeholder="确认新密码" style={{ border: '1px solid #D8D5CF', borderRadius: 4, padding: '8px 12px', flex: 1 }} />
-              <button className="btn ghost small" onClick={changePwd}>修改</button>
+              <Input.Password value={npw} onChange={(e) => setNpw(e.target.value)} placeholder="新密码" maxLength={32} />
+              <Input.Password value={cpw} onChange={(e) => setCpw(e.target.value)} placeholder="确认新密码" maxLength={32} onPressEnter={changePwd} />
+              <Button onClick={changePwd}>修改</Button>
             </div>
-            {pmsg && <div style={{ fontSize: 12, color: '#6B6862', marginTop: 8 }}>{pmsg}</div>}
           </div>
         </div>
         <div className="card" style={{ padding: 18 }}>
@@ -75,18 +75,7 @@ export default function Settings() {
             <span style={{ fontSize: 13, fontWeight: 600 }}>界面字号</span>
             <span className="num" style={{ fontSize: 22, fontWeight: 700 }}>{font}px · {font <= 12 ? '紧凑' : font <= 14 ? '标准' : font <= 16 ? '舒适' : font <= 18 ? '大' : '超大'}</span>
           </div>
-          <style>{`.fontRange{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;outline:none;cursor:pointer}.fontRange::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid #1A1A18;box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer}.fontRange::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #1A1A18;cursor:pointer}`}</style>
-          <div style={{ position: 'relative', padding: '14px 10px 0' }}>
-            <input type="range" className="fontRange" min={settingsConfig.fontSizeMin} max={settingsConfig.fontSizeMax} step={settingsConfig.fontSizeStep} value={font} onChange={(e) => previewFont(Number(e.target.value))} style={{ width: '100%', background: `linear-gradient(to right, #1A1A18 ${((font - settingsConfig.fontSizeMin) / (settingsConfig.fontSizeMax - settingsConfig.fontSizeMin)) * 100}%, #E8E6E1 ${((font - settingsConfig.fontSizeMin) / (settingsConfig.fontSizeMax - settingsConfig.fontSizeMin)) * 100}%)` }} />
-            <div style={{ position: 'relative', height: 22, marginTop: 2 }}>
-              {[12, 14, 16, 18, 20].map((v) => (
-                <span key={v} style={{ position: 'absolute', left: `${((v - settingsConfig.fontSizeMin) / (settingsConfig.fontSizeMax - settingsConfig.fontSizeMin)) * 100}%`, transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <span style={{ width: v === font ? 9 : 6, height: v === font ? 9 : 6, borderRadius: '50%', background: v <= font ? '#1A1A18' : '#D8D5CF' }} />
-                  <span className="num" style={{ fontSize: 11, color: v === font ? '#1A1A18' : '#A8A5A0', fontWeight: v === font ? 700 : 400 }}>{v}</span>
-                </span>
-              ))}
-            </div>
-          </div>
+          <Slider min={settingsConfig.fontSizeMin} max={settingsConfig.fontSizeMax} step={settingsConfig.fontSizeStep} value={font} onChange={previewFont} marks={{ 12: '12', 14: '14', 16: '16', 18: '18', 20: '20' }} tooltip={{ formatter: (v) => `${v}px` }} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginTop: 14 }}>
             {settingsConfig.themePresets.map((t) => {
               const on = theme === t.value;
