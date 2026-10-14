@@ -82,7 +82,6 @@ export default function AuthPage() {
         <div className="card" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', gap: 32 }}>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>授权健康</div><b className="num">{me ? `${me.days_left}天后过期` : '—'}</b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>今日同步余量</div><b className="num">{usage ? `${usage.left}/${usage.cap}` : '—'}</b></div>
-          <div><div style={{ fontSize: 12, color: '#6B6862' }}>违规提醒</div><b>0 · 正常</b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>蓝V</div><b>未认证 · <a href="/messages#upgrade">去升级</a></b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>系统授权</div><b>
             {lic ? (lic.mode === 'licensed' ? `正式授权${lic.valid ? '' : '（异常）'}` : '演示模式') : '—'}

@@ -34,5 +34,6 @@
 
 | S27 组件库改造 | 全面换antd6：6页+侧栏75处原始input/select/button/table→Input/Select/Button/Table/Checkbox/Switch/Slider/Drawer/message(App.useApp)；AntdRegistry SSR + AntdProvider主题token保留羊皮纸风+zhCN；隐藏file input与主题预览卡有意保留 | S26 | P1 | 五套门禁全绿+六页浏览器验收console 0错；First Load JS增至~320KB可接受 |
 | S28 自动化一期 | 话术引擎强化（模板库9→20条+三段式组合generateReply+关注点场景匹配）+定时调度框架（进程内scheduler：最小间隔/夜间静默/每日上限/熔断+resume解熔断+任务页调度状态卡）；不等资质先落地，live密钥到位自动接真数据 | S27 | P0 | 五套门禁全绿+评论页生成2候选实测+调度卡运行中console 0错 |
+| S29 假数据清理 | 客户报两bug一并修：①删overview硬编码假指标（fans_new/fans_total/mom_play/mom_like）只留真聚合；②删trend伪随机假线全返回空；③看板删"净增粉"指标；④"近7天播放总览"改诚实空态（修永久loading）；⑤趋势抽屉删天数选择器（无序列切换无意义）；⑥auth页删"违规提醒"硬编码。原则：接口没有的数据一律不展示 | S28 | P0 | 五套门禁全绿+看板/auth浏览器验收console 0错；净增粉/违规提醒已删、图表与抽屉空态正确 |
 - S1阻塞S2/S3/S4，S2/S3可并行
-- 当前状态（2026-10-13）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅ S23✅ S24✅ S25✅ S25b✅ S26✅ S27✅ S28✅（mock态，test11+verify61+冒烟70+journey5+port9全绿；已推送github私有仓betterfxb/digital-employee）
+- 当前状态（2026-10-14）：S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ S11✅ S12✅ S13✅ S14✅ S15✅ S16✅ S17✅ S18✅ S19✅ S20✅ S21✅ S22✅ S23✅ S24✅ S25✅ S25b✅ S26✅ S27✅ S28✅ S29✅（mock态，test11+verify61+冒烟70+journey5+port9全绿；已推送github私有仓betterfxb/digital-employee）

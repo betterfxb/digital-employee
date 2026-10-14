@@ -16,7 +16,6 @@ export default function Dashboard() {
   const [syncMsg, setSyncMsg] = useState('');
   const [derr, setDerr] = useState(false);
   const [trend, setTrend] = useState<{ id: string; title: string; rows: TrendPoint[] | null } | null>(null);
-  const [trendDays, setTrendDays] = useState(7);
   const [comps, setComps] = useState<Competitor[]>([]);
   const [allTrend, setAllTrend] = useState<Record<string, TrendPoint[]>>({});
   const [intents, setIntents] = useState<{ intent: string; n: number }[]>([]);
@@ -91,9 +90,9 @@ export default function Dashboard() {
     const id = setInterval(() => setCool((c) => { if (c <= 1) { clearInterval(id); return 0; } return c - 1 }), 1000);
   };
 
-  const openTrend = (id: string, title: string, days = trendDays) => {
+  const openTrend = (id: string, title: string) => {
     setTrend({ id, title, rows: null });
-    fetch(`/api/stats/trend?ids=${id}&days=${days}`).then((r) => r.json()).then((d) => setTrend({ id, title, rows: d[id] || [] })).catch(() => { setTrend(null); message.error('趋势加载失败，请重试'); });
+    fetch(`/api/stats/trend?ids=${id}&days=7`).then((r) => r.json()).then((d) => setTrend({ id, title, rows: d[id] || [] })).catch(() => { setTrend(null); message.error('趋势加载失败，请重试'); });
   };
 
   const addComp = async () => {
@@ -117,7 +116,7 @@ export default function Dashboard() {
     { title: '评论', dataIndex: 'comment', key: 'cm', onCell: () => ({ className: 'num' }) },
     { title: '转发', dataIndex: 'share', key: 'sh', onCell: () => ({ className: 'num' }) },
     { title: '近7天', key: 'spark', render: (_, v) => { const rows = allTrend[v.aweme_id || v.id] || []; return rows.length ? <svg viewBox="0 0 90 28" style={{ width: 90, height: 28 }} aria-hidden="true"><polyline points={spark(rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" /></svg> : '—'; } },
-    { title: '', key: 'act', width: 80, render: (_, v) => <Button size="small" onClick={() => openTrend(v.aweme_id || v.id, v.title, trendDays)}>趋势</Button> },
+    { title: '', key: 'act', width: 80, render: (_, v) => <Button size="small" onClick={() => openTrend(v.aweme_id || v.id, v.title)}>趋势</Button> },
   ];
 
   const compCols: ColumnsType<Competitor> = [
@@ -148,7 +147,7 @@ export default function Dashboard() {
             const tp = videos.reduce((a, v) => a + v.play, 0);
             const tl = videos.reduce((a, v) => a + v.like, 0);
             const ts = videos.reduce((a, v) => a + v.share, 0);
-            const cells: [string, string][] = [['总播放', ov.play.toLocaleString()], ['总点赞', ov.like.toLocaleString()], ['总评论', ov.comment.toLocaleString()], ['净增粉', `+${ov.fans_new.toLocaleString()}`], ['转发总数', ts.toLocaleString()], ['平均点赞率', tp ? `${(tl / tp * 100).toFixed(1)}%` : '—']];
+            const cells: [string, string][] = [['总播放', ov.play.toLocaleString()], ['总点赞', ov.like.toLocaleString()], ['总评论', ov.comment.toLocaleString()], ['转发总数', ts.toLocaleString()], ['平均点赞率', tp ? `${(tl / tp * 100).toFixed(1)}%` : '—']];
             return cells.map(([k, v], i) => (
               <div key={k} style={{ flex: 1, padding: '16px 20px', borderLeft: i ? '1px solid #E8E6E1' : 'none', minWidth: 0 }}>
                 <div style={{ fontSize: 12, color: '#6B6862' }}>{k}</div>
@@ -161,23 +160,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16, marginBottom: 16, marginTop: 16 }}>
           <div className="card" style={{ padding: 18 }}>
             <b>近7天播放总览</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>全账号作品汇总 · T+1</span>
-            {(() => {
-              const days = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'];
-              const totals = days.map((d) => Object.values(allTrend).reduce((a, rows) => a + (rows.find((r) => r.date === d)?.play || 0), 0));
-              if (totals.every((t) => t === 0)) return <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div>;
-              const max = Math.max(...totals, 1);
-              const pts = totals.map((t, i) => `${(i / 6) * 300},${86 - (t / max) * 78}`).join(' ');
-              return (
-                <div>
-                  <svg viewBox="0 0 300 90" style={{ width: '100%', height: 130, marginTop: 12 }} role="img" aria-label="全账号播放总览">
-                    <polyline points={pts} fill="none" stroke="#1A1A18" strokeWidth="2" />
-                  </svg>
-                  <div className="num" style={{ display: 'flex', gap: 16, fontSize: 12, color: '#6B6862', flexWrap: 'wrap' }}>
-                    {videos.map((v) => <span key={v.id}>{v.title.slice(0, 8)}… <b style={{ color: '#1A1A18' }}>{(allTrend[v.aweme_id || v.id]?.[6]?.play || 0).toLocaleString()}</b></span>)}
-                  </div>
-                </div>
-              );
-            })()}
+            <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '32px 0', textAlign: 'center' }}>暂无趋势序列（需同步能力接入后生成），指标以作品表为准</div>
           </div>
           <div className="card" style={{ padding: 18 }}>
             <b>评论意图分布</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>全部评论累计</span>
@@ -227,13 +210,9 @@ export default function Dashboard() {
           <Table<Competitor> size="small" pagination={false} style={{ marginTop: 10 }} columns={compCols} dataSource={comps} rowKey="id" locale={{ emptyText: '暂无竞品' }} />
         </div>
         <Drawer title={trend?.title || ''} placement="right" width={380} open={!!trend} onClose={() => setTrend(null)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ flex: 1 }} />
-            <Select size="small" value={trendDays} onChange={(d) => { setTrendDays(d); if (trend) openTrend(trend.id, trend.title, d); }} style={{ width: 110 }} options={statsConfig.trendDaysOptions.map((d) => ({ value: d, label: `近${d}天` }))} />
-          </div>
           <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 4 }}>T+1</div>
           {!trend ? null : trend.rows === null ? <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div> : trend.rows.length === 0 ? (
-            <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '16px 0' }}>导入作品暂无趋势序列（需同步能力接入后生成），指标以作品表为准</div>
+            <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '16px 0' }}>暂无趋势序列（需同步能力接入后生成），指标以作品表为准</div>
           ) : (
             <div>
               <svg viewBox="0 0 100 36" style={{ width: '100%', height: 72, marginTop: 12 }} role="img" aria-label="播放趋势迷你线">
