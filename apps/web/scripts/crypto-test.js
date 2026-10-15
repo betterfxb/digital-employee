@@ -9,9 +9,10 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
+const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -39,6 +40,17 @@ check(src.includes("createHash('sha256')"), 'crypto.ts sha256(master)');
 check(src.includes('randomBytes(12)'), 'crypto.ts 12B iv');
 check(src.includes('getAuthTag') && src.includes('setAuthTag'), 'crypto.ts tag编解');
 check(src.includes("NODE_ENV === 'production'"), 'crypto 缺key生产fail-fast');
+
+// 4) S30 机器绑定matchBind纯逻辑（三因子命中≥min(2,绑定数)）
+const cur = { cpu: 'aaa', disk: 'bbb', mac: 'ccc' };
+check(matchBind(undefined, cur) === true, 'matchBind 无绑定放行');
+check(matchBind({}, cur) === true, 'matchBind 空绑定放行');
+check(matchBind({ cpu: 'aaa', disk: 'bbb', mac: 'ccc' }, cur) === true, 'matchBind 3/3命中');
+check(matchBind({ cpu: 'aaa', disk: 'xxx', mac: 'ccc' }, cur) === true, 'matchBind 换1个硬件仍放行(2/3)');
+check(matchBind({ cpu: 'aaa', disk: 'xxx', mac: 'yyy' }, cur) === false, 'matchBind 换2个硬件拒绝(1/3)');
+check(matchBind({ cpu: 'aaa', disk: 'bbb', mac: '' }, cur) === true, 'matchBind 双因子绑定全命中放行');
+check(matchBind({ cpu: 'aaa', disk: '', mac: 'yyy' }, cur) === false, 'matchBind 双因子绑定不全拒绝');
+check(fingerprint({ cpu: '', disk: '', mac: '' }).cpu === '' && machineCode({ cpu: 'a', disk: 'b', mac: 'c' }) === 'a.b.c', 'machineId 空因子+机器码格式');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

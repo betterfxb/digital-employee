@@ -27,7 +27,8 @@ interface LocalState {
   settings: Record<string, unknown> | null; customScripts: unknown[]; replyRules: unknown[];
 }
 
-const FILE = path.join(process.cwd(), 'data', 'local.json');
+/** S30 数据目录外置（桌面端DATA_DIR指向%APPDATA%），默认兼容 cwd/data */
+const FILE = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'local.json');
 const state: LocalState = {
   accounts: [], videos: [], comments: [], tokens: {},
   follows: [], replies: [], competitors: [], videoTasks: [], settings: null, customScripts: [], replyRules: [],

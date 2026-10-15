@@ -21,6 +21,8 @@ const watermark = computeWatermark();
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // S30 桌面打包时 NEXT_OUTPUT_STANDALONE=1 产出 standalone 目录；日常 next start 不受影响
+  output: process.env.NEXT_OUTPUT_STANDALONE === '1' ? 'standalone' : undefined,
   async headers() {
     return [
       { source: '/:path*', headers: [{ key: 'X-Vendor-Watermark', value: watermark }] },

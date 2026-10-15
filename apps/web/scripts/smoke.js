@@ -127,14 +127,19 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');
   } catch (e) { pass(false, 'S23 flow', ` ${e.message}`); }
-  // S25 授权落地：license状态接口双态 + 溯源水印响应头
+  // S25/S30 授权落地：license状态双态+机器码 + 溯源水印响应头 + 导入非法FATAL
   try {
     const ls = await get('/api/license/status');
-    pass(ls.s === 200 && ['demo', 'licensed'].includes(ls.j.mode) && typeof ls.j.watermark === 'string' && ls.j.watermark.startsWith('wl-') && ls.j.valid === true, 'S25 license status双态');
+    pass(ls.s === 200 && ['demo', 'licensed'].includes(ls.j.mode) && typeof ls.j.watermark === 'string' && ls.j.watermark.startsWith('wl-') && typeof ls.j.machine_code === 'string' && ls.j.machine_code.includes('.'), 'S25 license status双态+机器码');
     const home = await fetch(base + '/auth');
     const wm = home.headers.get('x-vendor-watermark') || '';
     pass(home.ok && wm.startsWith('wl-'), 'S25 watermark响应头', ` (${wm})`);
   } catch (e) { pass(false, 'S25 license flow', ` ${e.message}`); }
+  try {
+    const bad = await post('/api/license/import', { license: '{oops' });
+    const none = await post('/api/license/import', {});
+    pass(bad.s === 400 && bad.j.code === 'FATAL' && none.s === 400 && none.j.code === 'FATAL', 'S30 import非法FATAL');
+  } catch (e) { pass(false, 'S30 import非法FATAL', ` ${e.message}`); }
   for (const p of ['/auth', '/dashboard', '/comments', '/messages']) {
     try { const r = await fetch(base + p); pass(r.ok, `page ${p}`, ` (${r.status})`); }
     catch (e) { pass(false, `page ${p}`); }

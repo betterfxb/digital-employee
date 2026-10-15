@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
+import { ActivationGate } from './ActivationGate';
 
 /**
  * 全局壳：侧栏208px + 账号切换 + 未读角标 + 新评论通知 + 内容槽
@@ -50,6 +51,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
   return (
     <div className="app">
+      <ActivationGate />
       <aside className="side">
         <div style={{ padding: '18px 18px 10px', fontWeight: 700 }}>{appConfig.appName}<small style={{ display: 'block', fontSize: 11, color: '#A8A5A0', fontWeight: 400 }}>DOUYIN · P0</small></div>
         <div style={{ padding: '0 12px 8px' }}>

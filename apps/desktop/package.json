@@ -1,0 +1,47 @@
+{
+  "name": "douyin-huoke-desktop",
+  "productName": "获客中台",
+  "version": "1.0.0",
+  "private": true,
+  "description": "抖音获客中台 桌面版（单机授权）",
+  "main": "main.js",
+  "scripts": {
+    "icon": "node scripts/make-icon.js",
+    "build:win": "node scripts/make-icon.js && node scripts/build-web.js && electron-builder --win nsis --publish never",
+    "dir:win": "node scripts/make-icon.js && node scripts/build-web.js && electron-builder --win --dir --publish never",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron"]
+  },
+  "build": {
+    "appId": "com.betterfxb.douyinhuoke",
+    "productName": "获客中台",
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": ["main.js", "package.json"],
+    "extraResources": [
+      { "from": "resources/standalone", "to": "standalone" },
+      { "from": "resources/license_pub.pem", "to": "license_pub.pem" },
+      { "from": "resources/icon.ico", "to": "icon.ico" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "resources/icon.ico"
+    },
+    "artifactName": "获客中台-Setup-${version}.exe",
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "获客中台"
+    }
+  }
+}

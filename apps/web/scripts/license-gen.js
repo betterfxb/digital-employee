@@ -41,6 +41,13 @@ if (cmd === 'keypair') {
   const features = (arg('features', '') || '').split(',').filter(Boolean);
   const seats = Number(arg('seats', '5'));
   const slots = Number(arg('slots', '2'));
+  const bindRaw = arg('bind', ''); // S30 机器绑定：cpuHash.diskHash.macHash（激活页机器码原样粘贴）
+  let machine_bind;
+  if (bindRaw) {
+    const parts = bindRaw.split('.');
+    if (parts.length !== 3 || !parts[0]) { console.error('--bind 格式应为 cpuHash.diskHash.macHash（从激活页复制机器码）'); process.exit(1); }
+    machine_bind = { cpu: parts[0], disk: parts[1], mac: parts[2] };
+  }
   const watermark = arg('watermark', `wl-${createHash('sha256').update(customer).digest('hex').slice(0, 8)}`);
   const now = new Date();
   const yyyyMMdd = (d) => d.toISOString().slice(0, 10);
@@ -52,6 +59,7 @@ if (cmd === 'keypair') {
     seats,
     machine_slots: slots,
     watermark,
+    ...(machine_bind ? { machine_bind } : {}),
     v: 1,
   };
   const key = createPrivateKey(fs.readFileSync(KEY));
@@ -60,7 +68,8 @@ if (cmd === 'keypair') {
   fs.writeFileSync(LIC, JSON.stringify({ payload, sig: sig.toString('base64') }, null, 2));
   console.log(`license OK → data/license.license`);
   console.log(`  客户=${customer} 到期=${payload.expires_at || '买断长期'} 席位=${seats} 槽位=${slots}`);
-  console.log(`  features=${features.length ? features.join(',') : '(全开)'} watermark=${watermark}`);
+  console.log(`  features=${features.length ? features.join(',') : '(全开)'} watermark=${watermark} 机器绑定=${machine_bind ? '已绑定（命中≥2因子）' : '无（勿商用分发）'}`);
 } else {
-  console.log('用法: keypair | issue --customer <客户> [--days 365] [--features a,b] [--seats 5] [--slots 2] [--watermark wl-xxxxxxxx]');
+  console.log('用法: keypair | issue --customer <客户> [--days 365] [--features a,b] [--seats 5] [--slots 2] [--bind cpuHash.diskHash.macHash] [--watermark wl-xxxxxxxx]');
+  console.log('  --bind 从客户激活页复制机器码（激活页可一键复制）；商用发证必须带 --bind');
 }

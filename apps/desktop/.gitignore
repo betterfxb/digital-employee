@@ -1,0 +1,5 @@
+node_modules/
+dist/
+resources/standalone/
+resources/icon.ico
+resources/license_pub.pem
