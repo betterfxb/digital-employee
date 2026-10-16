@@ -7,11 +7,12 @@ import { buildAuthorizeUrl } from '@/lib/douyinPort';
 
 /**
  * GET /api/auth/douyin/qrcode（S31: 真二维码图片dataURL）
- * 二维码内容=授权链接：live为开放平台官方授权页；mock为本机授权入口（部署态手机可扫，localhost仅演示外观）
+ * 二维码内容=授权链接：live为开放平台官方授权页（redirect_uri按配置登记）；
+ * mock取【请求来源origin】而非配置默认3001（桌面端随机端口/服务器部署下内容才自洽）
  */
-export async function GET() {
+export async function GET(req: Request) {
   const state = Math.random().toString(36).slice(2, 8);
-  const qrcode_url = buildAuthorizeUrl(state) || `${douyinConfig.baseUrl}/api/auth/douyin/authorize?state=${state}`;
+  const qrcode_url = buildAuthorizeUrl(state) || `${new URL(req.url).origin}/api/auth/douyin/authorize?state=${state}`;
   const qr_data_url = await QRCode.toDataURL(qrcode_url, {
     margin: 1, width: 240, errorCorrectionLevel: 'M',
     color: { dark: '#1A1A18', light: '#FFFFFF' },
