@@ -6,7 +6,9 @@
 
 ## Auth
 ```
-GET /api/auth/douyin/qrcode -> {qrcode_url, state, expire_in:60, mode:mock|live} // mode见docs/10（S23）
+GET /api/auth/douyin/qrcode -> {qrcode_url, qr_data_url(dataURL图片), state, expire_in:60, mode:mock|live} // S31真二维码；mode见docs/10（S23）
+GET /api/auth/douyin/mock-consent?state -> 200演示确认页(mock) / 404(live) / 410(state过期) // S31弹窗流，无密码输入不仿官方UI
+GET /api/auth/douyin/authorize?nick=&popup=1 -> 302 mock确认页|live官方授权页 // S31弹窗授权
 GET /api/auth/poll?state&t -> {status:pending/success}（t为演示轮询计数器，生产换真授权码）
 GET /api/accounts/me -> Account{id, open_id_mask, nickname, avatar, auth_type:personal, expires_at}
 POST /api/auth/refresh -> {expires_at} // live模式走refresh_token（S23）

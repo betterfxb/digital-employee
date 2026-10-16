@@ -10,7 +10,7 @@ import type { LicenseState } from '@/lib/license';
 /** S1 授权页：扫码轮询→看板闭环 + 掉线/加载/空态 */
 export default function AuthPage() {
   const { message } = App.useApp();
-  const [qr, setQr] = useState<{ state: string; mode?: string } | null>(null);
+  const [qr, setQr] = useState<{ state: string; mode?: string; qr_data_url?: string } | null>(null);
   const [status, setStatus] = useState('pending');
   const [me, setMe] = useState<Account | null>(null);
   const [logs, setLogs] = useState<AuthLogItem[]>([]);
@@ -31,6 +31,13 @@ export default function AuthPage() {
     const err = p.get('err');
     if (bind === 'ok') message.success(`已绑定「${p.get('nick') || ''}」并切为当前账号，可在看板导入真实数据`);
     else if (err) message.error(`绑定失败：${err}`);
+    // S31 弹窗授权：本窗是授权弹窗（opener存在）→ 结果转交打开方窗口并自关闭；opener不可用时留本窗自洽
+    if ((bind || err) && window.opener && !window.opener.closed) {
+      if (bind === 'ok') {
+        try { window.opener.location.href = `/auth?bind=ok&nick=${encodeURIComponent(p.get('nick') || '')}`; } catch { /* 转交失败留本窗展示 */ }
+      }
+      window.setTimeout(() => { try { window.close(); } catch { /* 浏览器策略禁止则留窗 */ } }, 350);
+    }
     if (bind || err) history.replaceState(null, '', '/auth');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -38,6 +45,16 @@ export default function AuthPage() {
   const switchAcc = async (id: string) => {
     const r = await fetch('/api/accounts/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).then((x) => x.json()).catch(() => null);
     if (r?.active_id) window.location.reload();
+  };
+
+  /** S31 弹窗授权：抖音登录页开在工作台弹出窗内（live=抖音官方页，mock=演示确认页），结果回传本页 */
+  const openDyAuth = () => {
+    const w = window.open(`/api/auth/douyin/authorize?popup=1&nick=${encodeURIComponent(nick)}`, 'dy_auth', 'width=540,height=680,menubar=no,toolbar=no');
+    if (!w) message.error('弹窗被浏览器拦截：请允许本站弹出窗口后重试');
+  };
+
+  const refreshQr = () => {
+    fetch('/api/auth/douyin/qrcode').then((r) => r.json()).then(setQr).catch(() => {});
   };
 
   const doRefresh = async () => {
@@ -101,15 +118,22 @@ export default function AuthPage() {
               60s过期 · 状态：{status}（轮询{authConfig.pollIntervalMs}ms） ·
               <span style={{ marginLeft: 4, color: qr?.mode === 'live' ? '#1A1A18' : '#A8A5A0', fontWeight: 700 }}>{qr?.mode === 'live' ? '真机模式' : '预真机·占位密钥'}</span>
             </div>
-            <div style={{ width: 180, height: 180, border: '1px dashed #D8D5CF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A8A5A0' }}>{qr ? `QR ${qr.state}` : <span className="skel">loading</span>}</div>
+            <div style={{ width: 180, height: 180, border: '1px dashed #D8D5CF', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
+              {qr?.qr_data_url
+                ? <img src={qr.qr_data_url} alt="抖音登录授权二维码" width={164} height={164} onClick={refreshQr} title="点击刷新二维码" style={{ cursor: 'zoom-in', display: 'block' }} />
+                : qr ? <span className="num" style={{ fontSize: 12, color: '#A8A5A0' }}>{qr.state}</span> : <span className="skel">loading</span>}
+            </div>
             {status === 'success' && <Button type="primary" size="small" style={{ marginTop: 12 }} href="/dashboard">授权成功，去看板 →</Button>}
             <div style={{ borderTop: '1px solid #E8E6E1', marginTop: 14, paddingTop: 12 }}>
-              <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 6 }}>真实授权（S23预真机）</div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 6 }}>登录授权（S23预真机）</div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                 <Input size="small" value={nick} onChange={(e) => setNick(e.target.value)} placeholder="你的抖音号昵称" maxLength={20} style={{ width: 150 }} />
-                <Button size="small" type="primary" href={`/api/auth/douyin/authorize?nick=${encodeURIComponent(nick)}`}>授权</Button>
               </div>
-              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>{qr?.mode === 'live' ? '跳转抖音官方授权页' : '占位密钥本地跑通：回调→换token→落库→切号'}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <Button size="small" type="primary" onClick={openDyAuth}>抖音登录授权</Button>
+                <Button size="small" href={`/api/auth/douyin/authorize?nick=${encodeURIComponent(nick)}`}>整页授权</Button>
+              </div>
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>{qr?.mode === 'live' ? '弹窗内即抖音官方登录页，确认后自动回工作台' : '演示：弹窗内确认→回调→换token→落库→切号'}</div>
             </div>
           </div>
         </div>

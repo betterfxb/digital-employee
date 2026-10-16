@@ -86,8 +86,22 @@ function createWindow(port) {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   mainWindow.loadURL(`http://127.0.0.1:${port}/`);
-  // 外链走系统浏览器；站内导航限制在本机服务
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  // S31 弹窗授权：本机页面的window.open（授权弹窗）开应用内子窗口——“抖音界面融入工作台”形态；
+  // 其余http(s)外链走系统浏览器；站内导航限制在本机服务
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`http://127.0.0.1:${port}`)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 560, height: 700, minWidth: 420, minHeight: 480,
+          title: '抖音登录', autoHideMenuBar: true, backgroundColor: '#FFFFFF',
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+        },
+      };
+    }
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   mainWindow.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith(`http://127.0.0.1:${port}`)) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); }
   });

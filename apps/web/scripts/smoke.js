@@ -99,6 +99,16 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const bad = await fetch(base + '/api/webhooks/douyin', { method: 'POST', headers: { 'Content-Type': 'text/plain', 'x-signature': 'smoke' }, body: '{oops' });
     pass(bad.status === 400, 'webhook bad-json DLQ');
   } catch (e) { pass(false, 'webhook flow'); }
+  // S31 真二维码+弹窗授权：qrcode出PNG dataURL；popup授权302到mock确认页；确认页过期state给410
+  try {
+    const qrj = (await get('/api/auth/douyin/qrcode')).j;
+    pass(typeof qrj?.qr_data_url === 'string' && qrj.qr_data_url.startsWith('data:image/png') && typeof qrj.qrcode_url === 'string' && qrj.qrcode_url.startsWith('http'), 'S31 真二维码dataURL');
+    const ap = await fetch(base + '/api/auth/douyin/authorize?popup=1', { redirect: 'manual' });
+    const locp = ap.headers.get('location') || '';
+    pass(ap.status === 302 && locp.includes('/api/auth/douyin/mock-consent'), 'S31 popup→确认页');
+    const cs = await fetch(base + '/api/auth/douyin/mock-consent?state=nope', { redirect: 'manual' });
+    pass(cs.status === 410, 'S31 确认页过期state 410');
+  } catch (e) { pass(false, 'S31 qr+popup flow', ` ${e.message}`); }
   // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
   try {
     const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });
