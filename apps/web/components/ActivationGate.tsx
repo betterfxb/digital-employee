@@ -28,7 +28,32 @@ export function ActivationGate() {
   };
 
   if (!st || (st.mode === 'licensed' && st.valid)) return null;
-  const copy = () => { navigator.clipboard?.writeText(st.machine_code).then(() => message.success('机器码已复制')).catch(() => message.error('复制失败，请手动选择复制')); };
+  /**
+   * S31修"复制没反应"：①非secure上下文/权限被拒时 clipboard 为 undefined，?.链整体静默短路无任何反馈；
+   * ②Electron主进程曾无差别拒绝全部浏览器权限（含clipboard-write）→双路径兜底，任何路径必有反馈
+   */
+  const copy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(st.machine_code);
+        message.success('机器码已复制');
+        return;
+      }
+    } catch { /* Clipboard API失败→落execCommand兜底 */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = st.machine_code;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, st.machine_code.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) { message.success('机器码已复制'); return; }
+    } catch { /* 兜底也失败→明确提示 */ }
+    message.error('复制失败：请手动选中机器码后 Ctrl+C');
+  };
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#F7F6F3', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 520, width: '100%', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 6, padding: '32px 36px' }}>

@@ -48,7 +48,8 @@ function startServer(port) {
   const dataDir = path.join(app.getPath('userData'), 'data');
   fs.mkdirSync(dataDir, { recursive: true });
   const pubDst = path.join(dataDir, 'license_pub.pem');
-  if (!fs.existsSync(pubDst) && fs.existsSync(PUB_SRC)) fs.copyFileSync(PUB_SRC, pubDst);
+  // 公钥以包内为权威、无条件覆盖（S31换钥后旧客户端data里的旧公钥必须被新包纠正，否则新license验签失败）
+  if (fs.existsSync(PUB_SRC)) fs.copyFileSync(PUB_SRC, pubDst);
   // token加密主密钥：首启随机生成落数据目录（单机密钥，仅本机数据解密用）
   const keyFile = path.join(dataDir, '.master_key');
   let masterKey;
@@ -110,7 +111,10 @@ function createWindow(port) {
 
 app.whenReady().then(async () => {
   // 桌面壳不需要任何浏览器权限（通知/摄像头/定位等全部拒绝）
-  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  // S31修：剪贴板权限必须放行（激活门复制机器码走navigator.clipboard），其余（通知/摄像头/定位等）拒绝
+  session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => {
+    cb(perm === 'clipboard-read' || perm === 'clipboard-write');
+  });
   try {
     const port = await pickPort();
     startServer(port);

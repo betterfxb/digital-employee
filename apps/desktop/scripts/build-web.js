@@ -33,4 +33,19 @@ if (fs.existsSync(keySrc)) {
 } else {
   console.warn('警告: data/license_pub.pem 缺失（先跑 web 的 license-gen.js keypair），桌面端将无法验签');
 }
+
+// ── S31安全硬校验：data目录（私钥/业务数据/license）绝不能进包 ──
+// Next file-trace 会把 web/data 整个目录带进 standalone，打包前必须清除 + 违禁扫描兜底
+fs.rmSync(path.join(dst, 'data'), { recursive: true, force: true });
+const banned = [];
+(function scan(d) {
+  if (!fs.existsSync(d)) return;
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) scan(p);
+    else if (/license_key\.pem$|\.license$|local\.json$|\.master_key$/.test(e.name)) banned.push(p);
+  }
+})(dst);
+if (banned.length) { console.error('构建中止：产物中发现敏感文件 →', banned); process.exit(1); }
+console.log('sensitive-data check OK：data/已清除，产物无私钥/license/业务数据');
 console.log('resources ready →', dst);
