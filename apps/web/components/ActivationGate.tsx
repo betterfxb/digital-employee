@@ -22,8 +22,9 @@ export function ActivationGate() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ license: text }),
     }).then((r) => r.json()).then((d) => {
       if (d.code) { setErr(d.message || '导入失败'); return; }
-      message.success('授权已激活');
+      message.success('授权已激活，进入工作台');
       setSt(d as LicenseState);
+      window.setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
     }).catch(() => setErr('导入失败，请重试')).finally(() => setBusy(false));
   };
 

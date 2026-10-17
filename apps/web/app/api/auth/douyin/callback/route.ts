@@ -65,6 +65,6 @@ export async function GET(req: Request) {
   recordToken(id, { access, refresh, expires_at: expiresAt, open_id: openId });
   try { saveToken(id, access); } catch { /* 生产缺TOKEN_MASTER_KEY时vault不托管，不影响绑定 */ }
   setActiveAccountId(id);
-  pushAuthLog('扫码授权成功', nickname, douyinConfig.mode === 'live' ? `真实授权 · 有效期${daysLeft}天` : `预真机(占位密钥) · 有效期${daysLeft}天`);
+  pushAuthLog('授权成功', nickname, `授权完成 · 有效期${daysLeft}天`);
   return Response.redirect(new URL(`/auth?bind=ok&nick=${encodeURIComponent(nickname)}&t=${randomHex(2)}`, req.url), 302);
 }

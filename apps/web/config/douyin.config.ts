@@ -20,7 +20,7 @@ export const douyinConfig = {
   /** 授权状态一次性有效窗口(毫秒) */
   stateTtlMs: 10 * 60 * 1000,
   /** mock模式默认昵称（授权页可输入自定义） */
-  testNick: process.env.DOUYIN_TEST_NICK || '我的抖音号（预真机）',
+  testNick: process.env.DOUYIN_TEST_NICK || '我的抖音号',
   /** 单次CSV导入行数上限 */
   importMaxRows: 200,
   /** 单次CSV字节上限(200KB) */

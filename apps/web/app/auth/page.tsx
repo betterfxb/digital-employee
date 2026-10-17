@@ -101,7 +101,7 @@ export default function AuthPage() {
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>今日同步余量</div><b className="num">{usage ? `${usage.left}/${usage.cap}` : '—'}</b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>蓝V</div><b>未认证 · <a href="/messages#upgrade">去升级</a></b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>系统授权</div><b>
-            {lic ? (lic.mode === 'licensed' ? `正式授权${lic.valid ? '' : '（异常）'}` : '演示模式') : '—'}
+            {lic ? (lic.mode === 'licensed' ? `正式授权${lic.valid ? '' : '（异常）'}` : '未授权') : '—'}
             {lic && <span style={{ fontWeight: 400, color: '#A8A5A0' }}> · {lic.watermark}{lic.customer ? ` · ${lic.customer}` : ''}</span>}
           </b></div>
         </div>
@@ -116,7 +116,7 @@ export default function AuthPage() {
           <div className="card" style={{ padding: 18, width: 320 }}>
             <b>扫码授权</b><div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 12px' }}>
               60s过期 · 状态：{status}（轮询{authConfig.pollIntervalMs}ms） ·
-              <span style={{ marginLeft: 4, color: qr?.mode === 'live' ? '#1A1A18' : '#A8A5A0', fontWeight: 700 }}>{qr?.mode === 'live' ? '真机模式' : '预真机·占位密钥'}</span>
+              <span style={{ marginLeft: 4, color: qr?.mode === 'live' ? '#1A1A18' : '#A8A5A0', fontWeight: 700 }}>{qr?.mode === 'live' ? '官方已接入' : '通道待开通'}</span>
             </div>
             <div style={{ width: 180, height: 180, border: '1px dashed #D8D5CF', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
               {qr?.qr_data_url
@@ -125,7 +125,7 @@ export default function AuthPage() {
             </div>
             {status === 'success' && <Button type="primary" size="small" style={{ marginTop: 12 }} href="/dashboard">授权成功，去看板 →</Button>}
             <div style={{ borderTop: '1px solid #E8E6E1', marginTop: 14, paddingTop: 12 }}>
-              <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 6 }}>登录授权（S23预真机）</div>
+              <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 6 }}>登录授权</div>
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                 <Input size="small" value={nick} onChange={(e) => setNick(e.target.value)} placeholder="你的抖音号昵称" maxLength={20} style={{ width: 150 }} />
               </div>
@@ -133,7 +133,7 @@ export default function AuthPage() {
                 <Button size="small" type="primary" onClick={openDyAuth}>抖音登录授权</Button>
                 <Button size="small" href={`/api/auth/douyin/authorize?nick=${encodeURIComponent(nick)}`}>整页授权</Button>
               </div>
-              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>{qr?.mode === 'live' ? '弹窗内即抖音官方登录页，确认后自动回工作台' : '演示：弹窗内确认→回调→换token→落库→切号'}</div>
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>{qr?.mode === 'live' ? '弹窗内即抖音官方登录页，确认后自动回工作台' : '当前为体验流程；开通官方通道后弹窗内即抖音官方登录页'}</div>
             </div>
           </div>
         </div>

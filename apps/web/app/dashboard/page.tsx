@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
-import { downloadCsv } from '@/lib/csv';
 import type { Video, Competitor, Overview, TrendPoint, CommentItem } from '@/lib/types';
 import { TaskBar } from '@/components/TaskBar';
+import { ImportWizard } from '@/components/ImportWizard';
 
 /** S2 看板：指标条+作品表+趋势抽屉+竞品导入+手动同步冷却 */
 export default function Dashboard() {
@@ -25,28 +25,7 @@ export default function Dashboard() {
   const [ckind, setCkind] = useState('note');
   const KINDS: [string, string][] = [['note', '笔记'], ['author', '作者'], ['comment', '评论'], ['user', '用户']];
   const [cmsg, setCmsg] = useState('');
-  const [impMsg, setImpMsg] = useState('');
-  const vFileRef = useRef<HTMLInputElement>(null);
-  const cFileRef = useRef<HTMLInputElement>(null);
-
-  const doImport = (kind: 'videos' | 'comments', file?: File) => {
-    if (!file) return;
-    file.text().then((csv) => fetch('/api/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind, csv }),
-    }).then((r) => r.json()).then((r) => {
-      if (r.code) { message.error(r.message); return; }
-      const n = (r.created || 0) + (r.updated || 0);
-      setImpMsg(`导入${kind === 'videos' ? '作品' : '评论'}成功 ${n}条${r.skipped ? `（跳过${r.skipped}条，视频标题未匹配）` : ''}${r.updated ? ` · 更新${r.updated}` : ''}`);
-      reloadStats();
-    }).catch(() => message.error('导入失败，请重试')));
-  };
-
-  const dlTemplate = (kind: 'videos' | 'comments') => {
-    if (kind === 'videos') downloadCsv('作品导入模板.csv', ['标题', '发布时间', '播放', '点赞', '评论', '转发'], [['三角洲跑刀实录 · 一局爆仓', '10-08', 48201, 4102, 312, 410]]);
-    else downloadCsv('评论导入模板.csv', ['昵称', '内容', '视频标题', '时间', '点赞'], [['刀友老陈', '跑刀一单多少钱？怎么下单？', '三角洲跑刀实录 · 一局爆仓', '2小时前', 12]]);
-  };
+  const [wiz, setWiz] = useState(false);
 
   const loadComps = () => fetch('/api/competitors').then((r) => r.json()).then((d) => setComps(d.items || [])).catch(() => {});
 
@@ -141,6 +120,25 @@ export default function Dashboard() {
       </div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
         <TaskBar />
+        {ov && !videos.some((v) => v.id.startsWith('imp-')) && (
+          <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+            <b>三步开始用</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>导入你自己的账号数据，这里立刻变成你的看板</span>
+            <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+              {[
+                { n: '①', t: '导入数据', d: '作品+评论 CSV，带模板照着填', btn: '现在导入', act: () => setWiz(true) },
+                { n: '②', t: '看意向客户', d: '评论自动分五档意图，高意向置顶', btn: '去评论工作台', act: () => { window.location.href = '/comments'; } },
+                { n: '③', t: '生成回复话术', d: '按场景出候选话术，复制即用', btn: '去话术库', act: () => { window.location.href = '/messages'; } },
+              ].map((s) => (
+                <div key={s.n} style={{ flex: 1, border: '1px solid #E8E6E1', borderRadius: 4, padding: 14 }}>
+                  <div style={{ fontSize: 12, color: '#A8A5A0' }}>{s.n}</div>
+                  <b style={{ fontSize: 13 }}>{s.t}</b>
+                  <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px', minHeight: 34 }}>{s.d}</div>
+                  <Button size="small" type={s.n === '①' ? 'primary' : 'default'} onClick={s.act}>{s.btn}</Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {!ov ? (derr ? <div className="card" style={{ padding: 24, marginBottom: 16 }}>数据加载失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => { setDerr(false); reloadStats(); }}>重试</Button></div> : <div className="skel" style={{ height: 96 }}>loading</div>) : (
           <div style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
           {(() => {
@@ -186,18 +184,13 @@ export default function Dashboard() {
           <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0' }}>服务端分页 · 20/页 · 趋势批量上限{statsConfig.trendBatchMax}</div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
-          <b>真实数据导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>自己的账号数据手工入台（S23预真机）· 单次≤200行 · 按标题upsert不重复</span>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button size="small" type="primary" onClick={() => { if (vFileRef.current) vFileRef.current.value = ''; vFileRef.current?.click(); }}>导入作品CSV</Button>
-            <Button size="small" onClick={() => { if (cFileRef.current) cFileRef.current.value = ''; cFileRef.current?.click(); }}>导入评论CSV</Button>
-            <Button size="small" type="text" onClick={() => dlTemplate('videos')}>模板·作品</Button>
-            <Button size="small" type="text" onClick={() => dlTemplate('comments')}>模板·评论</Button>
-            {impMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{impMsg}</span>}
-            <input ref={vFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => doImport('videos', e.target.files?.[0])} />
-            <input ref={cFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => doImport('comments', e.target.files?.[0])} />
+          <b>我的数据导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>作品/评论 CSV 一键导入 · 带模板 · 自动去重 · 评论自动分五档意图</span>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+            <Button size="small" type="primary" onClick={() => setWiz(true)}>导入我的数据</Button>
+            <span style={{ fontSize: 11, color: '#A8A5A0' }}>数据存本地，重启不丢；作品归属当前主账号（授权页绑定后自动切换）</span>
           </div>
-          <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>数据落本地 data/local.json 重启不丢 · 评论自动分五档意图 · 作品归属当前主账号（授权页绑定后自动切换）</div>
         </div>
+        <ImportWizard open={wiz} onClose={() => setWiz(false)} onDone={reloadStats} />
         <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
           <b>竞品手动导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>官方不给全平台数据，此区与自有数据隔离</span>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
