@@ -10,9 +10,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return ok(item);
 }
 
-/** DELETE /api/reply-rules/:id */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const okDel = getRepos().replyRules.remove(params.id);
-  if (!okDel) return fail('FATAL', '规则不存在', 404);
-  return ok({ removed: true, id: params.id });
+/** DELETE /api/reply-rules/:id（S57 软删进回收站；?restore=1 恢复） */
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const restore = new URL(req.url).searchParams.get('restore') === '1';
+  const okOp = restore ? getRepos().replyRules.restore(params.id) : getRepos().replyRules.remove(params.id);
+  if (!okOp) return fail('FATAL', restore ? '不存在或不在回收站' : '规则不存在', 404);
+  return ok({ [restore ? 'restored' : 'removed']: true, id: params.id });
 }

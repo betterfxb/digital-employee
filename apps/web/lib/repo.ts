@@ -43,14 +43,15 @@ export interface VideoTaskRepo {
   update(id: string, patch: Partial<Pick<VideoTask, 'follow' | 'like_done' | 'fav_done' | 'paused' | 'interval_min'>>): VideoTask | null;
   remove(id: string): boolean;
 }
-export interface Script { id: string; category: string; title: string; content: string }
-export interface ScriptRepo { list(): Script[]; create(category: string, title: string, content: string): Script | null; remove(id: string): boolean }
-export interface ReplyRule { id: string; keyword: string; reply: string; enabled: boolean }
+export interface Script { id: string; category: string; title: string; content: string; deleted?: boolean }
+export interface ScriptRepo { list(mode?: 'active' | 'trash'): Script[]; create(category: string, title: string, content: string): Script | null; remove(id: string): boolean; restore(id: string): boolean }
+export interface ReplyRule { id: string; keyword: string; reply: string; enabled: boolean; deleted?: boolean }
 export interface ReplyRuleRepo {
-  list(): ReplyRule[];
+  list(mode?: 'active' | 'trash'): ReplyRule[];
   create(keyword: string, reply: string): ReplyRule | null;
   update(id: string, patch: { reply?: string; enabled?: boolean }): ReplyRule | null;
   remove(id: string): boolean;
+  restore(id: string): boolean;
 }
 export interface Reply { id: string; comment_id: string; content: string; at: string }
 export interface ReplyRepo { list(comment_id: string): Reply[]; create(comment_id: string, content: string): Reply | null }
@@ -168,7 +169,11 @@ const memory: Repos = {
     remove: (id) => { const i = videoTasks.findIndex((x) => x.id === id); if (i < 0) return false; videoTasks.splice(i, 1); persistCollections(); return true; },
   },
   scripts: {
-    list: () => [...mockScripts.map((s) => ({ ...s })), ...customScripts],
+    // S57 软删除：active=未删（默认），trash=回收站
+    list: (mode) => {
+      const all = [...mockScripts.map((s) => ({ ...s })), ...customScripts];
+      return mode === 'trash' ? all.filter((s) => s.deleted) : all.filter((s) => !s.deleted);
+    },
     create: (category, title, content) => {
       if (!title.trim() || !content.trim()) return null;
       const item = { id: `cs-${Date.now().toString(36)}`, category: category || '自定义', title: title.trim(), content: content.trim() };
@@ -176,10 +181,13 @@ const memory: Repos = {
       persistCollections();
       return item;
     },
-    remove: (id) => { const i = customScripts.findIndex((x) => x.id === id); if (i < 0) return false; customScripts.splice(i, 1); persistCollections(); return true; },
+    // S57 删除=标记进回收站（内置话术不在customScripts天然404；误删可恢复）
+    remove: (id) => { const x = customScripts.find((v) => v.id === id); if (!x || x.deleted) return false; x.deleted = true; persistCollections(); return true; },
+    restore: (id) => { const x = customScripts.find((v) => v.id === id); if (!x || !x.deleted) return false; x.deleted = undefined; persistCollections(); return true; },
   },
   replyRules: {
-    list: () => replyRules,
+    // S57 软删除：active/trash双视图
+    list: (mode) => (mode === 'trash' ? replyRules.filter((r) => r.deleted) : replyRules.filter((r) => !r.deleted)),
     create: (keyword, reply) => {
       if (!keyword.trim() || !reply.trim()) return null;
       const item = { id: `rr-${Date.now().toString(36)}`, keyword: keyword.trim(), reply: reply.trim(), enabled: true };
@@ -195,7 +203,8 @@ const memory: Repos = {
       persistCollections();
       return r;
     },
-    remove: (id) => { const i = replyRules.findIndex((x) => x.id === id); if (i < 0) return false; replyRules.splice(i, 1); persistCollections(); return true; },
+    remove: (id) => { const x = replyRules.find((v) => v.id === id); if (!x || x.deleted) return false; x.deleted = true; persistCollections(); return true; },
+    restore: (id) => { const x = replyRules.find((v) => v.id === id); if (!x || !x.deleted) return false; x.deleted = undefined; persistCollections(); return true; },
   },
   replies: {
     list: (comment_id) => replies.filter((r) => r.comment_id === comment_id),

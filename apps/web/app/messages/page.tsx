@@ -30,6 +30,14 @@ export default function Messages() {
   /** S54 分版本能力（null=按可用渲染防闪） */
   const [feats, setFeats] = useState<string[] | null>(null);
   const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
+  /** S57 回收站 */
+  const [scriptTrash, setScriptTrash] = useState<ScriptItem[]>([]);
+  const [ruleTrash, setRuleTrash] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const loadTrash = () => {
+    fetch('/api/scripts?trash=1').then((r) => r.json()).then((d) => setScriptTrash(d.items || [])).catch(() => {});
+    fetch('/api/reply-rules?trash=1').then((r) => r.json()).then((d) => setRuleTrash(d.items || [])).catch(() => {});
+  };
   const [stitle, setStitle] = useState('');
   const [scontent, setScontent] = useState('');
   const [rules, setRules] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
@@ -49,6 +57,7 @@ export default function Messages() {
     loadFollows('');
     loadRules();
     loadTagLib();
+    loadTrash();
     fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
     fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,7 +136,20 @@ export default function Messages() {
   const delScript = async (id: string) => {
     const r = await fetch(`/api/scripts/${id}`, { method: 'DELETE' }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { flash(r?.message || '删除失败'); return; }
-    fetch('/api/scripts').then((x) => x.json()).then((d) => setScripts(d.items || [])).catch(() => {});
+    flash('已移入回收站', true);
+    fetch('/api/scripts').then((x) => x.json()).then((d) => { if (d.items?.length) setScripts(d.items); else setScripts([]); }).catch(() => {});
+    loadTrash();
+  };
+  /** S57 恢复（话术/规则通用） */
+  const restoreItem = async (kind: 'scripts' | 'rules', id: string) => {
+    const r = await fetch(`/api/${kind === 'scripts' ? 'scripts' : 'reply-rules'}/${id}?restore=1`, { method: 'DELETE' }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '恢复失败'); return; }
+    flash('已恢复', true);
+    fetch(`/api/${kind === 'scripts' ? 'scripts' : 'reply-rules'}`).then((x) => x.json()).then((d) => {
+      if (kind === 'scripts') setScripts(d.items || []);
+      else setRules(d.items || []);
+    }).catch(() => {});
+    loadTrash();
   };
   const addRule = async () => {
     if (!rkw.trim() || !rrp.trim()) { flash('请填写关键词与回复'); return; }
@@ -143,7 +165,9 @@ export default function Messages() {
   const delRule = async (id: string) => {
     const r = await fetch(`/api/reply-rules/${id}`, { method: 'DELETE' }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { flash('删除失败'); return; }
+    flash('已移入回收站', true);
     loadRules();
+    loadTrash();
   };
 
   const followCols: ColumnsType<Follow> = [
@@ -258,6 +282,33 @@ export default function Messages() {
                 </div>
               ));
             })()}
+            {/* S57 回收站（话术+规则合并入口，折叠展示） */}
+            {(scriptTrash.length + ruleTrash.length) > 0 && (
+              <div style={{ marginTop: 12, borderTop: '1px solid #E8E6E1', paddingTop: 8 }}>
+                <Button size="small" type="text" onClick={() => setShowTrash(!showTrash)}>
+                  回收站（{scriptTrash.length + ruleTrash.length}）{showTrash ? '收起' : '展开'}
+                </Button>
+                {showTrash && (
+                  <div style={{ marginTop: 4 }}>
+                    {scriptTrash.map((s) => (
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid #F0EEEA' }}>
+                        <Tag style={{ marginInlineEnd: 0 }}>{s.category}</Tag>
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.content}</span>
+                        <Button size="small" type="text" onClick={() => restoreItem('scripts', s.id)}>恢复</Button>
+                      </div>
+                    ))}
+                    {ruleTrash.map((r) => (
+                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 0', borderBottom: '1px solid #F0EEEA' }}>
+                        <Tag style={{ marginInlineEnd: 0 }}>规则</Tag>
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.keyword} → {r.reply}</span>
+                        <Button size="small" type="text" onClick={() => restoreItem('rules', r.id)}>恢复</Button>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>误删都在这里，恢复即回到列表</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="card" style={{ padding: 16, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -37,7 +37,7 @@ export interface Competitor {
   history?: { at: string; play: number; like: number }[];
 }
 
-export interface ScriptItem { id: string; category: string; title: string; content: string }
+export interface ScriptItem { id: string; category: string; title: string; content: string; deleted?: boolean }
 
 export interface TemplateItem { id: string; intent: string; scene: string; content: string }
 

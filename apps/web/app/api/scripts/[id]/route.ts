@@ -8,9 +8,10 @@ export async function POST(req: Request) {
   return ok(getRepos().scripts.create(body.category || '自定义', body.title, body.content));
 }
 
-/** DELETE /api/scripts/:id（仅自定义可删，内置返回404） */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const okDel = getRepos().scripts.remove(params.id);
-  if (!okDel) return fail('FATAL', '不存在或为内置话术', 404);
-  return ok({ removed: true, id: params.id });
+/** DELETE /api/scripts/:id（S57 仅自定义软删进回收站，内置404；?restore=1 恢复） */
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const restore = new URL(req.url).searchParams.get('restore') === '1';
+  const okOp = restore ? getRepos().scripts.restore(params.id) : getRepos().scripts.remove(params.id);
+  if (!okOp) return fail('FATAL', restore ? '不存在或不在回收站' : '不存在或为内置话术', 404);
+  return ok({ [restore ? 'restored' : 'removed']: true, id: params.id });
 }

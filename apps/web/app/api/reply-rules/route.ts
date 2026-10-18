@@ -2,9 +2,10 @@ export const dynamic = 'force-dynamic'; // S20: 内存态读接口禁静态预�
 import { ok, fail, page } from '@/lib/response';
 import { getRepos } from '@/lib/repo';
 
-/** GET /api/reply-rules（私信接待规则，休眠配置，无企业号授权不执行，见docs/10-B7） */
-export async function GET() {
-  return page(getRepos().replyRules.list(), null);
+/** GET /api/reply-rules?trash=1（S57 trash=1 返回回收站已删规则） */
+export async function GET(req: Request) {
+  const trash = new URL(req.url).searchParams.get('trash') === '1';
+  return page(getRepos().replyRules.list(trash ? 'trash' : 'active'), null);
 }
 
 /** POST /api/reply-rules {keyword,reply} */

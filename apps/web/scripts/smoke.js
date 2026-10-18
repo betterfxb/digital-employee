@@ -127,6 +127,22 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const upd = await patchCp({ remark: 'S53冒烟备注' });
     pass(bad.code === 'FATAL' && upd.remark === 'S53冒烟备注' && Array.isArray(upd.history) && upd.history.length >= 1, 'S53 竞品记录留历史+非法拒');
   } catch (e) { pass(false, 'S53 竞品记录', ` ${e.message}`); }
+  // S57 软删除闭环：删→active不见→trash可见→恢复→active回来（终态留trash不污染active列表）
+  try {
+    const a = await post('/api/scripts', { title: 'S57回收站话术', content: '软删测试内容' });
+    const d = await fetch(base + `/api/scripts/${a.j.id}`, { method: 'DELETE' }).then((r) => r.json());
+    const act1 = await get('/api/scripts');
+    const trash = await get('/api/scripts?trash=1');
+    const res = await fetch(base + `/api/scripts/${a.j.id}?restore=1`, { method: 'DELETE' }).then((r) => r.json());
+    const act2 = await get('/api/scripts');
+    const okChain = d.removed === true
+      && !act1.j.items.some((x) => x.id === a.j.id)
+      && trash.j.items.some((x) => x.id === a.j.id)
+      && res.restored === true
+      && act2.j.items.some((x) => x.id === a.j.id);
+    await fetch(base + `/api/scripts/${a.j.id}`, { method: 'DELETE' }); // 终态：回回收站，不进active
+    pass(okChain, 'S57 软删→回收站→恢复闭环');
+  } catch (e) { pass(false, 'S57 软删闭环', ` ${e.message}`); }
   // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
   try {
     const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });

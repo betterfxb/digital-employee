@@ -35,9 +35,9 @@ export const videoTasks: { id: string; video_id: string; title: string; follow: 
   { id: 'vt1', video_id: 'v1', title: '三角洲跑刀实录 · 一局爆仓', follow: true, like_done: false, fav_done: false, paused: false, interval_min: 5, last_check: null, created_at: '10-09' },
 ];
 /** 自定义话术（S20：用户自建，对齐ScriptItem） */
-export const customScripts: { id: string; category: string; title: string; content: string }[] = [];
+export const customScripts: { id: string; category: string; title: string; content: string; deleted?: boolean }[] = [];
 /** 私信接待规则（S20：休眠配置，无企业号授权不执行，见docs/10-B7） */
-export const replyRules: { id: string; keyword: string; reply: string; enabled: boolean }[] = [
+export const replyRules: { id: string; keyword: string; reply: string; enabled: boolean; deleted?: boolean }[] = [
   { id: 'rr1', keyword: '价格', reply: '报价已私信发送，详询请留联系方式。', enabled: true },
 ];
 /** 评论回评记账（S20：作者回评自有视频，mock本地记账） */

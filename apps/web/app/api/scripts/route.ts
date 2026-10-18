@@ -2,9 +2,10 @@ export const dynamic = 'force-dynamic'; // S12: 内存态读接口禁静态预�
 import { ok, fail, page } from '@/lib/response';
 import { getRepos } from '@/lib/repo';
 
-/** GET /api/scripts?type=私信（P0 mock：全量返回，type仅透传） */
-export async function GET() {
-  return page(getRepos().scripts.list(), null);
+/** GET /api/scripts?type=&trash=1（S57 trash=1 返回回收站已删项） */
+export async function GET(req: Request) {
+  const trash = new URL(req.url).searchParams.get('trash') === '1';
+  return page(getRepos().scripts.list(trash ? 'trash' : 'active'), null);
 }
 
 /** POST /api/scripts {category?,title,content}（自定义话术，见docs/10-A9） */
