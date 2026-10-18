@@ -8,6 +8,7 @@ import type { TaskItem, VideoTask, Video } from '@/lib/types';
 interface SchedStatus {
   enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: string | null;
   todayRunCount: number; nextInSec: number | null; failStreak: number; fused: boolean; minIntervalMin: number;
+  history?: { at: string; trigger: string; ok: boolean; detail: string }[];
 }
 
 /** S12a 任务中心：同步类任务队列（编号/对象/状态/上次执行/启停），只管同步节奏，不做自动执行 */
@@ -116,6 +117,19 @@ export default function Tasks() {
               {sched.lastResult && <span style={{ color: sched.fused ? '#B42318' : undefined }}>{sched.lastResult}</span>}
               {sched.fused && <span style={{ color: '#B42318' }}>连续失败{sched.failStreak}次已熔断，点上方「开始」恢复</span>}
             </div>
+            {sched.history && sched.history.length > 0 && (
+              <div style={{ marginTop: 10, borderTop: '1px solid #F0EEEA', paddingTop: 8 }}>
+                <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 4 }}>执行记录（最近5条）</div>
+                {sched.history.slice(0, 5).map((h, i) => (
+                  <div key={i} className="num" style={{ fontSize: 12, color: '#6B6862', display: 'flex', gap: 10, padding: '2px 0' }}>
+                    <span style={{ width: 138, flexShrink: 0 }}>{new Date(h.at).toLocaleString('zh-CN', { hour12: false })}</span>
+                    <span style={{ width: 44, flexShrink: 0, color: h.ok ? '#1A1A18' : '#B4443C' }}>{h.ok ? '✓ 成功' : '✕ 失败'}</span>
+                    <span style={{ width: 40, flexShrink: 0 }}>{h.trigger === 'auto' ? '自动' : h.trigger === 'manual' ? '手动' : '系统'}</span>
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.detail}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.8fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}>

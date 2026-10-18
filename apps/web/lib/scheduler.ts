@@ -21,6 +21,8 @@ export interface SchedulerStatus {
   failStreak: number;
   fused: boolean;
   minIntervalMin: number;
+  /** S40 执行历史（最新在前，环形保留20条，内存态） */
+  history: { at: string; trigger: string; ok: boolean; detail: string }[];
 }
 
 interface State {
@@ -33,6 +35,7 @@ interface State {
   todayRunCount: number;
   failStreak: number;
   fused: boolean;
+  history: { at: string; trigger: string; ok: boolean; detail: string }[];
 }
 
 const g = globalThis as unknown as { __scheduler?: { timer: NodeJS.Timeout | null; state: State } };
@@ -48,7 +51,14 @@ function freshState(): State {
     todayRunCount: 0,
     failStreak: 0,
     fused: false,
+    history: [],
   };
+}
+
+/** S40 执行历史入账（最新在前，环形20条） */
+function pushHistory(st: State, trigger: string, ok: boolean, detail: string) {
+  st.history.unshift({ at: new Date().toISOString(), trigger, ok, detail });
+  if (st.history.length > 20) st.history.length = 20;
 }
 
 function ensure(): { timer: NodeJS.Timeout | null; state: State } {
@@ -141,14 +151,17 @@ async function executeSync(trigger: 'auto' | 'manual'): Promise<{ ok: boolean; d
     st.lastSyncAt = new Date().toISOString();
     st.lastResult = `[${trigger}] ${detail}`;
     st.failStreak = 0;
+    pushHistory(st, trigger, true, detail);
     return { ok: true, detail, task_id: enq.task_id };
   } catch (e) {
     st.failStreak++;
     st.lastResult = `[${trigger}] 失败：${(e as Error).message}`;
+    pushHistory(st, trigger, false, (e as Error).message);
     if (st.failStreak >= tasksConfig.fuseFailThreshold && tasksConfig.riskFuseEnabled) {
       st.fused = true;
       repos.tasks.setPaused('statsSync', true);
       st.lastResult += ` · 连续失败${st.failStreak}次已熔断，任务自动暂停`;
+      pushHistory(st, 'system', false, `连续失败${st.failStreak}次，已熔断并自动暂停任务`);
     }
     return { ok: false, detail: (e as Error).message };
   }
@@ -169,6 +182,7 @@ export function resetFuse(): void {
   st.fused = false;
   st.failStreak = 0;
   st.lastResult = '熔断已解除';
+  pushHistory(st, 'system', true, '熔断已解除，调度恢复');
 }
 
 export function status(): SchedulerStatus {
@@ -191,5 +205,6 @@ export function status(): SchedulerStatus {
     failStreak: st.failStreak,
     fused: st.fused,
     minIntervalMin: syncConfig.minIntervalMin,
+    history: st.history,
   };
 }
