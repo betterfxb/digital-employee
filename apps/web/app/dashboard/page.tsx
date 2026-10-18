@@ -4,6 +4,8 @@ import { App, Button, Drawer, Input, Popconfirm, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
+import { hasFeature, type ProFeature } from '@/lib/tiers';
+import { ProLock } from '@/components/ProLock';
 import type { Video, Competitor, Overview, TrendPoint, CommentItem, Follow } from '@/lib/types';
 import { TaskBar } from '@/components/TaskBar';
 import { ImportWizard } from '@/components/ImportWizard';
@@ -26,6 +28,9 @@ export default function Dashboard() {
   const [followRows, setFollowRows] = useState<Follow[]>([]);
   const [hotHist, setHotHist] = useState<Record<string, Record<string, number>>>({});
   const [priceOn, setPriceOn] = useState(true);
+  /** S54 分版本能力（null=未加载按可用渲染防闪） */
+  const [feats, setFeats] = useState<string[] | null>(null);
+  const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
   const [curl, setCurl] = useState('');
   const [csource, setCsource] = useState('manual');
   const [ckind, setCkind] = useState('note');
@@ -60,6 +65,7 @@ export default function Dashboard() {
       setFollowNicks(new Set(items.map((f) => f.peer_nick)));
     }).catch(() => {});
     fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => setHotHist(d.history || {})).catch(() => {});
+    fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
     fetch('/api/settings').then((r) => r.json()).then((s) => setPriceOn(Array.isArray(s.price_list) && s.price_list.length > 0)).catch(() => {});
     loadComps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,9 +163,9 @@ export default function Dashboard() {
           }
           okText="记录" cancelText="取消" onConfirm={saveCp}
         >
-          <Button size="small" style={{ marginRight: 6 }}>记录数据</Button>
+          {can('competitor') && <Button size="small" style={{ marginRight: 6 }}>记录数据</Button>}
         </Popconfirm>
-        <Button size="small" type="text" onClick={() => setCpDetail(c)}>历史{c.history?.length ? `(${c.history.length})` : ''}</Button>
+        {can('competitor') && <Button size="small" type="text" onClick={() => setCpDetail(c)}>历史{c.history?.length ? `(${c.history.length})` : ''}</Button>}
       </>
     ) },
   ];
@@ -261,7 +267,10 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        {/* S51 转化漏斗 + 热词趋势 */}
+        {/* S51 转化漏斗 + 热词趋势（S54 基础版锁定为专业版占位） */}
+        {!can('analytics') ? (
+          <div style={{ marginBottom: 16 }}><ProLock feature="转化漏斗 + 热词趋势" desc="全链路转化分析与关键词每日趋势" /></div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16, marginBottom: 16 }}>
           <div className="card" style={{ padding: 18 }}>
             <b>转化漏斗</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>曝光→成交全链路 · 本地真实数据</span>
@@ -326,6 +335,7 @@ export default function Dashboard() {
             })()}
           </div>
         </div>
+        )}
         <div className="card">
           <Table<Video> size="small" pagination={false} columns={videoCols} dataSource={videos} rowKey="id" locale={{ emptyText: '暂无作品' }} />
           <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0', display: 'flex', alignItems: 'center' }}>

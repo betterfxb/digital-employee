@@ -6,7 +6,10 @@ import { Button, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
 import { isDue } from '../lib/remind';
+import { hasFeature } from '../lib/tiers';
+import type { LicenseState } from '../lib/license';
 import { ActivationGate } from './ActivationGate';
+import { ProLock } from './ProLock';
 
 /**
  * 全局壳：侧栏208px + 账号切换 + 未读角标 + 新评论通知 + 内容槽
@@ -23,6 +26,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [activeId, setActiveId] = useState('');
   const [unread, setUnread] = useState(0);
   const [ver, setVer] = useState('');
+  const [licState, setLicState] = useState<LicenseState | null>(null);
   const prevUnread = useRef(0);
   const nav = [
     { href: '/auth', label: '授权管理' },
@@ -36,7 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadAndApplySettings();
     fetch('/api/accounts').then((r) => r.json()).then((d) => { setAccounts(d.items || []); setActiveId(d.active_id || ''); }).catch(() => {});
-    fetch('/api/license/status').then((r) => r.json()).then((d) => setVer(d.app_version || '')).catch(() => {});
+    fetch('/api/license/status').then((r) => r.json()).then((d) => { setVer(d.app_version || ''); setLicState(d as LicenseState); }).catch(() => {});
     const tick = () => fetch('/api/comments?unread_only=1').then((r) => r.json()).then((d) => {
       const n = (d.items || []).length;
       if (typeof window !== 'undefined' && localStorage.getItem('notify_new_comment') === '1' && 'Notification' in window && Notification.permission === 'granted' && n > prevUnread.current) {
@@ -108,7 +112,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       <div style={{ flex: 1, minWidth: 0 }}>
         {expired && <div style={{ background: '#FBF3E4', borderBottom: '1px solid #E8E6E1', padding: '10px 24px', fontSize: 12 }}>授权已过期或被取消，请重新扫码授权。 <Link href="/auth">去授权 →</Link></div>}
-        {children}
+        {path?.startsWith('/report') && licState && !hasFeature(licState.features, 'report')
+          ? <div style={{ padding: 24, maxWidth: 680, margin: '0 auto' }}><ProLock feature="经营报告" desc="日报/周报、文字总结与行动建议" /></div>
+          : children}
       </div>
     </div>
   );

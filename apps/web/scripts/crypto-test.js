@@ -9,13 +9,14 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
 const { parseRemind, isDue } = require('./.tmp-crypto/remind.js');
 const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
+const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -80,6 +81,11 @@ const rep = buildReport({ videos: [], comments: [], follows: [] }, 'daily');
 check(rep.summary.startsWith('今日概览') && rep.metrics.length === 11 && rep.suggestions.length > 0, 'report 空数据日报结构完整');
 const repW = buildReport({ videos: [{ play: 100, like: 10, comment: 1, publish_time: '10-01' }], comments: [], follows: [] }, 'weekly');
 check(repW.summary.startsWith('近7天概览') && repW.metrics.some((m) => m.label === '近7天新评论'), 'report 周报周期与增量指标');
+
+// 8) S54 授权分版本：features白名单语义（[]=全开）
+check(hasFeature([], 'report') && hasFeature(undefined, 'report'), 'tiers 空features全开（专业版/兼容旧license）');
+check(hasFeature(TIERS.basic.features, 'report') === false && hasFeature(TIERS.basic.features, 'lead') === false, 'tiers 基础版锁report/lead');
+check(hasFeature(['report'], 'report') === true, 'tiers 白名单命中可用');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { App, Button, Input, Popconfirm, Slider } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
+import { hasFeature, type ProFeature } from '@/lib/tiers';
 
 /** S18 系统设置：店铺/服务/字体/主题/密码；调节即时预览，保存持久化并全局生效 */
 export default function Settings() {
@@ -15,6 +16,7 @@ export default function Settings() {
   const [npw, setNpw] = useState('');
   const [cpw, setCpw] = useState('');
   const [prices, setPrices] = useState<{ tier: string; price: string }[]>([]);
+  const [feats, setFeats] = useState<string[] | null>(null);
 
   useEffect(() => {
     fetch('/api/settings').then((r) => r.json()).then((s) => {
@@ -24,6 +26,7 @@ export default function Settings() {
       setPwdAt(s.password_changed_at || null);
       if (Array.isArray(s.price_list)) setPrices(s.price_list);
     }).catch(() => message.error('设置加载失败，请刷新重试'));
+    fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -109,7 +112,13 @@ export default function Settings() {
             </div>
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
-            <b>价目表</b>
+            <b>价目表{feats !== null && !hasFeature(feats, 'quote') && <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400, marginLeft: 8 }}>🔒专业版</span>}</b>
+            {feats !== null && !hasFeature(feats, 'quote') ? (
+              <div style={{ fontSize: 12, color: '#6B6862', marginTop: 8, lineHeight: 1.8 }}>
+                价目表属于专业版：配好后报价话术自动带参考价。联系服务商升级授权后解锁。
+              </div>
+            ) : (
+            <>
             <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>报价话术自动带参考价（评论页「智能生成回复」的报价候选）；不配置则话术不提价格</div>
             {prices.map((r, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
@@ -124,6 +133,8 @@ export default function Settings() {
               <Button size="small" disabled={prices.length >= 30} onClick={() => setPrices([...prices, { tier: '', price: '' }])}>添加行</Button>
               <Button size="small" type="primary" onClick={savePrices}>保存价目表</Button>
             </div>
+            </>
+            )}
           </div>
         </div>
         <div className="card" style={{ padding: 18 }}>

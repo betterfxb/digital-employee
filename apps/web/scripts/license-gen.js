@@ -38,7 +38,11 @@ if (cmd === 'keypair') {
   const customer = arg('customer', '');
   if (!customer) { console.error('缺少 --customer 客户标识'); process.exit(1); }
   const days = Number(arg('days', '0')); // 0=买断长期
-  const features = (arg('features', '') || '').split(',').filter(Boolean);
+  // S54 分版本：--tier pro(空features全开，默认)|basic(基础版白名单)；与 --features 互斥优先tier
+  const tier = arg('tier', '');
+  const TIER_FEATURES = { pro: [], basic: ['auth', 'dashboard', 'comments', 'scripts', 'messages', 'tasks', 'settings'] };
+  if (tier && !TIER_FEATURES[tier]) { console.error('--tier 仅支持 basic|pro'); process.exit(1); }
+  const features = tier ? TIER_FEATURES[tier] : (arg('features', '') || '').split(',').filter(Boolean);
   const seats = Number(arg('seats', '5'));
   const slots = Number(arg('slots', '2'));
   const bindRaw = arg('bind', ''); // S30 机器绑定：cpuHash.diskHash.macHash（激活页机器码原样粘贴）
@@ -68,8 +72,9 @@ if (cmd === 'keypair') {
   fs.writeFileSync(LIC, JSON.stringify({ payload, sig: sig.toString('base64') }, null, 2));
   console.log(`license OK → data/license.license`);
   console.log(`  客户=${customer} 到期=${payload.expires_at || '买断长期'} 席位=${seats} 槽位=${slots}`);
-  console.log(`  features=${features.length ? features.join(',') : '(全开)'} watermark=${watermark} 机器绑定=${machine_bind ? '已绑定（命中≥2因子）' : '无（勿商用分发）'}`);
+  console.log(`  features=${features.length ? features.join(',') : '(全开=专业版)'} watermark=${watermark} 机器绑定=${machine_bind ? '已绑定（命中≥2因子）' : '无（勿商用分发）'}${tier ? ` 分档=${tier}` : ''}`);
 } else {
-  console.log('用法: keypair | issue --customer <客户> [--days 365] [--features a,b] [--seats 5] [--slots 2] [--bind cpuHash.diskHash.macHash] [--watermark wl-xxxxxxxx]');
+  console.log('用法: keypair | issue --customer <客户> [--days 365] [--tier pro|basic] [--features a,b] [--seats 5] [--slots 2] [--bind cpuHash.diskHash.macHash] [--watermark wl-xxxxxxxx]');
+  console.log('  --tier basic=基础版（锁经营报告/漏斗热词/线索档案/竞品记录/价目表）；pro或省略=专业版全开');
   console.log('  --bind 从客户激活页复制机器码（激活页可一键复制）；商用发证必须带 --bind');
 }

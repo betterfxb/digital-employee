@@ -6,6 +6,7 @@ import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
 import { mockScripts } from '@/lib/mock';
 import { downloadCsv } from '@/lib/csv';
+import { hasFeature, type ProFeature } from '@/lib/tiers';
 import type { ScriptItem, Follow, Video } from '@/lib/types';
 
 /** S4 私信辅助占位：话术+台账走API（失败回退静态），无假会话，imEnabled=false */
@@ -26,6 +27,9 @@ export default function Messages() {
   /** S49 线索档案抽屉 */
   const [detail, setDetail] = useState<Follow | null>(null);
   const [noteText, setNoteText] = useState('');
+  /** S54 分版本能力（null=按可用渲染防闪） */
+  const [feats, setFeats] = useState<string[] | null>(null);
+  const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
   const [stitle, setStitle] = useState('');
   const [scontent, setScontent] = useState('');
   const [rules, setRules] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
@@ -45,6 +49,7 @@ export default function Messages() {
     loadFollows('');
     loadRules();
     loadTagLib();
+    fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
     fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -143,7 +148,7 @@ export default function Messages() {
 
   const followCols: ColumnsType<Follow> = [
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
-    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => <a onClick={() => openDetail(f)}>{v}</a> },
+    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => (can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>) },
     { title: '状态', key: 'status', width: 120, render: (_, f) => <Select size="small" value={f.status} onChange={(v) => changeStatus(f.id, v)} style={{ width: '100%' }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} /> },
     { title: '成交', key: 'amt', width: 130, render: (_, f) => (
       f.status !== '已转化' ? <span className="num" style={{ color: '#A8A5A0' }}>—</span>
@@ -159,7 +164,9 @@ export default function Messages() {
       )
     ) },
     { title: '下次提醒', dataIndex: 'next_remind_at', key: 'remind', onCell: () => ({ className: 'num' }) },
-    { title: '标签', key: 'tags', width: 140, render: (_, f) => (
+    { title: '标签', key: 'tags', width: 140, render: (_, f) => (!can('lead')
+      ? <span style={{ color: '#A8A5A0', fontSize: 12 }}>🔒专业版</span>
+      : (
       <Popconfirm
         title="线索标签"
         open={tagEdit?.id === f.id}
@@ -180,7 +187,7 @@ export default function Messages() {
           {f.tags && f.tags.length ? <span style={{ color: '#1677FF' }}>{f.tags.join(' / ')}</span> : '+标签'}
         </Button>
       </Popconfirm>
-    ) },
+      )) },
   ];
 
   const ruleCols: ColumnsType<{ id: string; keyword: string; reply: string; enabled: boolean }> = [
