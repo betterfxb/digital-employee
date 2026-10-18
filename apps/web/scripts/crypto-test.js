@@ -9,12 +9,13 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
 const { parseRemind, isDue } = require('./.tmp-crypto/remind.js');
 const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
+const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -70,6 +71,15 @@ check(scSpam === 0 && scoreLevel(scSpam) === 'low', 'leadScore 垃圾0分/low');
 const scMid = leadScore({ intent: '咨询', like_count: 2, content: '要什么段位', keywords: [] });
 check(scMid === 22 && scoreLevel(scMid) === 'low', 'leadScore 咨询2+赞=22/low');
 check(leadScore({ intent: '留电话', like_count: 99, content: '留个联系方式', keywords: ['电话'] }) === 90, 'leadScore 留电话+强信号=90');
+
+// 7) S50 报告：相对时间解析 + 日报生成
+const T0 = new Date('2026-10-18T12:00:00').getTime();
+check(parseCommentTime('2小时前', T0).getTime() === T0 - 7200000 && parseCommentTime('30分钟前', T0).getTime() === T0 - 1800000, 'report 相对时间解析');
+check(parseCommentTime('前天怪文', T0) === null && parseCommentTime('10-08 14:00', T0).getDate() === 8, 'report 无法解析null+MM-DD取日');
+const rep = buildReport({ videos: [], comments: [], follows: [] }, 'daily');
+check(rep.summary.startsWith('今日概览') && rep.metrics.length === 11 && rep.suggestions.length > 0, 'report 空数据日报结构完整');
+const repW = buildReport({ videos: [{ play: 100, like: 10, comment: 1, publish_time: '10-01' }], comments: [], follows: [] }, 'weekly');
+check(repW.summary.startsWith('近7天概览') && repW.metrics.some((m) => m.label === '近7天新评论'), 'report 周报周期与增量指标');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

@@ -29,6 +29,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: '/dashboard', label: '数据看板' },
     { href: '/comments', label: '评论工作台' },
     { href: '/tasks', label: '任务中心' },
+    { href: '/report', label: '经营报告' },
     { href: '/messages', label: '私信辅助' },
     { href: '/settings', label: '系统设置' },
   ];
