@@ -26,11 +26,16 @@ export default function Comments() {
   const [genBusy, setGenBusy] = useState(false);
   const [tone, setTone] = useState('亲切');
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  /** S58 渲染上限：大数据量首屏100条防卡顿，加载更多渐进 */
+  const [renderCap, setRenderCap] = useState(100);
+  /** 当前可见列表（受渲染上限约束，j/k导航与全选都在可见范围内） */
+  const vis = items.slice(0, renderCap);
 
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
 
   const load = (o?: { v?: string; it?: string; k?: string; uo?: boolean }) => {
     const v = o?.v ?? selVideo, it = o?.it ?? intent, k = o?.k ?? kw, uo = o?.uo ?? unreadOnly;
+    if (o) setRenderCap(100);
     const q = new URLSearchParams({ keyword: k, unread_only: uo ? '1' : '0' });
     if (v) q.set('video_id', v);
     if (it) q.set('intent', it);
@@ -96,7 +101,7 @@ export default function Comments() {
   };
   // ── S34 多选批量 ──
   const toggleCheck = (id: string) => setChecked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const checkAll = () => setChecked((prev) => (prev.size === items.length ? new Set() : new Set(items.map((x) => x.id))));
+  const checkAll = () => setChecked((prev) => (prev.size === vis.length ? new Set() : new Set(vis.map((x) => x.id))));
   const clearCheck = () => setChecked(new Set());
   const batchReadSel = async () => {
     const ids = [...checked].slice(0, commentsConfig.batchReadMax);
@@ -157,10 +162,10 @@ export default function Comments() {
       const t = e.target as HTMLElement;
       if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
       if (t?.closest?.('.ant-select-dropdown, .ant-picker-dropdown')) return;
-      const idx = items.findIndex((x) => x.id === selId);
+      const idx = vis.findIndex((x) => x.id === selId);
       if (e.key === 'j' || e.key === 'k') {
-        const n = e.key === 'j' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
-        if (items[n]) setSelId(items[n].id);
+        const n = e.key === 'j' ? Math.min(idx + 1, vis.length - 1) : Math.max(idx - 1, 0);
+        if (vis[n]) setSelId(vis[n].id);
       } else if (e.key === 'e' && selId) markRead(selId);
       else if (['1', '2', '3'].includes(e.key) && selId) {
         const v = commentsConfig.intentOptions[Number(e.key) - 1];
@@ -168,7 +173,7 @@ export default function Comments() {
       } else if (e.key === 'c') {
         const c = items.find((x) => x.id === selId);
         if (c) copy(c.content);
-      } else if (e.key === 'a' && items.length) {
+      } else if (e.key === 'a' && vis.length) {
         checkAll();
       }
     };
@@ -211,7 +216,7 @@ export default function Comments() {
               <Button size="small" type="text" onClick={clearCheck}>取消选择</Button>
             </>
           )}
-          <Button size="small" onClick={checkAll}>{checked.size === items.length && items.length > 0 ? '取消全选' : '全选'}</Button>
+          <Button size="small" onClick={checkAll}>{checked.size === vis.length && vis.length > 0 ? '取消全选' : '全选'}</Button>
           <Button size="small" onClick={batchRead}>未读批量已读</Button>
           <Button size="small" onClick={exportComments}>导出CSV</Button>
         </div>
@@ -231,7 +236,7 @@ export default function Comments() {
             ))}
           </div>
           <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>
-            {items.length === 0 ? <div style={{ padding: 24, color: '#A8A5A0' }}>暂无数据</div> : items.map((c) => (
+            {vis.length === 0 ? <div style={{ padding: 24, color: '#A8A5A0' }}>暂无数据</div> : vis.map((c) => (
               <div key={c.id} onClick={() => setSelId(c.id)} style={{ padding: '10px 14px 10px 16px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selId === c.id ? '#F5F4F1' : 'transparent', borderLeft: `2px solid ${colorOf(c.intent)}` }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Checkbox checked={checked.has(c.id)} onClick={(e: React.MouseEvent) => e.stopPropagation()} onChange={() => toggleCheck(c.id)} style={{ marginTop: 2 }} />
@@ -245,6 +250,12 @@ export default function Comments() {
                 </div>
               </div>
             ))}
+            {items.length > renderCap && (
+              <div style={{ padding: 10, textAlign: 'center', borderTop: '1px solid #F0EEEA' }}>
+                <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 6 }}>已显示 {renderCap} / {items.length} 条（搜索或筛选可缩小范围）</div>
+                <Button size="small" block onClick={() => setRenderCap((c) => c + 100)}>加载更多（剩 {items.length - renderCap} 条）</Button>
+              </div>
+            )}
           </div>
           <div style={{ padding: 16, overflow: 'auto', background: '#FCFBF9' }}>
             {!sel ? <div style={{ fontSize: 12, color: '#A8A5A0' }}>点击一条评论查看详情（j/k 移动，e 标已读，1/2/3 改意图，c 复制）。</div> : (

@@ -181,14 +181,24 @@ export function rememberAccount(a: Account) {
   flushLocal();
 }
 
+let batching = false;
+/**
+ * S58 批量导入合并落盘：批内只改内存，结束一次性flush。
+ * 修压测发现的线性劣化（每行全量写盘：2000行=2000次文件重写，单批200行从500ms涨到2s）
+ */
+export function withBatch<T>(fn: () => T): T {
+  batching = true;
+  try { return fn(); } finally { batching = false; flushLocal(); }
+}
+
 export function rememberVideo(v: Video) {
   state.videos = state.videos.filter((x) => x.id !== v.id).concat(v);
-  flushLocal();
+  if (!batching) flushLocal();
 }
 
 export function rememberComment(c: CommentItem) {
   state.comments = state.comments.filter((x) => x.id !== c.id).concat(c);
-  flushLocal();
+  if (!batching) flushLocal();
 }
 
 export function recordToken(accountId: string, t: { access: string; refresh?: string; expires_at?: string; open_id?: string }) {

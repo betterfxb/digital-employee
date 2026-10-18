@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'; // S23: 写内存态+落盘，禁静态�
 import { fail, ok } from '@/lib/response';
 import { douyinConfig } from '@/config/douyin.config';
 import { getRepos } from '@/lib/repo';
-import { pushAuthLog } from '@/lib/localData';
+import { pushAuthLog, withBatch } from '@/lib/localData';
 import { upsertVideo, upsertComment } from '@/lib/importData';
 
 /** CSV解析：支持引号转义/逗号换行/BOM，返回二维数组 */
@@ -116,7 +116,8 @@ export async function POST(req: Request) {
 
   const repos = getRepos();
   const aid = repos.accounts.getActive();
-  const result = kind === 'videos' ? importVideos(rows, aid) : importComments(rows, aid);
+  // S58 批量合并落盘：整批一次flush（修每行写盘的线性劣化）
+  const result = withBatch(() => (kind === 'videos' ? importVideos(rows, aid) : importComments(rows, aid)));
   if (result.error) return fail('FATAL', result.error, 400);
   const n = result.created + result.updated;
   pushAuthLog(`导入${kind === 'videos' ? '作品' : '评论'}数据`, '店长', `${n}条 · ${aid}`);
