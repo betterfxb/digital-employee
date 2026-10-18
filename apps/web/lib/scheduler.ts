@@ -8,6 +8,8 @@ import { tasksConfig } from '@/config/tasks.config';
 import { getRepos } from './repo';
 import { runLiveSync, liveSyncEnabled } from './liveSync';
 import { autoReplyTick } from './autoReply';
+import { autoCfgOf } from './autoCfg';
+import type { AutoConfig } from './autoCfg';
 
 export interface SchedulerStatus {
   enabled: boolean;
@@ -22,6 +24,8 @@ export interface SchedulerStatus {
   failStreak: number;
   fused: boolean;
   minIntervalMin: number;
+  /** S75 生效中的自动化配置（面板回显） */
+  auto_config?: AutoConfig;
   /** S40 执行历史（最新在前，环形保留20条，内存态） */
   history: { at: string; trigger: string; ok: boolean; detail: string }[];
 }
@@ -73,7 +77,12 @@ function todayStr(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function inQuietHours(): boolean {
+function inQuietHours(cfg?: { quiet_enabled: boolean; quiet_start: number; quiet_end: number }): boolean {
+  if (cfg) {
+    if (!cfg.quiet_enabled) return false;
+    const h = new Date().getHours();
+    return cfg.quiet_start > cfg.quiet_end ? h >= cfg.quiet_start || h < cfg.quiet_end : h >= cfg.quiet_start && h < cfg.quiet_end;
+  }
   if (!tasksConfig.quietHoursEnabled) return false;
   const h = new Date().getHours();
   const { start, end } = tasksConfig.quietHours;
@@ -114,6 +123,9 @@ async function tick(): Promise<void> {
   st.lastTickAt = new Date().toISOString();
   // S74 评论自动回复独立心跳（冷却/上限/静默自判，与同步开关和熔断无关）
   try { autoReplyTick(); } catch { /* 执行器异常不拖垮调度 */ }
+  // S75 自动化面板可调：同步总开关/间隔/日限/静默读用户配置（config为出厂默认）
+  const cfg = autoCfgOf(getRepos().settings.get() as { auto_config?: unknown });
+  if (!cfg.sync_enabled) return;
   if (!syncConfig.autoSyncEnabled || st.fused) return;
 
   const repos = getRepos();
@@ -124,12 +136,12 @@ async function tick(): Promise<void> {
   const t = todayStr();
   if (st.todayDate !== t) { st.todayDate = t; st.todayRunCount = 0; }
 
-  if (st.todayRunCount >= tasksConfig.dailySyncCap) {
-    st.lastResult = `已达今日上限${tasksConfig.dailySyncCap}次`;
+  if (st.todayRunCount >= cfg.sync_daily_cap) {
+    st.lastResult = `已达今日上限${cfg.sync_daily_cap}次`;
     return;
   }
-  if (minutesSince(st.lastSyncAt) < syncConfig.minIntervalMin) return;
-  if (syncConfig.respectQuietHours && inQuietHours()) {
+  if (minutesSince(st.lastSyncAt) < cfg.sync_interval_min) return;
+  if (syncConfig.respectQuietHours && inQuietHours(cfg)) {
     st.lastResult = '夜间静默中，跳过本次自动同步';
     return;
   }
@@ -192,11 +204,12 @@ export function status(): SchedulerStatus {
   const st = ensure().state;
   const t = todayStr();
   const todayCount = st.todayDate === t ? st.todayRunCount : 0;
-  const nextInSec = st.fused || !syncConfig.autoSyncEnabled
+  const cfg = autoCfgOf(getRepos().settings.get() as { auto_config?: unknown });
+  const nextInSec = st.fused || !syncConfig.autoSyncEnabled || !cfg.sync_enabled
     ? null
-    : Math.max(0, Math.round((syncConfig.minIntervalMin * 60_000 - (Date.now() - (st.lastSyncAt ? new Date(st.lastSyncAt).getTime() : 0))) / 1000));
+    : Math.max(0, Math.round((cfg.sync_interval_min * 60_000 - (Date.now() - (st.lastSyncAt ? new Date(st.lastSyncAt).getTime() : 0))) / 1000));
   return {
-    enabled: syncConfig.autoSyncEnabled,
+    enabled: syncConfig.autoSyncEnabled && cfg.sync_enabled,
     running: ensure().timer !== null,
     startedAt: st.startedAt ? new Date(st.startedAt).toISOString() : null,
     lastTickAt: st.lastTickAt,
@@ -204,10 +217,11 @@ export function status(): SchedulerStatus {
     lastResult: st.lastResult,
     todayRunCount: todayCount,
     todayDate: t,
-    nextInSec: nextInSec !== null && nextInSec <= syncConfig.minIntervalMin * 60 ? nextInSec : null,
+    nextInSec: nextInSec !== null && nextInSec <= cfg.sync_interval_min * 60 ? nextInSec : null,
     failStreak: st.failStreak,
     fused: st.fused,
-    minIntervalMin: syncConfig.minIntervalMin,
+    minIntervalMin: cfg.sync_interval_min,
+    auto_config: cfg,
     history: st.history,
   };
 }

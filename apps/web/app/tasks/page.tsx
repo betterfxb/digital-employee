@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Checkbox, Select, Switch, Table, Tag } from 'antd';
+import { App, Button, Checkbox, InputNumber, Select, Switch, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { tasksConfig } from '@/config/tasks.config';
 import type { TaskItem, VideoTask, Video } from '@/lib/types';
+import { REPLY_TONES, type AutoConfig } from '@/lib/autoCfg';
 
 interface SchedStatus {
   enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: string | null;
@@ -11,7 +12,12 @@ interface SchedStatus {
   history?: { at: string; trigger: string; ok: boolean; detail: string }[];
   /** S74 自动回复执行器 */
   auto_reply?: { enabled: boolean; ready: boolean; gate: string; sentToday: number; cap: number; nextInSec: number | null; log: { at: string; nick: string; text: string; via: string; status: string; note: string }[] };
+  /** S75 生效中的自动化配置（面板可编辑） */
+  auto_config?: AutoConfig;
 }
+
+/** S75 小时选项 */
+const HOURS = Array.from({ length: 24 }, (_, i) => ({ value: i, label: `${i}:00` }));
 
 /** S12a 任务中心：同步类任务队列（编号/对象/状态/上次执行/启停），只管同步节奏，不做自动执行 */
 export default function Tasks() {
@@ -25,6 +31,22 @@ export default function Tasks() {
   const [reportNotify, setReportNotify] = useState(false);
   const [tmsg, setTmsg] = useState('');
   const [sched, setSched] = useState<SchedStatus | null>(null);
+  /** S75 自动化参数面板 */
+  const [acfg, setAcfg] = useState<AutoConfig | null>(null);
+  const [cfgDirty, setCfgDirty] = useState(false);
+
+  useEffect(() => {
+    if (sched?.auto_config && !cfgDirty) setAcfg(sched.auto_config);
+  }, [sched, cfgDirty]);
+  const patchCfg = (p: Partial<AutoConfig>) => { setAcfg((c) => (c ? { ...c, ...p } : c)); setCfgDirty(true); };
+  const saveCfg = async () => {
+    if (!acfg) return;
+    const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto_config: acfg }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '保存失败'); return; }
+    setCfgDirty(false);
+    message.success('自动化参数已保存，下个心跳周期生效');
+    loadSched();
+  };
   const [mounted, setMounted] = useState(false);
   const flash = (t: string) => message.error(t);
   const load = () => fetch('/api/tasks').then((r) => r.json()).then((d) => setItems(d.items || [])).catch(() => setTmsg('任务列表加载失败，请重试'));
@@ -219,12 +241,61 @@ export default function Tasks() {
           <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>私信自动回复：等蓝V与IM能力审核（同架构预留，开通后并入本卡）</div>
         </div>
         <div className="card" style={{ padding: 16, marginTop: 16 }}>
-          <b>调度与风控</b>
-          <div className="num" style={{ fontSize: 12, color: '#6B6862', marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span>并发{tasksConfig.maxConcurrentTasks} · 每日上限{tasksConfig.dailySyncCap}次</span>
-            <span>夜间{tasksConfig.quietHours.start}-{tasksConfig.quietHours.end}点静默 · 熔断连失{tasksConfig.fuseFailThreshold}停</span>
-            <span>失败重试{tasksConfig.maxRetries}次 · 节奏约{tasksConfig.switchIntervalMin}分钟</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <b>自动化参数</b>
+            {cfgDirty && <Tag color="warning">未保存</Tag>}
+            <span style={{ flex: 1 }} />
+            {cfgDirty && (
+              <>
+                <Button size="small" onClick={() => { if (sched?.auto_config) { setAcfg(sched.auto_config); setCfgDirty(false); } }}>放弃修改</Button>
+                <Button size="small" type="primary" onClick={saveCfg}>保存参数</Button>
+              </>
+            )}
           </div>
+          {!acfg ? <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 8 }}>加载中…</div> : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: '10px 24px', marginTop: 12, fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>定时同步总开关</span>
+                <Switch size="small" checked={acfg.sync_enabled} onChange={(v) => patchCfg({ sync_enabled: v })} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>同步间隔(分)</span>
+                <InputNumber size="small" min={5} max={240} value={acfg.sync_interval_min} onChange={(v) => v != null && patchCfg({ sync_interval_min: v })} style={{ width: 90 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>每日同步上限(次)</span>
+                <InputNumber size="small" min={1} max={48} value={acfg.sync_daily_cap} onChange={(v) => v != null && patchCfg({ sync_daily_cap: v })} style={{ width: 90 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>夜间静默</span>
+                <Switch size="small" checked={acfg.quiet_enabled} onChange={(v) => patchCfg({ quiet_enabled: v })} />
+                <Select size="small" disabled={!acfg.quiet_enabled} value={acfg.quiet_start} onChange={(v) => patchCfg({ quiet_start: v })} options={HOURS} style={{ width: 86 }} />
+                <span>至</span>
+                <Select size="small" disabled={!acfg.quiet_enabled} value={acfg.quiet_end} onChange={(v) => patchCfg({ quiet_end: v })} options={HOURS} style={{ width: 86 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', borderTop: '1px dashed #E8E6E1', paddingTop: 10 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>回复间隔(秒·随机)</span>
+                <InputNumber size="small" min={10} max={3600} value={acfg.reply_gap_min_sec} onChange={(v) => v != null && patchCfg({ reply_gap_min_sec: v })} style={{ width: 90 }} />
+                <span>至</span>
+                <InputNumber size="small" min={30} max={7200} value={acfg.reply_gap_max_sec} onChange={(v) => v != null && patchCfg({ reply_gap_max_sec: v })} style={{ width: 90 }} />
+                <span style={{ width: 70, color: '#6B6862', marginLeft: 8 }}>每日回复上限</span>
+                <InputNumber size="small" min={1} max={50} value={acfg.reply_daily_cap} onChange={(v) => v != null && patchCfg({ reply_daily_cap: v })} style={{ width: 70 }} />
+                <span style={{ width: 40, color: '#6B6862', marginLeft: 8 }}>口吻</span>
+                <Select size="small" value={acfg.reply_tone} onChange={(v) => patchCfg({ reply_tone: v })} options={REPLY_TONES.map((t) => ({ value: t, label: t }))} style={{ width: 80 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>日报提醒时点</span>
+                <Select size="small" value={acfg.report_hour} onChange={(v) => patchCfg({ report_hour: v })} options={HOURS} style={{ width: 86 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 110, color: '#6B6862' }}>看板自动刷新</span>
+                <Select size="small" value={acfg.dashboard_refresh_sec} onChange={(v) => patchCfg({ dashboard_refresh_sec: v })} options={[{ value: 0, label: '关闭' }, { value: 30, label: '30秒' }, { value: 60, label: '60秒' }, { value: 120, label: '2分钟' }, { value: 300, label: '5分钟' }]} style={{ width: 90 }} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', color: '#A8A5A0', fontSize: 11, lineHeight: 1.8 }}>
+                出厂参数（不可调项）：并发{tasksConfig.maxConcurrentTasks} · 熔断连失{tasksConfig.fuseFailThreshold}停 · 失败重试{tasksConfig.maxRetries}次 · 提醒提前按每条时间。间隔过短会提高请求频率，建议保持默认节奏。
+              </div>
+            </div>
+          )}
         </div>
         </div>
         </div>

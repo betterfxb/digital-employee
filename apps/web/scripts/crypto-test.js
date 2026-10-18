@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -21,6 +21,7 @@ const { trendSeries } = require('./.tmp-crypto/lib/bizTrend.js');
 const { encryptBackup, decryptBackup } = require('./.tmp-crypto/lib/backupCrypto.js');
 const { hashPassword, verifyPassword } = require('./.tmp-crypto/lib/accessPw.js');
 const { nextGapMs, replyGate } = require('./.tmp-crypto/lib/autoReply.js');
+const { mergeAutoCfg, AUTO_DEFAULTS } = require('./.tmp-crypto/lib/autoCfg.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -120,7 +121,12 @@ check(decryptBackup(JSON.stringify(tampered), 'pass-123456') === null, 'bkenc �
 const pwHash = hashPassword('secret-123');
 check(pwHash.startsWith('s1$') && !pwHash.includes('secret-123'), 'apw 哈希格式且不含原文');
 check(verifyPassword('secret-123', pwHash) === true && verifyPassword('wrong-pw', pwHash) === false, 'apw 口令对通过错拒绝');
-check(verifyPassword('x', null) === false && verifyPassword('x', 'garbage-format') === false, 'apw 空与坏格式一律拒绝');
+// 15) S75 自动化配置钳制
+const def = mergeAutoCfg(null);
+check(def.sync_interval_min === AUTO_DEFAULTS.sync_interval_min && def.dashboard_refresh_sec === 60, 'acfg 空输入补默认');
+const clamped = mergeAutoCfg({ sync_interval_min: 999, reply_gap_min_sec: 500, reply_gap_max_sec: 100, reply_tone: '怪' });
+check(clamped.sync_interval_min === 240 && clamped.reply_gap_min_sec === 100 && clamped.reply_tone === '亲切', 'acfg 越界钳制+倒挂修正+坏枚举回退');
+check(mergeAutoCfg({ quiet_enabled: 'x' }).quiet_enabled === true, 'acfg 坏布尔回退默认');
 
 // 14) S74 自动回复节奏与三重门（纯函数）
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');

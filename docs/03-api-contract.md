@@ -89,6 +89,7 @@ POST /api/report/snapshot -> {snapshot, history}（S55：报告页打开记当�
 POST /api/auth/unlock {password} -> {unlocked}（S69：未设密码直接放行；错口令401 FATAL）
 GET  /api/scripts?trash=1 / DELETE /api/scripts/:id[?restore=1] -> 软删进回收站/恢复（S57；reply-rules同构）
 PATCH /api/competitors/:id {play?,like?,remark?} -> 变化自动留history（S53）
+PATCH /api/settings {auto_config:{sync_enabled,sync_interval_min,sync_daily_cap,quiet_enabled,quiet_start,quiet_end,reply_gap_min_sec,reply_gap_max_sec,reply_daily_cap,reply_tone,report_hour,dashboard_refresh_sec}} -> GET自动回显（S75读侧经mergeAutoCfg钳制，越界/倒挂/坏枚举/坏布尔回退默认；调度器+自动回复+日报+看板刷新共12旋钮）
 ```
 
 ## 红线（永续有效）

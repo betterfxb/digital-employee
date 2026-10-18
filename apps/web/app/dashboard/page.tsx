@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
+import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
 import type { Video, Competitor, Overview, TrendPoint, CommentItem, Follow } from '@/lib/types';
 import { TaskBar } from '@/components/TaskBar';
@@ -28,6 +29,9 @@ export default function Dashboard() {
   const [followRows, setFollowRows] = useState<Follow[]>([]);
   const [hotHist, setHotHist] = useState<Record<string, Record<string, number>>>({});
   const [priceOn, setPriceOn] = useState(true);
+  /** S75 看板自动刷新（面板可配，0=关；页面隐藏时暂停） */
+  const [refreshSec, setRefreshSec] = useState(0);
+  const [reloadTick, setReloadTick] = useState(0);
   /** S54 分版本能力（null=未加载按可用渲染防闪） */
   const [feats, setFeats] = useState<string[] | null>(null);
   const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
@@ -73,10 +77,17 @@ export default function Dashboard() {
     }).catch(() => {});
     fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => setHotHist(d.history || {})).catch(() => {});
     fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
-    fetch('/api/settings').then((r) => r.json()).then((s) => setPriceOn(Array.isArray(s.price_list) && s.price_list.length > 0)).catch(() => {});
+    fetch('/api/settings').then((r) => r.json()).then((s) => { setPriceOn(Array.isArray(s.price_list) && s.price_list.length > 0); setRefreshSec(autoCfgOf(s).dashboard_refresh_sec); }).catch(() => {});
     loadComps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadTick]);
+
+  // S75 自动刷新（面板配置，页面隐藏时暂停）
+  useEffect(() => {
+    if (refreshSec <= 0) return;
+    const id = setInterval(() => { if (typeof document !== 'undefined' && !document.hidden) setReloadTick((t) => t + 1); }, refreshSec * 1000);
+    return () => clearInterval(id);
+  }, [refreshSec]);
 
   const reloadStats = () => {
     fetch('/api/stats/overview').then((r) => r.json()).then(setOv).catch(() => {});

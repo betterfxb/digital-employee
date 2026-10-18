@@ -27,6 +27,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [ver, setVer] = useState('');
   const [licState, setLicState] = useState<LicenseState | null>(null);
+  const [reportHour, setReportHour] = useState(9);
   /** S69 本地访问密码解锁层 */
   const [locked, setLocked] = useState(false);
   const [unlockPw, setUnlockPw] = useState('');
@@ -46,9 +47,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
     loadAndApplySettings();
     fetch('/api/accounts').then((r) => r.json()).then((d) => { setAccounts(d.items || []); setActiveId(d.active_id || ''); }).catch(() => {});
     fetch('/api/license/status').then((r) => r.json()).then((d) => { setVer(d.app_version || ''); setLicState(d as LicenseState); }).catch(() => {});
-    // S69 有访问密码且本标签未解锁 → 显示解锁层（sessionStorage按标签会话）
+    // S69 有访问密码且本标签未解锁 → 显示解锁层（sessionStorage按标签会话）；S75 顺带取日报时点
     fetch('/api/settings').then((r) => r.json()).then((d) => {
       if (d?.password_hash && sessionStorage.getItem('unlock_ok') !== '1') setLocked(true);
+      const rh = (d?.auto_config && typeof d.auto_config === 'object') ? Number((d.auto_config as { report_hour?: number }).report_hour) : NaN;
+      if (Number.isFinite(rh)) setReportHour(rh);
     }).catch(() => {});
     const tick = () => fetch('/api/comments?unread_only=1').then((r) => r.json()).then((d) => {
       const n = (d.items || []).length;
@@ -100,16 +103,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       const enabled = localStorage.getItem('notify_report') === '1';
       const last = localStorage.getItem('report_notified');
-      if (!shouldNotifyReport(Date.now(), last, enabled)) return;
+      if (!shouldNotifyReport(Date.now(), last, enabled, reportHour)) return;
       try {
-        new Notification('经营报告已生成', { body: '今日日报已就绪：数据概览、7天趋势与行动建议点开即看（经营报告页）' });
+        new Notification('经营报告已生成', { body: `今日日报已就绪（${reportHour}点）：数据概览、7天趋势与行动建议点开即看（经营报告页）` });
       } catch { /* 通知失败不打扰 */ }
       localStorage.setItem('report_notified', todayKey());
     };
     check();
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
-  }, [mounted]);
+  }, [mounted, reportHour]);
 
   // S59 授权到期真实提醒：剩余≤7天且未过期时每日最多提醒一次（已过期由激活门/横幅负责，不重复打扰）
   useEffect(() => {

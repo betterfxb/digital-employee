@@ -4,6 +4,7 @@
  */
 import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, viewOf } from './store';
 import { hashPassword } from './accessPw';
+import { autoCfgOf, mergeAutoCfg } from './autoCfg';
 import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
 import { persistCollections } from './localData'; // S25b: 业务集合变更落盘
 import type { Account, Video, CommentItem, Follow, Competitor, DlqItem } from './types';
@@ -34,7 +35,7 @@ export interface AccountRepo { list(): Account[]; getActive(): string; getActive
 export interface TaskRepo { isPaused(type: string): boolean; setPaused(type: string, paused: boolean): void; lastRun(type: string): string | null }
 export interface SettingsRepo {
   get(): Record<string, unknown>;
-  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean }): Record<string, unknown>;
+  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; auto_config?: unknown }): Record<string, unknown>;
   /** S69 设置/取消访问密码（pw='' → 清除），返回 changed_at 或 null */
   setAccessPassword(pw: string): string | null;
 }
@@ -138,7 +139,7 @@ const memory: Repos = {
   settings: {
     get: () => {
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, auto_config: autoCfgOf(settings) };
     },
     update: (patch) => {
       if (typeof patch.service_name === 'string') settings.service_name = patch.service_name;
@@ -146,9 +147,10 @@ const memory: Repos = {
       if (typeof patch.theme_color === 'string') settings.theme_color = patch.theme_color;
       if (Array.isArray(patch.price_list)) settings.price_list = patch.price_list as { tier: string; price: string }[];
       if (typeof patch.auto_reply_enabled === 'boolean') settings.auto_reply_enabled = patch.auto_reply_enabled;
+      if (patch.auto_config && typeof patch.auto_config === 'object') settings.auto_config = mergeAutoCfg(patch.auto_config as Record<string, unknown>) as unknown as Record<string, unknown>;
       persistCollections();
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, auto_config: autoCfgOf(settings) };
     },
     // S69 设置/取消访问密码（scrypt哈希，原文永不落盘）
     setAccessPassword: (pw) => {
