@@ -15,6 +15,7 @@ const T: TemplateItem[] = [
   { id: 't-h2-1', intent: '高意向', scene: '报价', content: '{product}按单/按星报价，{nick}说下段位，报个准价给你。' },
   { id: 't-h2-2', intent: '高意向', scene: '报价', content: '{nick}具体看段位和模式——当前段位发我，价格当场算。' },
   { id: 't-h2-3', intent: '高意向', scene: '报价', content: '{product}价格好说{nick}，不同档位不同价，先说需求不踩坑。' },
+  { id: 't-h2-4', intent: '高意向', scene: '报价', content: '{nick}，{product}参考价：{price}。段位发我，按最省的方案报准。' },
   { id: 't-h3-1', intent: '高意向', scene: '下单引导', content: '{nick}下单很简单：发段位→确认价格→开打，全程可跟进度。' },
   { id: 't-h3-2', intent: '高意向', scene: '下单引导', content: '{nick}直接私我就行，把段位和模式发来，马上给你排单。' },
   { id: 't-h3-3', intent: '高意向', scene: '下单引导', content: '{nick}点我主页私信，发个段位就开整，不用等。' },
@@ -37,6 +38,7 @@ const T: TemplateItem[] = [
   { id: 't-c2-1', intent: '咨询', scene: '报价', content: '{product}按段位和单量报价{nick}，你发下段位帮你算。' },
   { id: 't-c2-2', intent: '咨询', scene: '报价', content: '{nick}价格区间好说，先说你的需求，给你匹配最划算的。' },
   { id: 't-c2-3', intent: '咨询', scene: '报价', content: '不同档位不同价{nick}，把段位发我，报准价。' },
+  { id: 't-c2-4', intent: '咨询', scene: '报价', content: '{nick}，{product}参考价：{price}，你的段位发我给你算个准的。' },
   { id: 't-c3-1', intent: '咨询', scene: '答疑', content: '{nick}可以的，{product}支持先看实录再决定，你想了解哪块？' },
   { id: 't-c3-2', intent: '咨询', scene: '答疑', content: '这个问题简单{nick}——先看主页实录，还有不明白的继续问。' },
   { id: 't-c3-3', intent: '咨询', scene: '答疑', content: '{nick}流程是这样的：确认需求→报价→开打→交付验收，随时可问。' },
@@ -81,9 +83,9 @@ const INTENT_SCENES: Record<string, string[]> = {
   垃圾: ['处理建议'],
 };
 
-/** S33 变体轮换：同输入稳定可复现，不同输入/不同客户有多样性 */
-function pickVariant(intent: string, scene: string, nick: string, content: string): TemplateItem {
-  const pool = T.filter((t) => t.intent === intent && t.scene === scene);
+/** S33 变体轮换：同输入稳定可复现，不同输入/不同客户有多样性；S45 报价场景按价目表有无选带价/无价池 */
+function pickVariant(intent: string, scene: string, nick: string, content: string, hasPrice = false): TemplateItem {
+  const pool = T.filter((t) => t.intent === intent && t.scene === scene && t.content.includes('{price}') === hasPrice);
   if (pool.length === 0) {
     const fb = T.filter((t) => t.intent === '普通' && t.scene === scene);
     return fb[0] || T.find((t) => t.intent === '普通')!;
@@ -93,22 +95,27 @@ function pickVariant(intent: string, scene: string, nick: string, content: strin
   return pool[h % pool.length];
 }
 
-/** 按意图取模板并填充变量（每场景取1条变体，保持话术库精简；空昵称/产品用默认值）——向后兼容，J4/J5依赖 */
-export function renderTemplates(intent: string, nick: string, product: string) {
+/** 按意图取模板并填充变量（每场景取1条变体，保持话术库精简；S45：无价目表时隐藏带{price}的条目）——向后兼容，J4/J5依赖 */
+export function renderTemplates(intent: string, nick: string, product: string, priceText = '') {
   const n = nick.trim() || '朋友';
   const p = product.trim() || '本店新品';
+  const withPrice = priceText.trim().length > 0;
   const hit = T.filter((t) => t.intent === intent);
-  const source = hit.length > 0 ? hit : T.filter((t) => t.intent === '普通');
+  const source = (hit.length > 0 ? hit : T.filter((t) => t.intent === '普通'))
+    .filter((t) => withPrice || !t.content.includes('{price}'))
+    // S45：有价目表时带价变体优先入选（同场景去重取带价条，话术库与生成器口径一致）
+    .sort((a, b) => Number(b.content.includes('{price}')) - Number(a.content.includes('{price}')));
   const seenScene = new Set<string>();
   const rows = source.filter((t) => (seenScene.has(t.scene) ? false : (seenScene.add(t.scene), true)));
-  return rows.map((t) => ({ ...t, content: fill(t.content, n, p, '') }));
+  return rows.map((t) => ({ ...t, content: fill(t.content, n, p, '', priceText) }));
 }
 
-function fill(s: string, nick: string, product: string, videoTitle: string): string {
+function fill(s: string, nick: string, product: string, videoTitle: string, price = ''): string {
   return s
     .replace(/\{nick\}/g, nick)
     .replace(/\{product\}/g, product)
-    .replace(/\{video\}/g, videoTitle || '这条视频');
+    .replace(/\{video\}/g, videoTitle || '这条视频')
+    .replace(/\{price\}/g, price || '面议');
 }
 
 /** 从评论正文抽取关注点场景（命中多个取第一个；无命中按意图兜底） */
@@ -137,12 +144,15 @@ function toneFix(s: string, tone: string): string {
  * 出4个候选供人工挑选（3个不同核心场景 + 1个主场景换口吻）；简洁口吻只出核心+行动两段。
  * 合规：人工确认后发送，不做自动外呼。
  */
-export function generateReply(o: { content: string; intent: string; nick: string; product: string; videoTitle?: string; tone?: string }): ReplyDraft[] {
+export function generateReply(o: { content: string; intent: string; nick: string; product: string; videoTitle?: string; tone?: string; priceText?: string }): ReplyDraft[] {
   const nick = o.nick.trim() || '朋友';
   const product = o.product.trim() || '本店新品';
   const video = o.videoTitle?.trim() || '';
   const intent = o.intent || '普通';
   const tone = o.tone === '专业' || o.tone === '简洁' ? o.tone : '亲切';
+  const price = (o.priceText || '').trim();
+  /** 报价场景且价目表非空 → 选带价变体 */
+  const priceFor = (sc: string) => sc === '报价' && !!price;
 
   if (intent === '垃圾') {
     const g = T.find((t) => t.intent === '垃圾')!;
@@ -150,18 +160,18 @@ export function generateReply(o: { content: string; intent: string; nick: string
   }
 
   const coreScene = focusScene(o.content || '', intent);
-  const openerT = pickVariant(intent, '破冰', nick, o.content || '');
-  const coreT = pickVariant(intent, coreScene, nick, o.content || '');
+  const openerT = pickVariant(intent, '破冰', nick, o.content || '', false);
+  const coreT = pickVariant(intent, coreScene, nick, o.content || '', priceFor(coreScene));
   const ctaPool = ['下单引导', '留资引导', '催单', '售后'];
   const ctaScene = ctaPool.find((s) => s !== coreScene && (INTENT_SCENES[intent] || []).includes(s)) || '留资引导';
-  const ctaT = pickVariant(intent, ctaScene, nick, o.content || '');
+  const ctaT = pickVariant(intent, ctaScene, nick, o.content || '', false);
 
   const compose = (a: TemplateItem | null, b: TemplateItem, c: TemplateItem | null, label: string, id: string, t2: string): ReplyDraft => {
     const segs = [a, b, c].filter(Boolean) as TemplateItem[];
     return {
       id,
       label,
-      content: segs.map((x) => toneFix(fill(x.content, nick, product, video), t2))
+      content: segs.map((x) => toneFix(fill(x.content, nick, product, video, price), t2))
         .filter((x, i, arr) => x && arr.indexOf(x) === i)
         .join(' '),
     };
@@ -175,7 +185,7 @@ export function generateReply(o: { content: string; intent: string; nick: string
   // 备选核心场景（同口吻），最多补2个
   const altScenes = (INTENT_SCENES[intent] || []).filter((s) => s !== coreScene && s !== '处理建议').slice(0, 2);
   for (const sc of altScenes) {
-    const altCore = pickVariant(intent, sc, nick, o.content || '');
+    const altCore = pickVariant(intent, sc, nick, o.content || '', priceFor(sc));
     drafts.push(compose(openerFor(tone), altCore, ctaT, `备选「${sc}」`, `draft-alt-${sc}`, tone));
   }
 

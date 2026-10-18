@@ -14,6 +14,7 @@ export default function Settings() {
   const [pwdAt, setPwdAt] = useState<string | null>(null);
   const [npw, setNpw] = useState('');
   const [cpw, setCpw] = useState('');
+  const [prices, setPrices] = useState<{ tier: string; price: string }[]>([]);
 
   useEffect(() => {
     fetch('/api/settings').then((r) => r.json()).then((s) => {
@@ -21,6 +22,7 @@ export default function Settings() {
       setFont(s.font_size || settingsConfig.fontSizeDefault);
       setTheme(s.theme_color || settingsConfig.themeDefault);
       setPwdAt(s.password_changed_at || null);
+      if (Array.isArray(s.price_list)) setPrices(s.price_list);
     }).catch(() => message.error('设置加载失败，请刷新重试'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -61,6 +63,15 @@ export default function Settings() {
     message.success('业务数据已清空（授权与设置保留）');
   };
 
+  /** S45 价目表保存 */
+  const savePrices = async () => {
+    const cleaned = prices.map((r) => ({ tier: r.tier.trim(), price: r.price.trim() })).filter((r) => r.tier && r.price);
+    const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_list: cleaned }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '保存失败'); return; }
+    setPrices(Array.isArray(r.price_list) ? r.price_list : cleaned);
+    message.success('价目表已保存，报价话术将自动带参考价');
+  };
+
   return (
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}><div><b style={{ fontSize: 15 }}>系统设置</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>调节即时预览，保存后持久化全局生效</div></div><div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}><Button size="small" type="primary" onClick={save}>保存全部</Button></div></div>
@@ -95,6 +106,23 @@ export default function Settings() {
                 <Button danger>清空业务数据</Button>
               </Popconfirm>
               <input ref={restoreRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={(e) => { doRestore(e.target.files?.[0]); e.target.value = ''; }} />
+            </div>
+          </div>
+          <div className="card" style={{ padding: 18, marginTop: 16 }}>
+            <b>价目表</b>
+            <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>报价话术自动带参考价（评论页「智能生成回复」的报价候选）；不配置则话术不提价格</div>
+            {prices.map((r, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <Input size="small" value={r.tier} placeholder="档位，如 王者20星内" maxLength={20} style={{ flex: 1 }}
+                  onChange={(e) => setPrices(prices.map((x, j) => (j === i ? { ...x, tier: e.target.value } : x)))} />
+                <Input size="small" value={r.price} placeholder="价格，如 ¥50/星" maxLength={12} style={{ width: 130 }}
+                  onChange={(e) => setPrices(prices.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} />
+                <Button size="small" onClick={() => setPrices(prices.filter((_, j) => j !== i))}>删</Button>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <Button size="small" disabled={prices.length >= 30} onClick={() => setPrices([...prices, { tier: '', price: '' }])}>添加行</Button>
+              <Button size="small" type="primary" onClick={savePrices}>保存价目表</Button>
             </div>
           </div>
         </div>

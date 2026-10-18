@@ -33,7 +33,7 @@ export interface AccountRepo { list(): Account[]; getActive(): string; getActive
 export interface TaskRepo { isPaused(type: string): boolean; setPaused(type: string, paused: boolean): void; lastRun(type: string): string | null }
 export interface SettingsRepo {
   get(): Record<string, unknown>;
-  update(patch: { service_name?: string; font_size?: number; theme_color?: string }): Record<string, unknown>;
+  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown }): Record<string, unknown>;
   setPassword(): string;
 }
 export interface VideoTask { id: string; video_id: string; title: string; follow: boolean; like_done: boolean; fav_done: boolean; paused: boolean; interval_min: number; last_check: string | null; created_at: string }
@@ -100,15 +100,16 @@ const memory: Repos = {
   settings: {
     get: () => {
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list };
     },
     update: (patch) => {
       if (typeof patch.service_name === 'string') settings.service_name = patch.service_name;
       if (typeof patch.font_size === 'number') settings.font_size = patch.font_size;
       if (typeof patch.theme_color === 'string') settings.theme_color = patch.theme_color;
+      if (Array.isArray(patch.price_list)) settings.price_list = patch.price_list as { tier: string; price: string }[];
       persistCollections();
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list };
     },
     setPassword: () => { settings.password_changed_at = new Date().toISOString(); persistCollections(); return settings.password_changed_at as string; },
   },

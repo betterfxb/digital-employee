@@ -35,9 +35,19 @@ export async function PATCH(req: Request) {
   if (body.theme_color !== undefined) {
     if (!settingsConfig.themePresets.some((t) => t.value === body.theme_color)) return fail('FATAL', '主题色不在候选内');
   }
-  const patch: { service_name?: string; font_size?: number; theme_color?: string } = {};
+  if (body.price_list !== undefined) {
+    const arr = body.price_list;
+    if (!Array.isArray(arr) || arr.length > 30) return fail('FATAL', '价目表需为不超过30行的数组');
+    for (const row of arr as { tier?: unknown; price?: unknown }[]) {
+      if (!row || typeof row.tier !== 'string' || typeof row.price !== 'string' || !row.tier.trim() || !row.price.trim() || row.tier.trim().length > 20 || row.price.trim().length > 12) {
+        return fail('FATAL', '每行需档位(1-20字)与价格(1-12字)');
+      }
+    }
+  }
+  const patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown } = {};
   if (body.service_name !== undefined) patch.service_name = String(body.service_name).trim();
   if (body.font_size !== undefined) patch.font_size = Number(body.font_size);
   if (body.theme_color !== undefined) patch.theme_color = body.theme_color;
+  if (body.price_list !== undefined) patch.price_list = (body.price_list as { tier: string; price: string }[]).map((r) => ({ tier: r.tier.trim(), price: r.price.trim() }));
   return ok(repos.settings.update(patch));
 }

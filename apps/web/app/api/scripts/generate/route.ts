@@ -1,5 +1,6 @@
 import { page, fail } from '@/lib/response';
 import { generateReply } from '@/lib/templates';
+import { priceText } from '@/lib/price';
 
 /** POST /api/scripts/generate {content,intent,nick,product,video_title}（S28 三段式智能回复候选，人工确认后发送） */
 export async function POST(req: Request) {
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
     product: String(body.product || ''),
     videoTitle: String(body.video_title || ''),
     tone: String(body.tone || ''), // S33 口吻：亲切(默认)/专业/简洁
+    priceText: priceText(), // S45 价目表接入（报价场景候选自动带参考价）
   });
   return page(items, null);
 }
