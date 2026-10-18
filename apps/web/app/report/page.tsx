@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Segmented } from 'antd';
 import { downloadCsv } from '@/lib/csv';
 import { buildReport, type Report } from '@/lib/report';
+import { trendSeries, type BizSnapshot } from '@/lib/bizTrend';
 import type { CommentItem, Follow, Video } from '@/lib/types';
 
 /** S50 智能日报/周报：本地真实数据聚合 → 指标网格+文字总结+行动建议（可复制/导出） */
@@ -11,6 +12,10 @@ export default function ReportPage() {
   const [kind, setKind] = useState<'daily' | 'weekly'>('daily');
   const [report, setReport] = useState<Report | null>(null);
   const [err, setErr] = useState(false);
+  /** S55 业务趋势：打开报告页即记当日快照并取回历史 */
+  const [hist, setHist] = useState<Record<string, Partial<BizSnapshot>>>({});
+
+  const snap = () => fetch('/api/report/snapshot', { method: 'POST' }).then((r) => r.json()).then((d) => setHist(d.history || {})).catch(() => {});
 
   const build = (k: 'daily' | 'weekly') => {
     Promise.all([
@@ -26,7 +31,7 @@ export default function ReportPage() {
       setErr(false);
     }).catch(() => setErr(true));
   };
-  useEffect(() => { build('daily'); }, []);
+  useEffect(() => { build('daily'); snap(); }, []);
 
   const switchKind = (k: string) => { const kk = k === '周报' ? 'weekly' : 'daily'; setKind(kk); build(kk); };
   const copySummary = () => {
@@ -63,6 +68,29 @@ export default function ReportPage() {
                     <div className="num" style={{ fontSize: 20, fontWeight: 700 }}>{m.value}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+            <div className="card" style={{ padding: 18, marginTop: 16 }}>
+              <b>7天趋势</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>每日首次打开本页自动记录 · 只记真实数据</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginTop: 12 }}>
+                {([['comments', '评论数'], ['follows', '线索数'], ['revenue', '成交额']] as [keyof BizSnapshot, string][]).map(([k, label]) => {
+                  const series = trendSeries(hist, k);
+                  const cur = series.length ? series[series.length - 1].v : 0;
+                  const pts = series.map((p, i) => `${(i / Math.max(series.length - 1, 1)) * 100},${36 - (p.v / Math.max(...series.map((x) => x.v), 1)) * 30 - 3}`).join(' ');
+                  return (
+                    <div key={k} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 12, color: '#6B6862' }}>{label}<b className="num" style={{ fontSize: 16, color: '#1A1A18', marginLeft: 8 }}>{k === 'revenue' ? `¥${cur.toLocaleString()}` : cur.toLocaleString()}</b></div>
+                      {series.length >= 2 ? (
+                        <svg viewBox="0 0 100 36" preserveAspectRatio="none" style={{ width: '100%', height: 40, marginTop: 6 }} role="img" aria-label={`${label}趋势`}>
+                          <polyline points={pts} fill="none" stroke="#1A1A18" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                        </svg>
+                      ) : (
+                        <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 12 }}>今日已记第1个点，明天起显示变化</div>
+                      )}
+                      {series.length >= 2 && <div className="num" style={{ fontSize: 10, color: '#A8A5A0', display: 'flex', justifyContent: 'space-between' }}><span>{series[0].date.slice(5)}</span><span>{series[series.length - 1].date.slice(5)}</span></div>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="card" style={{ padding: 18, marginTop: 16, background: '#FCFBF9' }}>

@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
@@ -17,6 +17,7 @@ const { parseRemind, isDue } = require('./.tmp-crypto/remind.js');
 const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
+const { trendSeries } = require('./.tmp-crypto/bizTrend.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -86,6 +87,12 @@ check(repW.summary.startsWith('近7天概览') && repW.metrics.some((m) => m.lab
 check(hasFeature([], 'report') && hasFeature(undefined, 'report'), 'tiers 空features全开（专业版/兼容旧license）');
 check(hasFeature(TIERS.basic.features, 'report') === false && hasFeature(TIERS.basic.features, 'lead') === false, 'tiers 基础版锁report/lead');
 check(hasFeature(['report'], 'report') === true, 'tiers 白名单命中可用');
+
+// 9) S55 业务趋势序列（升序取7天+缺key补0）
+const BH = { '2026-10-17': { comments: 5 }, '2026-10-18': { comments: 9 }, '2026-10-16': { comments: 2 } };
+const ts1 = trendSeries(BH, 'comments');
+check(ts1.map((x) => x.date).join(',') === '2026-10-16,2026-10-17,2026-10-18', 'biz trend 升序取序列');
+check(ts1[2].v === 9 && trendSeries(BH, 'revenue').every((x) => x.v === 0), 'biz trend 取值+缺key补0');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);
