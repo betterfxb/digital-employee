@@ -1,3 +1,5 @@
 
 # 门禁临时编译产物
 .tmp-*/
+
+*.tsbuildinfo
