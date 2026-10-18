@@ -3,3 +3,6 @@
 .tmp-*/
 
 *.tsbuildinfo
+
+# 桌面端独立构建产物（electron-builder）
+apps/desktop/release/
