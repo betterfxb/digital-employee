@@ -102,7 +102,7 @@ export default function AuthPage() {
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>今日同步余量</div><b className="num">{usage ? `${usage.left}/${usage.cap}` : '—'}</b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>蓝V</div><b>未认证 · <a href="/messages#upgrade">去升级</a></b></div>
           <div><div style={{ fontSize: 12, color: '#6B6862' }}>系统授权</div><b>
-            {lic ? (lic.mode === 'licensed' ? `正式授权${lic.valid ? '' : '（异常）'}` : '未授权') : '—'}
+            {lic ? (lic.mode === 'licensed' ? `正式授权${lic.valid ? ` · ${(lic.features && lic.features.length) ? '基础版' : '专业版'}` : '（异常）'}` : '未授权') : '—'}
             {lic && <span style={{ fontWeight: 400, color: '#A8A5A0' }}> · {lic.watermark}{lic.customer ? ` · ${lic.customer}` : ''}{lic.mode === 'licensed' ? (() => { const d = daysUntilExpiry(lic.expires_at); if (d === null) return ' · 买断长期'; return d >= 0 && d <= 7 ? <b style={{ color: '#B4443C' }}> · 仅剩{d}天到期，请续期⚠️</b> : ` · 剩${d}天到期`; })() : ''}</span>}
           </b></div>
         </div>

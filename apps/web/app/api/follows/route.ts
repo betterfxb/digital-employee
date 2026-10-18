@@ -24,5 +24,9 @@ export async function POST(req: Request) {
   if (!body?.peer_nick || !body?.source_video_id) return fail('FATAL', '缺少 peer_nick/source_video_id');
   const status = body.status || '待回访';
   if (!assistConfig.followStatuses.includes(status)) return fail('FATAL', `状态非法，仅支持 ${assistConfig.followStatuses.join('/')}`);
+  // S66 防呆去重：活跃管线（待回访/已手动回复）内同昵称直接返回已有——防重复加入；已转化等终态允许开新一轮
+  const ACTIVE = ['待回访', '已手动回复'];
+  const existing = getRepos().follows.list('').find((f) => f.peer_nick === body.peer_nick && ACTIVE.includes(f.status));
+  if (existing) return ok({ ...existing, deduped: true });
   return ok(getRepos().follows.create({ peer_nick: body.peer_nick, source_video_id: body.source_video_id, next_remind_at: body.next_remind_at || `明天 ${assistConfig.defaultRemindHour}:00`, status }));
 }

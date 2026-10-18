@@ -143,6 +143,12 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     await fetch(base + `/api/scripts/${a.j.id}`, { method: 'DELETE' }); // 终态：回回收站，不进active
     pass(okChain, 'S57 软删→回收站→恢复闭环');
   } catch (e) { pass(false, 'S57 软删闭环', ` ${e.message}`); }
+  // S66 跟进去重防呆：活跃管线同昵称重复加入返回已有记录（幂等，多轮跑稳定）
+  try {
+    const f1 = await post('/api/follows', { peer_nick: '去重测试员', source_video_id: 'v1' });
+    const f2 = await post('/api/follows', { peer_nick: '去重测试员', source_video_id: 'v2' });
+    pass(f1.s === 200 && f2.s === 200 && f2.j.deduped === true && f2.j.id === f1.j.id, 'S66 跟进去重防呆');
+  } catch (e) { pass(false, 'S66 去重', ` ${e.message}`); }
   // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
   try {
     const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });

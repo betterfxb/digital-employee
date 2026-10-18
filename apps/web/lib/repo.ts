@@ -20,7 +20,7 @@ export interface CommentRepo {
   setIntent(id: string, patch: IntentPatch): Record<string, unknown> | null;
   exists(id: string): boolean;
 }
-export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string }): Follow | null }
+export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string }): Follow | null }
 export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor; update(id: string, patch: { play?: number; like?: number; remark?: string }): Competitor | null }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
@@ -80,10 +80,12 @@ const memory: Repos = {
       if (patch.amount !== undefined) acts.push(`记成交 ¥${patch.amount}`);
       if (patch.tags !== undefined) acts.push(`标签更新为「${patch.tags.join('、') || '无'}」`);
       if (patch.note !== undefined) acts.push('更新跟进纪要');
+      if (patch.next_remind_at !== undefined && patch.next_remind_at !== f.next_remind_at) acts.push(`提醒时间改为「${patch.next_remind_at}」`);
       if (patch.status !== undefined) f.status = patch.status;
       if (patch.amount !== undefined) f.amount = patch.amount;
       if (patch.tags !== undefined) f.tags = patch.tags;
       if (patch.note !== undefined) f.note = patch.note;
+      if (patch.next_remind_at !== undefined) f.next_remind_at = patch.next_remind_at;
       if (acts.length > 0) {
         f.history = [{ at: new Date().toISOString(), act: acts.join('；') }, ...(f.history || [])].slice(0, 20);
       }

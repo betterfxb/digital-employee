@@ -97,7 +97,7 @@ export default function Comments() {
   };
   const exportComments = () => {
     if (items.length === 0) { flash('暂无数据可导出'); return; }
-    downloadCsv('评论线索.csv', ['用户', '时间', '意图', '已读', '内容'], items.map((x) => [x.user_nick, x.create_time, x.intent, x.is_read_local ? '是' : '否', x.content]));
+    downloadCsv('评论线索.csv', ['用户', '时间', '意图', '意向分', '已读', '内容'], items.map((x) => [x.user_nick, x.create_time, x.intent, leadScore(x), x.is_read_local ? '是' : '否', x.content]));
   };
   // ── S34 多选批量 ──
   const toggleCheck = (id: string) => setChecked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });

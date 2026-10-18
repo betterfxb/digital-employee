@@ -37,6 +37,8 @@ export default function Messages() {
   /** S60 台账批量操作 */
   const [fsel, setFsel] = useState<Set<string>>(new Set());
   const [batchTagInput, setBatchTagInput] = useState('');
+  /** S65 提醒时间编辑 */
+  const [remindEdit, setRemindEdit] = useState<{ id: string; val: string } | null>(null);
   const loadTrash = () => {
     fetch('/api/scripts?trash=1').then((r) => r.json()).then((d) => setScriptTrash(d.items || [])).catch(() => {});
     fetch('/api/reply-rules?trash=1').then((r) => r.json()).then((d) => setRuleTrash(d.items || [])).catch(() => {});
@@ -123,6 +125,16 @@ export default function Messages() {
     flash(okn === targets.length ? `${label} ${okn} 条` : `完成 ${okn}/${targets.length} 条（失败的重试）`, okn > 0);
     setFsel(new Set()); setBatchTagInput(''); loadFollows(); loadTagLib();
   };
+  /** S65 保存提醒时间（到点且页面开着时系统通知；解析不了的文本只漏提醒不误报） */
+  const saveRemind = async (id: string) => {
+    if (!remindEdit || remindEdit.id !== id || !remindEdit.val.trim()) { flash('请输入提醒时间'); return; }
+    const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ next_remind_at: remindEdit.val.trim() }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '保存失败'); return; }
+    setRemindEdit(null); flash('提醒时间已更新', true); loadFollows();
+  };
+  /** S67 全选当前筛选结果（与行内复选共用 fsel） */
+  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)));
+  const checkAllF = () => setFsel((prev) => (prev.size === fview.length && fview.length > 0 ? new Set() : new Set(fview.map((x) => x.id))));
   const batches: Follow[][] = [];
   (rows || []).forEach((f, i) => {
     const g = Math.floor(i / tasksConfig.followBatchSize);
@@ -202,7 +214,22 @@ export default function Messages() {
         </Popconfirm>
       )
     ) },
-    { title: '下次提醒', dataIndex: 'next_remind_at', key: 'remind', onCell: () => ({ className: 'num' }) },
+    { title: '下次提醒', key: 'remind', onCell: () => ({ className: 'num' }), render: (_, f) => (
+      <Popconfirm
+        title="修改提醒时间"
+        open={remindEdit?.id === f.id}
+        onOpenChange={(o) => { if (o) setRemindEdit({ id: f.id, val: f.next_remind_at }); else setRemindEdit(null); }}
+        description={
+          <div style={{ width: 250 }}>
+            <Input size="small" value={remindEdit?.id === f.id ? remindEdit.val : ''} onChange={(e) => remindEdit && setRemindEdit({ id: f.id, val: e.target.value })} maxLength={40} placeholder="明天 18:00 / 10-20 09:30" onPressEnter={() => saveRemind(f.id)} />
+            <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>支持 今天/明天/后天 HH:MM、MM-DD HH:MM、ISO时间；到点且工作台开着时系统提醒</div>
+          </div>
+        }
+        okText="保存" cancelText="取消" onConfirm={() => saveRemind(f.id)}
+      >
+        <Button size="small" type="text" style={{ paddingInline: 0 }}><u>{f.next_remind_at}</u></Button>
+      </Popconfirm>
+    ) },
     { title: '标签', key: 'tags', width: 140, render: (_, f) => (!can('lead')
       ? <span style={{ color: '#A8A5A0', fontSize: 12 }}>🔒专业版</span>
       : (
@@ -331,6 +358,7 @@ export default function Messages() {
               <span style={{ flex: 1 }} />
               <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
+              <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
             </div>
             <div className="num" style={{ fontSize: 12, color: '#6B6862', marginTop: 4 }}>每批{tasksConfig.followBatchSize}个 · 每{tasksConfig.groupFollowIntervalMin}分钟一批 · 默认{assistConfig.defaultRemindHour}:00提醒（纯展示，不自动发送）</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -349,7 +377,7 @@ export default function Messages() {
                 <Button size="small" type="text" onClick={clearFsel}>取消选择</Button>
               </div>
             )}
-            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={(rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)))} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
           </div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16 }}>

@@ -54,17 +54,19 @@ export default function Settings() {
 
   // ── S37/S38 数据管理 ──
   const restoreRef = useRef<HTMLInputElement>(null);
+  /** S64 恢复覆盖确认（preview 校验+计数 → 确认弹窗 → 才真恢复） */
+  const [restorePlan, setRestorePlan] = useState<{ data: Record<string, unknown>; pass?: string; counts: Record<string, number | boolean> } | null>(null);
+
   const doRestore = async (f?: File) => {
     if (!f) return;
     const text = await f.text().catch(() => '');
     let data: unknown;
     try { data = JSON.parse(text); } catch { message.error('不是合法JSON备份文件'); return; }
-    // S61 加密备份：识别__enc结构 → 弹口令框走加密恢复
+    // S61 加密备份：识别__enc结构 → 弹口令框（口令在preview阶段就校验）
     if ((data as { __enc?: number }).__enc === 1) { setEncFile(data as Record<string, unknown>); setEncPass(''); return; }
-    const r = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) }).then((x) => x.json()).catch(() => null);
-    if (!r || r.code) { message.error(r?.message || '恢复失败'); return; }
-    message.success('恢复成功，界面即将刷新');
-    setTimeout(() => window.location.reload(), 1200);
+    const pv = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data, preview: true }) }).then((x) => x.json()).catch(() => null);
+    if (!pv || pv.code) { message.error(pv?.message || '备份文件校验失败'); return; }
+    setRestorePlan({ data: data as Record<string, unknown>, counts: pv });
   };
   /** S61 加密备份下载（口令≥6位，服务端AES-GCM加密） */
   const downloadEnc = async () => {
@@ -85,9 +87,19 @@ export default function Settings() {
   const doRestoreEnc = async () => {
     if (!encFile) return;
     if (encPass.length < 6) { message.error('口令至少6位'); return; }
-    const r = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: encFile, pass: encPass }) }).then((x) => x.json()).catch(() => null);
+    // S64 先preview：口令与结构在此校验，通过才进覆盖确认
+    const pv = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: encFile, pass: encPass, preview: true }) }).then((x) => x.json()).catch(() => null);
+    if (!pv || pv.code) { message.error(pv?.message || '口令错误或文件损坏'); return; }
+    setEncFile(null);
+    setRestorePlan({ data: encFile, pass: encPass, counts: pv });
+    setEncPass('');
+  };
+  /** S64 确认后执行恢复 */
+  const confirmRestore = async () => {
+    if (!restorePlan) return;
+    const r = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: restorePlan.data, pass: restorePlan.pass }) }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { message.error(r?.message || '恢复失败'); return; }
-    setEncFile(null); setEncPass('');
+    setRestorePlan(null);
     message.success('恢复成功，界面即将刷新');
     setTimeout(() => window.location.reload(), 1200);
   };
@@ -150,10 +162,29 @@ export default function Settings() {
             </div>
             <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>出问题点「导出诊断包」，把下载的 txt 文件发给服务商即可（含版本/授权状态/最近日志，不含业务数据）</div>
             {/* S61 加密备份恢复：口令弹窗 */}
-            <Modal title="加密备份 · 输入口令恢复" open={!!encFile} okText="解密并恢复" cancelText="取消"
+            <Modal title="加密备份 · 输入口令恢复" open={!!encFile} okText="下一步（校验口令）" cancelText="取消"
               onOk={doRestoreEnc} onCancel={() => { setEncFile(null); setEncPass(''); }}>
               <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 10 }}>此备份文件已加密，输入创建它时设置的口令（至少6位）。口令错误无法恢复。</div>
               <Input.Password placeholder="备份口令" value={encPass} onChange={(e) => setEncPass(e.target.value)} maxLength={64} onPressEnter={doRestoreEnc} />
+            </Modal>
+            {/* S64 恢复覆盖确认：展示将导入的数量并警示覆盖 */}
+            <Modal title="确认恢复？当前数据将被覆盖" open={!!restorePlan} onOk={confirmRestore} okText="确认恢复（覆盖当前）" cancelText="取消"
+              onCancel={() => setRestorePlan(null)}>
+              {restorePlan && (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
+                    {([['账号', restorePlan.counts.accounts], ['作品', restorePlan.counts.videos], ['评论', restorePlan.counts.comments], ['跟进台账', restorePlan.counts.follows], ['自定义话术', restorePlan.counts.customScripts]] as [string, number | boolean][]).map(([k, v]) => (
+                      <div key={k} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '8px 10px' }}>
+                        <span style={{ color: '#6B6862' }}>{k}：</span><b className="num">{typeof v === 'number' ? v : v ? '无示例数据' : '含示例数据'}</b>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ color: '#B4443C', fontSize: 12, marginTop: 12, lineHeight: 1.8, background: '#FDF3F2', border: '1px solid #F0D4D1', borderRadius: 4, padding: '8px 12px' }}>
+                    <b>恢复后当前所有业务数据（作品/评论/跟进/纪要等）会被此备份整体替换，且不可撤销。</b>
+                    <br />建议：先点「下载备份」保存当前数据，再确认恢复。
+                  </div>
+                </div>
+              )}
             </Modal>
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
