@@ -20,6 +20,7 @@ export default function Tasks() {
   const [vsel, setVsel] = useState('');
   const [notify, setNotify] = useState(false);
   const [followNotify, setFollowNotify] = useState(false);
+  const [reportNotify, setReportNotify] = useState(false);
   const [tmsg, setTmsg] = useState('');
   const [sched, setSched] = useState<SchedStatus | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -38,6 +39,7 @@ export default function Tasks() {
     const id = setInterval(loadSched, 15_000);
     if (typeof window !== 'undefined') setNotify(localStorage.getItem('notify_new_comment') === '1');
     if (typeof window !== 'undefined') setFollowNotify(localStorage.getItem('notify_follow_due') === '1');
+    if (typeof window !== 'undefined') setReportNotify(localStorage.getItem('notify_report') === '1');
     return () => clearInterval(id);
   }, []);
   const control = async (type: string, action: 'pause' | 'resume') => {
@@ -77,6 +79,15 @@ export default function Tasks() {
     const v = !followNotify;
     setFollowNotify(v);
     if (typeof window !== 'undefined') localStorage.setItem('notify_follow_due', v ? '1' : '0');
+  };
+  /** S56 日报提醒开关（每天9点提醒看经营报告） */
+  const toggleReportNotify = async () => {
+    if (!reportNotify && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      try { await Notification.requestPermission(); } catch {}
+    }
+    const v = !reportNotify;
+    setReportNotify(v);
+    if (typeof window !== 'undefined') localStorage.setItem('notify_report', v ? '1' : '0');
   };
 
   const taskCols: ColumnsType<TaskItem> = [
@@ -159,6 +170,10 @@ export default function Tasks() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
             <span style={{ fontSize: 13, flex: 1 }}>跟进到期提醒<span style={{ fontSize: 11, color: '#A8A5A0', marginLeft: 6 }}>待回访到点提醒你</span></span>
             <Switch checked={followNotify} onChange={toggleFollowNotify} checkedChildren="已开启" unCheckedChildren="关闭" />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+            <span style={{ fontSize: 13, flex: 1 }}>日报提醒<span style={{ fontSize: 11, color: '#A8A5A0', marginLeft: 6 }}>每天9点提示看经营报告（页面开着时）</span></span>
+            <Switch checked={reportNotify} onChange={toggleReportNotify} checkedChildren="已开启" unCheckedChildren="关闭" />
           </div>
         </div>
         <div className="card" style={{ padding: 16, marginTop: 16 }}>

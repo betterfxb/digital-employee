@@ -24,3 +24,21 @@ export function isDue(s: string | undefined | null, now = Date.now()): boolean {
   const t = parseRemind(s);
   return !!t && t.getTime() <= now;
 }
+
+/** 本地日期键 YYYY-MM-DD（提醒去重用） */
+export function todayKey(now = Date.now()): string {
+  const d = new Date(now);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * S56 日报提醒判定：开关开 + 当天未提醒过 + 处在 hour 点的前5分钟窗口
+ * （页面开着才提醒——纯本地方案的诚实边界，不做后台常驻）
+ */
+export function shouldNotifyReport(now: number, lastNotified: string | null, enabled: boolean, hour = 9): boolean {
+  if (!enabled) return false;
+  if (lastNotified === todayKey(now)) return false;
+  const d = new Date(now);
+  return d.getHours() === hour && d.getMinutes() <= 5;
+}

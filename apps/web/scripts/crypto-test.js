@@ -13,7 +13,7 @@ execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
-const { parseRemind, isDue } = require('./.tmp-crypto/remind.js');
+const { parseRemind, isDue, shouldNotifyReport, todayKey } = require('./.tmp-crypto/remind.js');
 const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
@@ -93,6 +93,12 @@ const BH = { '2026-10-17': { comments: 5 }, '2026-10-18': { comments: 9 }, '2026
 const ts1 = trendSeries(BH, 'comments');
 check(ts1.map((x) => x.date).join(',') === '2026-10-16,2026-10-17,2026-10-18', 'biz trend 升序取序列');
 check(ts1[2].v === 9 && trendSeries(BH, 'revenue').every((x) => x.v === 0), 'biz trend 取值+缺key补0');
+
+// 10) S56 日报提醒判定（开关/当天去重/9点窗口）
+const D0 = new Date('2026-10-18T09:03:00').getTime();
+check(shouldNotifyReport(D0, null, true) === true, 'report-notify 9:03窗口触发');
+check(shouldNotifyReport(D0, todayKey(D0), true) === false, 'report-notify 当天已提醒去重');
+check(shouldNotifyReport(new Date('2026-10-18T10:00:00').getTime(), null, true) === false && shouldNotifyReport(D0, null, false) === false, 'report-notify 非窗口/关开关不触发');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

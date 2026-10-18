@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
-import { isDue } from '../lib/remind';
+import { isDue, shouldNotifyReport, todayKey } from '../lib/remind';
 import { hasFeature } from '../lib/tiers';
 import type { LicenseState } from '../lib/license';
 import { ActivationGate } from './ActivationGate';
@@ -77,6 +77,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
         } catch { /* 通知失败不打扰 */ }
         localStorage.setItem('follow_reminded', JSON.stringify({ date: today, ids: [...seen, ...due.map((x) => x.id)] }));
       }).catch(() => { /* 轮询自愈 */ });
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [mounted]);
+
+  // S56 日报提醒：每天9点窗口（页面开着时）提醒查看经营报告，当天去重
+  useEffect(() => {
+    if (!mounted) return;
+    const check = () => {
+      if (typeof window === 'undefined') return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const enabled = localStorage.getItem('notify_report') === '1';
+      const last = localStorage.getItem('report_notified');
+      if (!shouldNotifyReport(Date.now(), last, enabled)) return;
+      try {
+        new Notification('经营报告已生成', { body: '今日日报已就绪：数据概览、7天趋势与行动建议点开即看（经营报告页）' });
+      } catch { /* 通知失败不打扰 */ }
+      localStorage.setItem('report_notified', todayKey());
     };
     check();
     const id = setInterval(check, 60000);
