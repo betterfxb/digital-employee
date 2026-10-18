@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
+import { downloadCsv } from '@/lib/csv';
 import type { Video, Competitor, Overview, TrendPoint, CommentItem } from '@/lib/types';
 import { TaskBar } from '@/components/TaskBar';
 import { ImportWizard } from '@/components/ImportWizard';
@@ -79,6 +80,12 @@ export default function Dashboard() {
     const r = await fetch('/api/competitors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: curl.trim(), source: csource, kind: ckind }) }).then((x) => x.json());
     if (r.code) { setCmsg(r.message); return; }
     setCurl(''); setCmsg('已加入'); loadComps();
+  };
+
+  /** S35 看板导出：作品明细CSV（指标均可由明细复算） */
+  const exportVideos = () => {
+    if (videos.length === 0) { message.info('暂无数据可导出'); return; }
+    downloadCsv('作品数据.csv', ['标题', '发布时间', '播放', '点赞', '评论', '转发'], videos.map((v) => [v.title, v.publish_time, v.play, v.like, v.comment, v.share]));
   };
 
   const spark = (rows: TrendPoint[]) => {
@@ -181,7 +188,11 @@ export default function Dashboard() {
         </div>
         <div className="card">
           <Table<Video> size="small" pagination={false} columns={videoCols} dataSource={videos} rowKey="id" locale={{ emptyText: '暂无作品' }} />
-          <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0' }}>服务端分页 · 20/页 · 趋势批量上限{statsConfig.trendBatchMax}</div>
+          <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0', display: 'flex', alignItems: 'center' }}>
+            <span>服务端分页 · 20/页 · 趋势批量上限{statsConfig.trendBatchMax}</span>
+            <span style={{ flex: 1 }} />
+            <Button size="small" onClick={exportVideos}>导出作品CSV</Button>
+          </div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16, background: '#F7F6F3' }}>
           <b>我的数据导入</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>作品/评论 CSV 一键导入 · 带模板 · 自动去重 · 评论自动分五档意图</span>

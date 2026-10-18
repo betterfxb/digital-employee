@@ -17,6 +17,7 @@ export default function Messages() {
   const [fstatus, setFstatus] = useState('');
   const [fpeer, setFpeer] = useState('');
   const [fsource, setFsource] = useState('v1');
+  const [fsearch, setFsearch] = useState('');
   const [stitle, setStitle] = useState('');
   const [scontent, setScontent] = useState('');
   const [rules, setRules] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
@@ -135,9 +136,10 @@ export default function Messages() {
               <Input size="small" value={fpeer} onChange={(e) => setFpeer(e.target.value)} placeholder="对方昵称" style={{ width: 130 }} onPressEnter={addFollow} />
               <Select size="small" value={fsource} onChange={setFsource} style={{ minWidth: 200 }} options={videos.map((v) => ({ value: v.id, label: v.title }))} />
               <Button size="small" type="primary" onClick={addFollow}>加入跟进</Button>
+              <Input size="small" value={fsearch} onChange={(e) => setFsearch(e.target.value)} placeholder="搜对方昵称" style={{ width: 120 }} allowClear />
               <Button size="small" onClick={exportFollows}>导出CSV</Button>
             </div>
-            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={rows || []} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={(rows || []).filter((f) => !fsearch.trim() || f.peer_nick.includes(fsearch.trim()))} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
           </div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16 }}>

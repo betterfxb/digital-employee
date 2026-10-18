@@ -24,6 +24,7 @@ export default function Comments() {
   const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
   const [genBusy, setGenBusy] = useState(false);
   const [tone, setTone] = useState('亲切');
+  const [checked, setChecked] = useState<Set<string>>(new Set());
 
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
 
@@ -90,6 +91,34 @@ export default function Comments() {
     if (items.length === 0) { flash('暂无数据可导出'); return; }
     downloadCsv('评论线索.csv', ['用户', '时间', '意图', '已读', '内容'], items.map((x) => [x.user_nick, x.create_time, x.intent, x.is_read_local ? '是' : '否', x.content]));
   };
+  // ── S34 多选批量 ──
+  const toggleCheck = (id: string) => setChecked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const checkAll = () => setChecked((prev) => (prev.size === items.length ? new Set() : new Set(items.map((x) => x.id))));
+  const clearCheck = () => setChecked(new Set());
+  const batchReadSel = async () => {
+    const ids = [...checked].slice(0, commentsConfig.batchReadMax);
+    if (!ids.length) return;
+    const j = await call(fetch('/api/comments/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }), '批量标已读');
+    if (j) { clearCheck(); load(); }
+  };
+  const batchIntentSel = async (v: string) => {
+    const ids = [...checked];
+    if (!ids.length || !v) return;
+    const rs = await Promise.all(ids.map((id) => fetch(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intent: v }) }).then((x) => x.json()).catch(() => null)));
+    const okn = rs.filter((r) => r && !r.code).length;
+    flash(okn === ids.length ? `已改 ${okn} 条意图` : `完成 ${okn}/${ids.length} 条`, okn > 0);
+    clearCheck(); load();
+  };
+  const batchFollowSel = async () => {
+    const targets = items.filter((x) => checked.has(x.id));
+    const uniq = [...new Map(targets.map((x) => [x.user_nick, x])).values()];
+    if (!uniq.length) return;
+    const rs = await Promise.all(uniq.map((x) => fetch('/api/follows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ peer_nick: x.user_nick, source_video_id: x.video_id }) }).then((r) => r.json()).catch(() => null)));
+    const okn = rs.filter((r) => r && !r.code).length;
+    await Promise.all(targets.map((x) => fetch('/api/comments/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [x.id] }) }).catch(() => {})));
+    flash(`已加入跟进 ${okn} 人并标已读`, okn > 0);
+    clearCheck(); load();
+  };
   const replied = async (c: CommentItem) => {
     const f = await call(fetch('/api/follows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ peer_nick: c.user_nick, source_video_id: c.video_id }) }), '登记跟进');
     if (!f) return;
@@ -136,6 +165,8 @@ export default function Comments() {
       } else if (e.key === 'c') {
         const c = items.find((x) => x.id === selId);
         if (c) copy(c.content);
+      } else if (e.key === 'a' && items.length) {
+        checkAll();
       }
     };
     window.addEventListener('keydown', h);
@@ -161,14 +192,24 @@ export default function Comments() {
 
   return (
     <div>
-      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>评论工作台</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>只看自己视频 · 本地已读 · 快捷键 j/k/e/1/2/3/c</div></div>
+      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>评论工作台</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>只看自己视频 · 本地已读 · 快捷键 j/k/e/1/2/3/c/a（a=全选）</div></div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
         <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <Input size="small" value={kw} onChange={(e) => setKw(e.target.value)} onPressEnter={() => load({ k: kw })} placeholder="搜索关键词" style={{ width: 200 }} allowClear />
           <Select size="small" value={intent} onChange={(v) => { setIntent(v); load({ it: v }); }} style={{ width: 120 }} options={intentOpts} />
           <Checkbox checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); load({ uo: e.target.checked }); }} style={{ fontSize: 12, color: '#6B6862' }}>只看未读</Checkbox>
           <span style={{ flex: 1 }} />
-          <Button size="small" onClick={batchRead}>批量标已读</Button>
+          {checked.size > 0 && (
+            <>
+              <span style={{ fontSize: 12, color: '#6B6862' }}>已选 {checked.size}</span>
+              <Button size="small" onClick={batchReadSel}>标已读</Button>
+              <Select size="small" placeholder="改意图" value={null} onChange={batchIntentSel} style={{ width: 96 }} options={commentsConfig.intentOptions.map((o) => ({ value: o, label: o }))} />
+              <Button size="small" onClick={batchFollowSel}>加入跟进</Button>
+              <Button size="small" type="text" onClick={clearCheck}>取消选择</Button>
+            </>
+          )}
+          <Button size="small" onClick={checkAll}>{checked.size === items.length && items.length > 0 ? '取消全选' : '全选'}</Button>
+          <Button size="small" onClick={batchRead}>未读批量已读</Button>
           <Button size="small" onClick={exportComments}>导出CSV</Button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -188,9 +229,14 @@ export default function Comments() {
           </div>
           <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>
             {items.length === 0 ? <div style={{ padding: 24, color: '#A8A5A0' }}>暂无数据</div> : items.map((c) => (
-              <div key={c.id} onClick={() => setSelId(c.id)} style={{ padding: '12px 14px 12px 16px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selId === c.id ? '#F5F4F1' : 'transparent', borderLeft: `2px solid ${colorOf(c.intent)}` }}>
-                <div style={{ fontSize: 12, color: '#A8A5A0' }}><b style={{ color: '#1A1A18' }}>{c.user_nick}</b> · {c.create_time} · {c.intent} · {c.is_read_local ? '已读' : '未读'}{c.ignore ? ' ·已忽略' : ''}</div>
-                <div>{c.content}</div>
+              <div key={c.id} onClick={() => setSelId(c.id)} style={{ padding: '10px 14px 10px 16px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selId === c.id ? '#F5F4F1' : 'transparent', borderLeft: `2px solid ${colorOf(c.intent)}` }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Checkbox checked={checked.has(c.id)} onClick={(e: React.MouseEvent) => e.stopPropagation()} onChange={() => toggleCheck(c.id)} style={{ marginTop: 2 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: '#A8A5A0' }}><b style={{ color: '#1A1A18' }}>{c.user_nick}</b> · {c.create_time} · {c.intent} · {c.is_read_local ? '已读' : '未读'}{c.ignore ? ' ·已忽略' : ''}</div>
+                    <div>{c.content}</div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
