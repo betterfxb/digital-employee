@@ -2,8 +2,11 @@ export const dynamic = 'force-dynamic'; // S59: 实时读license与日志，禁�
 import fs from 'fs';
 import path from 'path';
 import { getLicenseState } from '@/lib/license';
+import { getRepos } from '@/lib/repo';
+import { autoCfgOf } from '@/lib/autoCfg';
+import { autoReplyStatus } from '@/lib/autoReply';
 
-/** GET /api/diag/bundle（S59 诊断包：版本/环境/授权状态/近150行日志，报障一键导出txt） */
+/** GET /api/diag/bundle（S59 诊断包：版本/环境/授权状态/近150行日志，报障一键导出txt；S76附自动化配置与门状态快照，日志明细含客户信息不外带） */
 export async function GET() {
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
   // 桌面端日志与data同级（main写%APPDATA%/获客中台/server.log，DATA_DIR=其/data）；开发态无日志如实标注
@@ -32,6 +35,10 @@ export async function GET() {
     `features=${ls.features.length ? ls.features.join(',') : '(全开=专业版)'} machine_ok=${ls.machine_ok} app_version=${process.env.APP_VERSION || '-'}`,
     `error=${ls.error ?? '-'}`,
     `机器码: ${ls.machine_code}`,
+    '',
+    '---- 自动化（S76） ----',
+    `auto_config: ${JSON.stringify(autoCfgOf(getRepos().settings.get() as { auto_config?: unknown }))}`,
+    (() => { const ar = autoReplyStatus(); return `auto_reply: enabled=${ar.enabled} ready=${ar.ready} gate=${ar.gate} sentToday=${ar.sentToday}/${ar.cap} nextInSec=${ar.nextInSec ?? '-'}`; })(),
     '',
     '---- server.log 最近150行 ----',
     tail('server.log'),

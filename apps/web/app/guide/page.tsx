@@ -37,6 +37,8 @@ const FAQ = [
   { q: '回复是我发的还是软件自动发的？', a: '全部由你确认后自己发送。系统只负责筛选意向、生成候选话术和记账跟进，不会碰你的账号自动操作。' },
   { q: '怎么备份更安全？', a: '系统设置→数据管理：「下载备份」是普通JSON；「加密备份」会设一个口令，文件被别人拿到没口令也打不开——口令和文件请分开保管（别放同一个聊天里发）。' },
   { q: '出问题了要提供什么？', a: '系统设置→数据管理→「导出诊断包」，把生成的 txt 文件发给服务商即可（含版本、授权状态与最近日志，不含你的业务数据）。' },
+  { q: '自动回复安全吗？会不会被封号？', a: '只在抖音官方接口范围内工作：能力审核通过 + 你手动开启开关后才会自动发送；之前系统只起草、你确认后自己发。系统从不模拟人工点击、不绕平台检测——这是写进产品的红线承诺。' },
+  { q: '自动化的节奏能改吗？', a: '任务中心「自动化参数」：同步间隔与每日上限、夜间静默时段、自动回复随机间隔与每日上限与口吻、日报提醒时点、看板自动刷新，全部可调（越界值系统自动钳回安全范围）。' },
 ];
 
 export default function Guide() {
@@ -85,6 +87,7 @@ export default function Guide() {
             rowKey="cap"
             dataSource={[
               { cap: '授权绑定 · 数据看板 · CSV导入', basic: '✓', pro: '✓' },
+              { cap: '自动化（定时同步/自动回复起草/提醒/参数面板）', basic: '✓', pro: '✓' },
               { cap: '评论工作台（意图分类+意向分+批量操作）', basic: '✓', pro: '✓' },
               { cap: '话术生成（行业模板+口吻可调）', basic: '✓', pro: '✓' },
               { cap: '跟进台账 · 任务中心 · 系统设置', basic: '✓', pro: '✓' },
@@ -102,6 +105,15 @@ export default function Guide() {
           />
         </div>
         <div className="card" style={{ padding: 18, marginTop: 16 }}>
+          <b>自动化与合规</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>任务中心「自动化参数」可随时调</span>
+          <div style={{ fontSize: 13, color: '#1A1A18', lineHeight: 2, marginTop: 10 }}>
+            <div>· <b>定时同步</b>：按你设的间隔自动拉取作品/评论数据（官方通道开通后生效），带每日上限与夜间静默。</div>
+            <div>· <b>评论自动回复</b>：新评论自动按「接待规则」匹配或起草话术并记执行日志；<b>正式发送需三重门齐</b>——官方 live 通道 + 平台「评论回复」能力审核 + 你手动打开开关。三样齐之前系统只起草、不发送。</div>
+            <div>· <b>提醒</b>：跟进到期、授权临期、每日报告，系统主动通知你（只提醒，不代你操作）。</div>
+            <div>· <b>边界承诺</b>：本系统只在抖音官方提供的接口内工作，不做任何模拟人工点击、绕过平台检测的操作——那类做法会被抖音封号，我们不碰，也请勿用于任何第三方工具。</div>
+          </div>
+        </div>
+        <div className="card" style={{ padding: 18, marginTop: 16 }}>
           <b>快捷键（评论工作台）</b>
           <Table size="small" pagination={false} style={{ marginTop: 10 }} columns={hotCols} dataSource={HOTKEYS} rowKey="key" />
         </div>
@@ -110,7 +122,7 @@ export default function Guide() {
           <Table size="small" pagination={false} style={{ marginTop: 10 }} columns={faqCols} dataSource={FAQ} rowKey="q" />
         </div>
         <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 16, lineHeight: 1.8 }}>
-          还有问题？联系你的服务商会第一时间响应。本系统所有回复/跟进均由你人工确认后操作，不会自动操作你的抖音账号。
+          还有问题？联系你的服务商会第一时间响应。系统只在抖音官方接口内工作：自动回复需官方能力审核通过并由你开启后才发送，能力开通前所有回复均由你确认后自己发送——任何情况下都不会模拟人工操作你的账号。
         </div>
       </div>
     </div>

@@ -92,6 +92,18 @@ const tag = Date.now().toString(36);
     if (!okAll) throw new Error('批量入台账缺失');
     pass(true, 'J7 批量意图→已读→入台账');
   } catch (e) { pass(false, 'J7 批量意图→已读→入台账', ` ${e.message}`); }
+  // J8 自动化参数（S75/S76）：越界钳制+调度器回声+三重门状态+恢复默认（自清理，不留脏配置）
+  try {
+    const pv = await send('PATCH', '/api/settings', { auto_config: { sync_interval_min: 999, reply_tone: '怪' } });
+    if (pv.s !== 200 || pv.j.auto_config.sync_interval_min !== 240) throw new Error('越界未钳制240');
+    if (pv.j.auto_config.reply_tone !== '亲切') throw new Error('坏枚举未回退亲切');
+    const ts = await get('/api/tasks/status');
+    if (!ts.auto_config || ts.auto_config.sync_interval_min !== 240) throw new Error('调度器未回声钳制值');
+    if (ts.auto_reply.ready !== false || !ts.auto_reply.gate.includes('live')) throw new Error('mock态三重门应卡在live未就绪');
+    const rst = await send('PATCH', '/api/settings', { auto_config: {} });
+    if (rst.j.auto_config.sync_interval_min !== 30 || rst.j.auto_config.reply_daily_cap !== 12) throw new Error('恢复默认失败');
+    pass(true, 'J8 自动化钳制+三重门+回默认');
+  } catch (e) { pass(false, 'J8 自动化钳制与三重门', ` ${e.message}`); }
   console.log(fail === 0 ? 'JOURNEY ALL GREEN' : `JOURNEY ${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();
