@@ -23,6 +23,7 @@ export default function Comments() {
   const [product, setProduct] = useState('跑刀代跑');
   const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
   const [genBusy, setGenBusy] = useState(false);
+  const [tone, setTone] = useState('亲切');
 
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
 
@@ -111,7 +112,7 @@ export default function Comments() {
     try {
       const r = await fetch('/api/scripts/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: sel.content, intent: sel.intent, nick: sel.user_nick, product, video_title: videos.find((v) => v.id === sel.video_id)?.title || '' }),
+        body: JSON.stringify({ content: sel.content, intent: sel.intent, nick: sel.user_nick, product, video_title: videos.find((v) => v.id === sel.video_id)?.title || '', tone }),
       }).then((x) => x.json()).catch(() => null);
       if (r?.items?.length) { setDrafts(r.items); flash('已生成候选，挑一条用', true); }
       else flash('生成失败，请重试');
@@ -213,6 +214,7 @@ export default function Comments() {
                 <div style={{ fontSize: 12, color: '#6B6862', marginTop: 14 }}>作者回评（记账，可多条）</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <Button size="small" onClick={genDrafts} loading={genBusy}>智能生成回复</Button>
+                  <Select size="small" value={tone} onChange={setTone} style={{ width: 84 }} options={[{ value: '亲切', label: '亲切' }, { value: '专业', label: '专业' }, { value: '简洁', label: '简洁' }]} />
                 </div>
                 {drafts.length > 0 && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>

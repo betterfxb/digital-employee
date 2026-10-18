@@ -11,6 +11,7 @@ export async function POST(req: Request) {
     nick: String(body.nick || ''),
     product: String(body.product || ''),
     videoTitle: String(body.video_title || ''),
+    tone: String(body.tone || ''), // S33 口吻：亲切(默认)/专业/简洁
   });
   return page(items, null);
 }
