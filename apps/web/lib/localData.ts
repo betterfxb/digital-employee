@@ -27,6 +27,10 @@ interface LocalState {
   settings: Record<string, unknown> | null; customScripts: unknown[]; replyRules: unknown[];
   /** S37 清空标记：清空/恢复后示例种子永不复活（仅全新安装有示例） */
   cleared_at?: string;
+  /** S68 协作态持久化：已读/整视频已读/意图忽略覆盖——此前只在内存，重启即丢（真bug修复） */
+  read_ids?: string[];
+  all_read_videos?: string[];
+  intent_overrides?: Record<string, { intent?: string; ignore?: boolean }>;
 }
 
 /** S30 数据目录外置（桌面端DATA_DIR指向%APPDATA%），默认兼容 cwd/data */
@@ -52,6 +56,9 @@ function hydrate() {
       if (Array.isArray(raw.customScripts)) state.customScripts = raw.customScripts;
       if (Array.isArray(raw.replyRules)) state.replyRules = raw.replyRules;
       if (typeof raw.cleared_at === 'string') state.cleared_at = raw.cleared_at;
+      if (Array.isArray(raw.read_ids)) state.read_ids = raw.read_ids;
+      if (Array.isArray(raw.all_read_videos)) state.all_read_videos = raw.all_read_videos;
+      if (raw.intent_overrides && typeof raw.intent_overrides === 'object') state.intent_overrides = raw.intent_overrides as Record<string, { intent?: string; ignore?: boolean }>;
     }
   } catch { /* 文件损坏则忽略，保持内存态起跑 */ }
   // S37 清空/恢复后示例种子不复活（先清种子再注文件数据；仅全新安装有示例）
@@ -66,6 +73,10 @@ hydrate();
 export interface CollectionRefs {
   follows: { id: string }[]; replies: { id: string }[]; competitors: { id: string }[]; videoTasks: { id: string }[];
   settings: object; customScripts: { id: string }[]; replyRules: { id: string }[];
+  /** S68 协作态（可选注入） */
+  readIds?: Set<string>;
+  allReadVideos?: Set<string>;
+  intentOverrides?: Map<string, { intent?: string; ignore?: boolean }>;
 }
 let collRefs: CollectionRefs | null = null;
 
@@ -82,6 +93,15 @@ export function hydrateCollections(refs: CollectionRefs) {
   if (state.settings) Object.assign(refs.settings, state.settings);
   merge(refs.customScripts, state.customScripts);
   merge(refs.replyRules, state.replyRules);
+  // S68 协作态水合（本地const承接避免闭包内null收窄丢失——S47同款坑）
+  const rids = refs.readIds;
+  if (rids && Array.isArray(state.read_ids)) state.read_ids.forEach((id) => rids.add(id));
+  const ravs = refs.allReadVideos;
+  if (ravs && Array.isArray(state.all_read_videos)) state.all_read_videos.forEach((id) => ravs.add(id));
+  const rio = refs.intentOverrides;
+  if (rio && state.intent_overrides && typeof state.intent_overrides === 'object') {
+    Object.entries(state.intent_overrides).forEach(([k, v]) => rio.set(k, v));
+  }
 }
 
 /** repo变更点调用：内存集合→文件（全量序列化） */
@@ -94,6 +114,10 @@ export function persistCollections() {
   state.settings = collRefs.settings as Record<string, unknown>;
   state.customScripts = collRefs.customScripts;
   state.replyRules = collRefs.replyRules;
+  // S68 协作态回写
+  if (collRefs.readIds) state.read_ids = [...collRefs.readIds];
+  if (collRefs.allReadVideos) state.all_read_videos = [...collRefs.allReadVideos];
+  if (collRefs.intentOverrides) state.intent_overrides = Object.fromEntries(collRefs.intentOverrides);
   flushLocal();
 }
 
@@ -109,6 +133,8 @@ export function clearBusinessData() {
   state.videos = []; state.comments = [];
   state.follows = []; state.replies = []; state.competitors = []; state.videoTasks = [];
   state.customScripts = []; state.replyRules = [];
+  // S68 协作态随业务数据一并清（已读/意图属于评论）
+  state.read_ids = []; state.all_read_videos = []; state.intent_overrides = {};
   state.cleared_at = new Date().toISOString();
   mockVideos.splice(0, mockVideos.length);
   mockComments.splice(0, mockComments.length);
@@ -116,6 +142,7 @@ export function clearBusinessData() {
   if (refs) {
     refs.follows.length = 0; refs.replies.length = 0; refs.competitors.length = 0;
     refs.videoTasks.length = 0; refs.customScripts.length = 0; refs.replyRules.length = 0;
+    refs.readIds?.clear(); refs.allReadVideos?.clear(); refs.intentOverrides?.clear();
   }
   flushLocal();
 }
@@ -166,6 +193,13 @@ export function restoreBackup(data: Record<string, unknown>): { ok: boolean; err
     refs.videoTasks.length = 0; refs.videoTasks.push(...(state.videoTasks as { id: string }[]));
     refs.customScripts.length = 0; refs.customScripts.push(...(state.customScripts as { id: string }[]));
     refs.replyRules.length = 0; refs.replyRules.push(...(state.replyRules as { id: string }[]));
+    // S68 协作态按备份回放（缺失字段=清空，以备份时点为准）
+    const rids = refs.readIds;
+    if (rids) { rids.clear(); (state.read_ids || []).forEach((id) => rids.add(id)); }
+    const ravs = refs.allReadVideos;
+    if (ravs) { ravs.clear(); (state.all_read_videos || []).forEach((id) => ravs.add(id)); }
+    const rio = refs.intentOverrides;
+    if (rio) { rio.clear(); Object.entries(state.intent_overrides || {}).forEach(([k, v]) => rio.set(k, v)); }
     if (state.settings) {
       const s = refs.settings as Record<string, unknown>;
       Object.keys(s).forEach((k) => { delete s[k]; });

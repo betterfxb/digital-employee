@@ -377,7 +377,7 @@ export default function Messages() {
                 <Button size="small" type="text" onClick={clearFsel}>取消选择</Button>
               </div>
             )}
-            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+            <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
           </div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16 }}>

@@ -63,9 +63,10 @@ const memory: Repos = {
   },
   comments: {
     list: (f) => mockComments.map(viewOf).filter((c) => (!f.video_id || c.video_id === f.video_id) && (!f.intent || c.intent === f.intent) && (!f.keyword || c.content.includes(f.keyword)) && (!f.unreadOnly || !c.is_read_local)),
-    markRead: (ids, valid) => { let n = 0; ids.forEach((id) => { if (valid.has(id)) { readIds.add(id); n++; } }); return n; },
-    markAllRead: (videoId) => { allReadVideos.add(videoId); },
-    setIntent: (id, patch) => { const next = { ...(intentOverrides.get(id) || {}), ...patch }; intentOverrides.set(id, next); return { id, ...next }; },
+    // S68 修：协作态写内存后必须落盘（此前重启即丢已读/意图）
+    markRead: (ids, valid) => { let n = 0; ids.forEach((id) => { if (valid.has(id)) { readIds.add(id); n++; } }); if (n > 0) persistCollections(); return n; },
+    markAllRead: (videoId) => { allReadVideos.add(videoId); persistCollections(); },
+    setIntent: (id, patch) => { const next = { ...(intentOverrides.get(id) || {}), ...patch }; intentOverrides.set(id, next); persistCollections(); return { id, ...next }; },
     exists: (id) => mockComments.some((c) => c.id === id),
   },
   follows: {

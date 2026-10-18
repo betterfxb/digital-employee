@@ -62,7 +62,7 @@ export default function Comments() {
     // S46 URL深链（运营建议跳转带 ?intent= 高意向 等）
     const urlIntent = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('intent') : null;
     if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent }); } else load();
-    fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw)); }).catch(() => {});
+    fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw).slice(0, 8)); }).catch(() => {});
     fetch('/api/scripts/templates?intent=普通').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {
       fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
     });
@@ -221,7 +221,7 @@ export default function Comments() {
           <Button size="small" onClick={exportComments}>导出CSV</Button>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          {hot.map((k) => <Button key={k} size="small" onClick={() => { setKw(k); load({ k }); }}>{k}</Button>)}
+          {hot.slice(0, 8).map((k) => <Button key={k} size="small" onClick={() => { setKw(k); load({ k }); }}>{k}</Button>)}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0,1fr) 340px', gap: 0, border: '1px solid #E8E6E1', borderRadius: 6, background: '#fff', minHeight: 'calc(100vh - 300px)' }}>
           <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>

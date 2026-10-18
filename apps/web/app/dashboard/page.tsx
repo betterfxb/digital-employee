@@ -384,7 +384,7 @@ export default function Dashboard() {
             <Button size="small" type="primary" onClick={addComp}>加入</Button>
             {cmsg && <span style={{ fontSize: 12, color: '#6B6862', alignSelf: 'center' }}>{cmsg}</span>}
           </div>
-          <Table<Competitor> size="small" pagination={false} style={{ marginTop: 10 }} columns={compCols} dataSource={comps} rowKey="id" locale={{ emptyText: '暂无竞品' }} />
+          <Table<Competitor> size="small" pagination={{ pageSize: 10, showSizeChanger: false, size: 'small' }} style={{ marginTop: 10 }} columns={compCols} dataSource={comps} rowKey="id" locale={{ emptyText: '暂无竞品' }} />
         </div>
         {/* S53 竞品记录历史抽屉 */}
         <Drawer title={cpDetail ? `竞品历史 · ${cpDetail.url}` : ''} placement="right" width={400} open={!!cpDetail} onClose={() => setCpDetail(null)}>

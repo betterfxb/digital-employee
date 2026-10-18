@@ -61,5 +61,5 @@ export function viewOf(c: (typeof mockComments)[number]) {
   return { ...c, is_read_local: isRead(c), intent: ov?.intent || c.intent, ignore: ov?.ignore || false };
 }
 
-// S25b：业务集合水合（模块尾部，数组已定义）；repo变更点调persistCollections落盘
-hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules });
+// S25b：业务集合水合（模块尾部，数组已定义）；repo变更点调persistCollections落盘；S68协作态一并注入
+hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules, readIds, allReadVideos, intentOverrides });
