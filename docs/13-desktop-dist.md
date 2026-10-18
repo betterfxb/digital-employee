@@ -49,3 +49,17 @@ pnpm build:win                            # = make-icon → web构建(standalone
 - 授权仅锁 UI（激活门），API 保持开放（导入授权与自动化需要）；服务只监听 127.0.0.1
 - 桌面端数据在 `%APPDATA%\获客中台\data\`（local.json 业务数据 + license + 主密钥），卸载不自动清数据
 - 更新：暂无自动更新，发新版安装包覆盖安装即可（数据目录独立不受影响）
+
+## 五、live 切换 SOP（客户开放平台密钥到位后）
+
+```powershell
+cd apps\web
+node scripts\live-switch.js --key <client_key> --secret <client_secret> --dry   # 先演练看一眼
+node scripts\live-switch.js --key <client_key> --secret <client_secret>          # 确认后真写
+# 重启服务（客户重启「获客中台」，开发机 pnpm start）
+node scripts\live-check.js                                                       # 三项全PASS即完成
+```
+
+自检三项：①模式=live ②授权跳转=open.douyin.com ③二维码=官方授权链接。
+完成后授权页点「抖音登录授权」→ 弹窗内即抖音官方登录页；定时同步自动转真拉取。
+**注意**：client_secret 别进聊天记录明文（切完把 shell 历史/记录删掉）；回调域名必须与开放平台登记一致否则官方页报错。
