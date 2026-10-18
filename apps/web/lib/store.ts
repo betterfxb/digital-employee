@@ -10,7 +10,7 @@ export const allReadVideos = new Set<string>();
 /** 意图/忽略覆盖 {commentId: {intent?, ignore?}} */
 export const intentOverrides = new Map<string, { intent?: string; ignore?: boolean }>();
 /** 跟进台账 */
-export const follows: { id: string; peer_nick: string; source_video_id: string; next_remind_at: string; status: string }[] = [
+export const follows: { id: string; peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number; created_at?: string }[] = [
   { id: 'f1', peer_nick: '刀友老陈', source_video_id: 'v1', next_remind_at: '今天 18:00', status: '待回访' },
   { id: 'f2', peer_nick: '熬夜选手Lin', source_video_id: 'v1', next_remind_at: '明天', status: '已手动回复' },
 ];

@@ -20,6 +20,9 @@ export interface CommentItem {
 
 export interface Follow {
   id: string; peer_nick: string; source_video_id: string; next_remind_at: string; status: string;
+  /** S43 成交记账：已转化客户可记成交金额（元）与登记时间 */
+  amount?: number;
+  created_at?: string;
 }
 
 export interface Competitor {

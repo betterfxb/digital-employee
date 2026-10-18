@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Checkbox, Input, Select, Table } from 'antd';
+import { App, Button, Checkbox, Input, Popconfirm, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
@@ -18,6 +18,7 @@ export default function Messages() {
   const [fpeer, setFpeer] = useState('');
   const [fsource, setFsource] = useState('v1');
   const [fsearch, setFsearch] = useState('');
+  const [amtEdit, setAmtEdit] = useState<{ id: string; val: string } | null>(null);
   const [stitle, setStitle] = useState('');
   const [scontent, setScontent] = useState('');
   const [rules, setRules] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
@@ -44,6 +45,14 @@ export default function Messages() {
     if (!r || r.code) { flash(r?.message || '状态更新失败'); return; }
     loadFollows();
   };
+  /** S43 成交记账 */
+  const saveAmount = async (id: string) => {
+    const n = Number(amtEdit?.val);
+    if (!amtEdit || amtEdit.id !== id || !Number.isFinite(n) || n < 0) { flash('请输入有效金额'); return; }
+    const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: n }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '记账失败'); return; }
+    setAmtEdit(null); flash('已记账', true); loadFollows();
+  };
   const batches: Follow[][] = [];
   (rows || []).forEach((f, i) => {
     const g = Math.floor(i / tasksConfig.followBatchSize);
@@ -54,7 +63,7 @@ export default function Messages() {
   const exportFollows = () => {
     const flat = batches.flat();
     if (flat.length === 0) { flash('暂无数据可导出'); return; }
-    downloadCsv('跟进台账.csv', ['对方', '状态', '下次提醒', '来源视频'], flat.map((f) => [f.peer_nick, f.status, f.next_remind_at, f.source_video_id]));
+    downloadCsv('跟进台账.csv', ['对方', '状态', '下次提醒', '来源视频', '成交金额'], flat.map((f) => [f.peer_nick, f.status, f.next_remind_at, f.source_video_id, f.amount ?? '']));
   };
   const addScript = async () => {
     if (!stitle.trim() || !scontent.trim()) { flash('请填写标题与内容'); return; }
@@ -89,6 +98,19 @@ export default function Messages() {
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
     { title: '对方', dataIndex: 'peer_nick', key: 'nick' },
     { title: '状态', key: 'status', width: 120, render: (_, f) => <Select size="small" value={f.status} onChange={(v) => changeStatus(f.id, v)} style={{ width: '100%' }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} /> },
+    { title: '成交', key: 'amt', width: 130, render: (_, f) => (
+      f.status !== '已转化' ? <span className="num" style={{ color: '#A8A5A0' }}>—</span>
+      : f.amount != null ? <span className="num">¥{f.amount.toLocaleString()}</span>
+      : (
+        <Popconfirm
+          title="记一笔成交"
+          description={<Input size="small" placeholder="金额（元）" value={amtEdit?.id === f.id ? amtEdit.val : ''} onChange={(e) => setAmtEdit({ id: f.id, val: e.target.value })} onPressEnter={() => saveAmount(f.id)} style={{ marginTop: 6 }} />}
+          okText="记账" cancelText="取消" onConfirm={() => saveAmount(f.id)}
+        >
+          <Button size="small">记账</Button>
+        </Popconfirm>
+      )
+    ) },
     { title: '下次提醒', dataIndex: 'next_remind_at', key: 'remind', onCell: () => ({ className: 'num' }) },
   ];
 
@@ -109,12 +131,23 @@ export default function Messages() {
           <div style={{ fontSize: 12, color: '#6B6862' }}>分类：{assistConfig.scriptCategories.join(' / ')} · 默认提醒 {assistConfig.defaultRemindHour}:00</div>
         </div>
         <div style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
-          {[['待回访', rows ? rows.filter((f) => f.status === '待回访').length : '—'], ['已转化', rows ? rows.filter((f) => f.status === '已转化').length : '—'], ['跟进总数', rows ? rows.length : '—']].map(([k, v], i) => (
-            <div key={k as string} style={{ flex: 1, padding: '12px 18px', borderLeft: i ? '1px solid #E8E6E1' : 'none' }}>
-              <div style={{ fontSize: 12, color: '#6B6862' }}>{k}</div>
-              <div className="num" style={{ fontSize: 22, fontWeight: 700 }}>{v}</div>
-            </div>
-          ))}
+          {(() => {
+            const done = rows ? rows.filter((f) => f.status === '已转化') : [];
+            const revenue = done.reduce((a, f) => a + (f.amount || 0), 0);
+            const rate = rows && rows.length ? Math.round((done.length / rows.length) * 100) : 0;
+            const cells: [string, string, string][] = [
+              ['待回访', rows ? String(rows.filter((f) => f.status === '待回访').length) : '—', ''],
+              ['已转化', rows ? String(done.length) : '—', ''],
+              ['跟进总数', rows ? String(rows.length) : '—', ''],
+              ['成交额', `¥${revenue.toLocaleString()}`, `转化率 ${rate}%`],
+            ];
+            return cells.map(([k, v, sub], i) => (
+              <div key={k} style={{ flex: 1, padding: '12px 18px', borderLeft: i ? '1px solid #E8E6E1' : 'none' }}>
+                <div style={{ fontSize: 12, color: '#6B6862' }}>{k}</div>
+                <div className="num" style={{ fontSize: 22, fontWeight: 700 }}>{v}{sub && <span style={{ fontSize: 12, fontWeight: 400, color: '#6B6862', marginLeft: 8 }}>{sub}</span>}</div>
+              </div>
+            ));
+          })()}
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <div className="card" style={{ padding: 16, flex: 1 }}>

@@ -7,7 +7,7 @@ import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
 import { persistCollections } from './localData'; // S25b: 业务集合变更落盘
 import type { Account, Video, CommentItem, Follow, Competitor, DlqItem } from './types';
 
-export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string }
+export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number }
 export interface CompetitorInput { source: string; url: string; remark: string; kind?: string }
 export interface IntentPatch { intent?: string; ignore?: boolean }
 export interface CommentFilter { video_id: string; intent: string; keyword: string; unreadOnly: boolean }
@@ -20,7 +20,7 @@ export interface CommentRepo {
   setIntent(id: string, patch: IntentPatch): Record<string, unknown> | null;
   exists(id: string): boolean;
 }
-export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, status: string): Follow | null }
+export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number }): Follow | null }
 export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
@@ -69,8 +69,8 @@ const memory: Repos = {
   },
   follows: {
     list: (status) => (status ? follows.filter((f) => f.status === status) : follows),
-    create: (input) => { const item = { id: `f-${Date.now().toString(36)}`, ...input }; follows.push(item); persistCollections(); return item; },
-    update: (id, status) => { const f = follows.find((x) => x.id === id); if (!f) return null; f.status = status; persistCollections(); return f; },
+    create: (input) => { const item = { id: `f-${Date.now().toString(36)}`, created_at: new Date().toISOString(), ...input }; follows.push(item); persistCollections(); return item; },
+    update: (id, patch) => { const f = follows.find((x) => x.id === id); if (!f) return null; if (patch.status !== undefined) f.status = patch.status; if (patch.amount !== undefined) f.amount = patch.amount; persistCollections(); return f; },
   },
   competitors: {
     list: () => competitors,
