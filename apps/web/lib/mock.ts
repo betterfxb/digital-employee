@@ -44,3 +44,14 @@ export const mockScripts: ScriptItem[] = [
   { id: 's2', category: '报价', title: '报价', content: '跑刀单件9折，今天下单送保险，契约代练按段位报价。' },
   { id: 's3', category: '留资引导', title: '留资引导', content: '方便留个联系方式吗，发你跑刀实录和价目表。' },
 ];
+
+/**
+ * S47 种子快照：模块加载第一时刻（数组纯净）冻结的内置示例。
+ * 用途：restoreBackup 恢复时以「种子 ∪ 备份」重建内存（备份只含文件态、从不含种子，
+ * 若全量替换会把示例数据和 acc_001/002 种子账号抹掉——J3/J5连锁挂的根因）
+ */
+export const seedSnapshot = {
+  accounts: [...mockAccounts],
+  videos: [...mockVideos],
+  comments: [...mockComments],
+};

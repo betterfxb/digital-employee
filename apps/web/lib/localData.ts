@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomBytes, createHash } from 'crypto';
 import { encryptToken, decryptToken } from './crypto';
-import { mockAccounts, mockVideos, mockComments } from './mock';
+import { mockAccounts, mockVideos, mockComments, seedSnapshot } from './mock';
 import type { Account, Video, CommentItem, AuthLogItem } from './types';
 
 export interface StoredToken {
@@ -132,9 +132,18 @@ export function restoreBackup(data: Record<string, unknown>): { ok: boolean; err
   const arrKeys = ['accounts', 'videos', 'comments', 'follows', 'replies', 'competitors', 'videoTasks', 'customScripts', 'replyRules'];
   for (const k of arrKeys) if (k in data && !Array.isArray(data[k])) return { ok: false, error: `字段${k}格式不对` };
   const arr = <T>(k: string): T[] => (Array.isArray(data[k]) ? (data[k] as T[]) : []);
-  state.accounts = arr<Account>('accounts');
-  state.videos = arr<Video>('videos');
-  state.comments = arr<CommentItem>('comments');
+  // S47 修复：备份只含文件态（种子从不入文件）→ 恢复以「种子 ∪ 备份」重建（id去重，备份优先）；
+  // 备份带 cleared_at（客户清空后备份）则不并种子，保持清空语义
+  const clearedBackup = typeof data.cleared_at === 'string';
+  const mergeBy = <T extends { id: string }>(seed: T[], saved: T[]): T[] => {
+    const out = [...seed];
+    saved.forEach((s) => { const i = out.findIndex((x) => x.id === s.id); if (i > -1) out[i] = s; else out.push(s); });
+    return out;
+  };
+  const noSeed = <T,>(x: T[]): T[] => (clearedBackup ? [] : x);
+  state.accounts = mergeBy(noSeed(seedSnapshot.accounts as unknown as { id: string }[]), arr('accounts')) as unknown as Account[];
+  state.videos = mergeBy(noSeed(seedSnapshot.videos as unknown as { id: string }[]), arr('videos')) as unknown as Video[];
+  state.comments = mergeBy(noSeed(seedSnapshot.comments as unknown as { id: string }[]), arr('comments')) as unknown as CommentItem[];
   state.tokens = (data.tokens && typeof data.tokens === 'object' ? data.tokens : {}) as Record<string, StoredToken>;
   state.follows = arr<unknown>('follows');
   state.replies = arr<unknown>('replies');
@@ -143,7 +152,8 @@ export function restoreBackup(data: Record<string, unknown>): { ok: boolean; err
   state.customScripts = arr<unknown>('customScripts');
   state.replyRules = arr<unknown>('replyRules');
   state.settings = (data.settings && typeof data.settings === 'object' ? data.settings : null) as Record<string, unknown> | null;
-  state.cleared_at = typeof data.cleared_at === 'string' ? data.cleared_at : new Date().toISOString();
+  // S47修：cleared_at 严格跟随备份——备份没有即回到「从未清空」态（S37原设计无脑设now会永久污染环境致种子永灭）
+  state.cleared_at = typeof data.cleared_at === 'string' ? data.cleared_at : undefined;
   // 内存态同步（避免重启才能生效）
   mockAccounts.splice(0, mockAccounts.length, ...state.accounts);
   mockVideos.splice(0, mockVideos.length, ...state.videos);

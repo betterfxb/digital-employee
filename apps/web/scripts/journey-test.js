@@ -61,6 +61,37 @@ const tag = Date.now().toString(36);
     await send('POST', '/api/accounts/switch', { id: 'acc_001' });
     pass(b2.status === 302 && !!vv && !!c && c.intent === '高意向' && tpl.items.length > 0 && tpl.items[0].scene !== '处理建议' && fol.j.status === '待回访' && rep.s === 200 && reps.items.some((x) => x.content === 'J5回评'), 'J5 预真机真数据闭环');
   } catch (e) { pass(false, 'J5 预真机真数据闭环', ` ${e.message}`); }
+  // J6 数据管理闭环（S37/S38）：备份→无确认词拒→清空→空→恢复→同口径一致（S47修：对比当前账号before/after而非全量）
+  try {
+    const bk = await fetch(base + '/api/data/backup').then((r) => r.json());
+    if (!Array.isArray(bk.accounts) || !Array.isArray(bk.videos)) throw new Error('backup结构异常');
+    const before = (await get('/api/videos')).items.length;
+    const cl0 = await send('POST', '/api/data/clear', {});
+    if (cl0.s !== 400) throw new Error('无确认词应400');
+    const cl = await send('POST', '/api/data/clear', { confirm: '清空' });
+    if (!cl.j.cleared) throw new Error('清空失败');
+    const v0 = await get('/api/videos');
+    if (v0.items.length !== 0) throw new Error('清空后应无作品');
+    const rt = await send('POST', '/api/data/restore', { data: bk });
+    if (!rt.j.restored) throw new Error('恢复失败');
+    const after = (await get('/api/videos')).items.length;
+    if (after !== before) throw new Error(`恢复后作品数不一致 before=${before} after=${after}`);
+    pass(true, 'J6 备份→清空→恢复闭环');
+  } catch (e) { pass(false, 'J6 备份→清空→恢复闭环', ` ${e.message}`); }
+  // J7 批量操作底层链（S34）：多条意图PATCH→批量已读→批量入台账
+  try {
+    const cs = await get('/api/comments?unread_only=0');
+    const pick = cs.items.slice(0, 3);
+    if (pick.length < 2) throw new Error('评论不足');
+    for (const c of pick) await send('PATCH', `/api/comments/${c.id}`, { intent: '咨询' });
+    const rd = await send('POST', '/api/comments/read', { ids: pick.map((x) => x.id) });
+    if (!rd.j.updated) throw new Error('批量已读失败');
+    for (const c of pick) await send('POST', '/api/follows', { peer_nick: c.user_nick, source_video_id: c.video_id });
+    const fl = await get('/api/follows');
+    const okAll = pick.every((c) => fl.items.some((f) => f.peer_nick === c.user_nick));
+    if (!okAll) throw new Error('批量入台账缺失');
+    pass(true, 'J7 批量意图→已读→入台账');
+  } catch (e) { pass(false, 'J7 批量意图→已读→入台账', ` ${e.message}`); }
   console.log(fail === 0 ? 'JOURNEY ALL GREEN' : `JOURNEY ${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();
