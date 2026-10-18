@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { App, Button, Checkbox, Input, Select } from 'antd';
 import { commentsConfig } from '@/config/comments.config';
 import { downloadCsv } from '@/lib/csv';
+import { leadScore, scoreLevel } from '@/lib/leadScore';
 import type { Video, CommentItem, ScriptItem, TemplateItem } from '@/lib/types';
 
 /** S8 评论工作台三栏：左作品（含未读）/中评论流/右详情（意图PATCH+跟进），快捷键j/k/e/1/2/3/c */
@@ -235,7 +236,10 @@ export default function Comments() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Checkbox checked={checked.has(c.id)} onClick={(e: React.MouseEvent) => e.stopPropagation()} onChange={() => toggleCheck(c.id)} style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, color: '#A8A5A0' }}><b style={{ color: '#1A1A18' }}>{c.user_nick}</b> · {c.create_time} · {c.intent} · {c.is_read_local ? '已读' : '未读'}{c.ignore ? ' ·已忽略' : ''}</div>
+                    <div style={{ fontSize: 12, color: '#A8A5A0' }}>
+                      <b style={{ color: '#1A1A18' }}>{c.user_nick}</b> · {c.create_time} · {c.intent} · {c.is_read_local ? '已读' : '未读'}{c.ignore ? ' ·已忽略' : ''}
+                      {(() => { const s = leadScore(c); const lv = scoreLevel(s); return <span className="num" style={{ marginLeft: 6, fontWeight: 700, color: lv === 'high' ? '#B4443C' : lv === 'mid' ? '#8A6D1F' : '#A8A5A0' }}>意向{s}</span>; })()}
+                    </div>
                     <div>{c.content}</div>
                   </div>
                 </div>

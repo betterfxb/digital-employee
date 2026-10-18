@@ -23,6 +23,12 @@ export interface Follow {
   /** S43 成交记账：已转化客户可记成交金额（元）与登记时间 */
   amount?: number;
   created_at?: string;
+  /** S48 线索标签（自定义，≤10个每个≤8字） */
+  tags?: string[];
+  /** S49 跟进纪要 */
+  note?: string;
+  /** S49 操作历史（最新在前，环形20条） */
+  history?: { at: string; act: string }[];
 }
 
 export interface Competitor {

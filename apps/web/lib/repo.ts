@@ -20,7 +20,7 @@ export interface CommentRepo {
   setIntent(id: string, patch: IntentPatch): Record<string, unknown> | null;
   exists(id: string): boolean;
 }
-export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number }): Follow | null }
+export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string }): Follow | null }
 export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
@@ -70,7 +70,25 @@ const memory: Repos = {
   follows: {
     list: (status) => (status ? follows.filter((f) => f.status === status) : follows),
     create: (input) => { const item = { id: `f-${Date.now().toString(36)}`, created_at: new Date().toISOString(), ...input }; follows.push(item); persistCollections(); return item; },
-    update: (id, patch) => { const f = follows.find((x) => x.id === id); if (!f) return null; if (patch.status !== undefined) f.status = patch.status; if (patch.amount !== undefined) f.amount = patch.amount; persistCollections(); return f; },
+    update: (id, patch) => {
+      const f = follows.find((x) => x.id === id);
+      if (!f) return null;
+      // S49 先算变更动作再落值（顺序反了会漏记状态变更）
+      const acts: string[] = [];
+      if (patch.status !== undefined && patch.status !== f.status) acts.push(`状态改为「${patch.status}」`);
+      if (patch.amount !== undefined) acts.push(`记成交 ¥${patch.amount}`);
+      if (patch.tags !== undefined) acts.push(`标签更新为「${patch.tags.join('、') || '无'}」`);
+      if (patch.note !== undefined) acts.push('更新跟进纪要');
+      if (patch.status !== undefined) f.status = patch.status;
+      if (patch.amount !== undefined) f.amount = patch.amount;
+      if (patch.tags !== undefined) f.tags = patch.tags;
+      if (patch.note !== undefined) f.note = patch.note;
+      if (acts.length > 0) {
+        f.history = [{ at: new Date().toISOString(), act: acts.join('；') }, ...(f.history || [])].slice(0, 20);
+      }
+      persistCollections();
+      return f;
+    },
   },
   competitors: {
     list: () => competitors,

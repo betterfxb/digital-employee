@@ -9,11 +9,12 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
 const { parseRemind, isDue } = require('./.tmp-crypto/remind.js');
+const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -60,6 +61,15 @@ check(tmr !== null && tmr.getTime() === new Date('2026-10-19T18:00:00').getTime(
 check(isDue('今天 11:00', now) === true && isDue('明天 18:00', now) === false, 'remind 到期判定');
 check(isDue('2026-10-18T11:00:00', now) === true, 'remind ISO兼容');
 check(parseRemind('随便写的') === null && isDue(null) === false, 'remind 无法解析不提醒');
+
+// 6) S48 线索意向评分（意图+点赞+关键词规则）
+const scHot = leadScore({ intent: '高意向', like_count: 15, content: '跑刀一单多少钱怎么下单', keywords: ['价格'] });
+const scSpam = leadScore({ intent: '垃圾', like_count: 0, content: '加V代练', keywords: [] });
+check(scHot === 95 && scoreLevel(scHot) === 'high', 'leadScore 高意向+热词=95/high');
+check(scSpam === 0 && scoreLevel(scSpam) === 'low', 'leadScore 垃圾0分/low');
+const scMid = leadScore({ intent: '咨询', like_count: 2, content: '要什么段位', keywords: [] });
+check(scMid === 22 && scoreLevel(scMid) === 'low', 'leadScore 咨询2+赞=22/low');
+check(leadScore({ intent: '留电话', like_count: 99, content: '留个联系方式', keywords: ['电话'] }) === 90, 'leadScore 留电话+强信号=90');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

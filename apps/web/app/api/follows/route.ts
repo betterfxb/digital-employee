@@ -2,11 +2,20 @@ import { ok, fail, page } from '@/lib/response';
 import { getRepos } from '@/lib/repo';
 import { assistConfig } from '@/config/assist.config';
 
-/** GET /api/follows?status（手动台账，经Repository） */
+/** GET /api/follows?status&tag（手动台账，经Repository；S48支持标签筛选与全量标签库聚合） */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status');
-  return page(getRepos().follows.list(status || ''), null);
+  const tag = searchParams.get('tag');
+  let items = getRepos().follows.list(status || '');
+  if (tag) items = items.filter((f) => (f.tags || []).includes(tag));
+  // ?tags=1 返回全量标签库（已用标签聚合，去重按频次排序）
+  if (searchParams.get('tags') === '1') {
+    const counts = new Map<string, number>();
+    getRepos().follows.list('').forEach((f) => (f.tags || []).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
+    return ok({ items: [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([tag2, n]) => ({ tag: tag2, n })) });
+  }
+  return page(items, null);
 }
 
 /** POST /api/follows {peer_nick, source_video_id, next_remind_at?, status?}（状态必须在followStatuses内） */

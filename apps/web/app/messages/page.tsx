@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Checkbox, Input, Popconfirm, Select, Table } from 'antd';
+import { App, Button, Checkbox, Drawer, Input, Popconfirm, Select, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
@@ -19,6 +19,13 @@ export default function Messages() {
   const [fsource, setFsource] = useState('v1');
   const [fsearch, setFsearch] = useState('');
   const [amtEdit, setAmtEdit] = useState<{ id: string; val: string } | null>(null);
+  const [ftag, setFtag] = useState('');
+  const [tagLib, setTagLib] = useState<string[]>([]);
+  const [tagEdit, setTagEdit] = useState<{ id: string; tags: string[] } | null>(null);
+  const [newTag, setNewTag] = useState('');
+  /** S49 线索档案抽屉 */
+  const [detail, setDetail] = useState<Follow | null>(null);
+  const [noteText, setNoteText] = useState('');
   const [stitle, setStitle] = useState('');
   const [scontent, setScontent] = useState('');
   const [rules, setRules] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
@@ -26,11 +33,14 @@ export default function Messages() {
   const [rrp, setRrp] = useState('');
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
   const loadFollows = (st = fstatus) => fetch(`/api/follows${st ? `?status=${encodeURIComponent(st)}` : ''}`).then((r) => r.json()).then((d) => setRows(d.items || [])).catch(() => { setRows([]); flash('台账加载失败，请刷新重试'); });
+  /** S48 标签库（已用标签聚合） */
+  const loadTagLib = () => fetch('/api/follows?tags=1').then((r) => r.json()).then((d) => setTagLib(((d.items || []) as { tag: string }[]).map((x) => x.tag))).catch(() => {});
   const loadRules = () => fetch('/api/reply-rules').then((r) => r.json()).then((d) => setRules(d.items || [])).catch(() => flash('规则加载失败，请重试'));
   useEffect(() => {
     fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
     loadFollows('');
     loadRules();
+    loadTagLib();
     fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -52,6 +62,34 @@ export default function Messages() {
     const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: n }) }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { flash(r?.message || '记账失败'); return; }
     setAmtEdit(null); flash('已记账', true); loadFollows();
+  };
+  /** S48 线索标签：切换/新建/保存 */
+  const toggleTagEdit = (tag: string) => {
+    if (!tagEdit) return;
+    const tags = tagEdit.tags.includes(tag) ? tagEdit.tags.filter((t) => t !== tag) : [...tagEdit.tags, tag];
+    setTagEdit({ id: tagEdit.id, tags });
+  };
+  const addNewTag = () => {
+    const t = newTag.trim();
+    if (!t || !tagEdit) return;
+    if (t.length > 8) { flash('标签最多8字'); return; }
+    if (!tagEdit.tags.includes(t)) setTagEdit({ id: tagEdit.id, tags: [...tagEdit.tags, t].slice(0, 10) });
+    setNewTag('');
+    if (!tagLib.includes(t)) setTagLib([...tagLib, t]);
+  };
+  const saveTags = async () => {
+    if (!tagEdit) return;
+    const r = await fetch(`/api/follows/${tagEdit.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tags: tagEdit.tags }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '标签保存失败'); return; }
+    setTagEdit(null); flash('标签已保存', true); loadFollows(); loadTagLib();
+  };
+  /** S49 打开线索档案 */
+  const openDetail = (f: Follow) => { setDetail(f); setNoteText(f.note || ''); };
+  const saveNote = async () => {
+    if (!detail) return;
+    const r = await fetch(`/api/follows/${detail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: noteText }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '纪要保存失败'); return; }
+    setDetail(r as Follow); flash('纪要已保存', true); loadFollows();
   };
   const batches: Follow[][] = [];
   (rows || []).forEach((f, i) => {
@@ -96,7 +134,7 @@ export default function Messages() {
 
   const followCols: ColumnsType<Follow> = [
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
-    { title: '对方', dataIndex: 'peer_nick', key: 'nick' },
+    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => <a onClick={() => openDetail(f)}>{v}</a> },
     { title: '状态', key: 'status', width: 120, render: (_, f) => <Select size="small" value={f.status} onChange={(v) => changeStatus(f.id, v)} style={{ width: '100%' }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} /> },
     { title: '成交', key: 'amt', width: 130, render: (_, f) => (
       f.status !== '已转化' ? <span className="num" style={{ color: '#A8A5A0' }}>—</span>
@@ -112,6 +150,28 @@ export default function Messages() {
       )
     ) },
     { title: '下次提醒', dataIndex: 'next_remind_at', key: 'remind', onCell: () => ({ className: 'num' }) },
+    { title: '标签', key: 'tags', width: 140, render: (_, f) => (
+      <Popconfirm
+        title="线索标签"
+        open={tagEdit?.id === f.id}
+        onOpenChange={(o) => { if (!o) { setTagEdit(null); setNewTag(''); } }}
+        description={
+          <div style={{ width: 250 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, minHeight: 26 }}>
+              {[...new Set([...tagLib, ...(f.tags || []), ...(tagEdit?.tags || [])])].map((t) => (
+                <Tag key={t} color={(tagEdit?.tags || f.tags || []).includes(t) ? 'processing' : undefined} style={{ cursor: 'pointer', marginInlineEnd: 0 }} onClick={() => toggleTagEdit(t)}>{t}</Tag>
+              ))}
+            </div>
+            <Input size="small" placeholder="新建标签，回车添加" value={newTag} onChange={(e) => setNewTag(e.target.value)} onPressEnter={addNewTag} maxLength={8} />
+          </div>
+        }
+        okText="保存" cancelText="关闭" onConfirm={saveTags}
+      >
+        <Button size="small" type="text" onClick={() => setTagEdit({ id: f.id, tags: [...(f.tags || [])] })} style={{ paddingInline: 0 }}>
+          {f.tags && f.tags.length ? <span style={{ color: '#1677FF' }}>{f.tags.join(' / ')}</span> : '+标签'}
+        </Button>
+      </Popconfirm>
+    ) },
   ];
 
   const ruleCols: ColumnsType<{ id: string; keyword: string; reply: string; enabled: boolean }> = [
@@ -162,7 +222,8 @@ export default function Messages() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <b>手动跟进台账</b>
               <span style={{ flex: 1 }} />
-              <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 120 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
+              <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
+              <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
             </div>
             <div className="num" style={{ fontSize: 12, color: '#6B6862', marginTop: 4 }}>每批{tasksConfig.followBatchSize}个 · 每{tasksConfig.groupFollowIntervalMin}分钟一批 · 默认{assistConfig.defaultRemindHour}:00提醒（纯展示，不自动发送）</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -172,7 +233,7 @@ export default function Messages() {
               <Input size="small" value={fsearch} onChange={(e) => setFsearch(e.target.value)} placeholder="搜对方昵称" style={{ width: 120 }} allowClear />
               <Button size="small" onClick={exportFollows}>导出CSV</Button>
             </div>
-            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={(rows || []).filter((f) => !fsearch.trim() || f.peer_nick.includes(fsearch.trim()))} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+            <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={(rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)))} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
           </div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16 }}>
@@ -187,6 +248,34 @@ export default function Messages() {
           </div>
           <Table size="small" pagination={false} style={{ marginTop: 10 }} columns={ruleCols} dataSource={rules} rowKey="id" locale={{ emptyText: '暂无规则' }} />
         </div>
+        {/* S49 线索档案抽屉：纪要 + 操作历史 + 档案信息 */}
+        <Drawer title={detail ? `线索档案 · ${detail.peer_nick}` : ''} placement="right" width={420} open={!!detail} onClose={() => setDetail(null)}>
+          {detail && (
+            <div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                <Tag color={detail.status === '已转化' ? 'success' : detail.status === '待回访' ? 'warning' : 'default'}>{detail.status}</Tag>
+                {(detail.tags || []).map((t) => <Tag key={t} color="processing">{t}</Tag>)}
+                {detail.amount != null && <Tag color="gold">成交 ¥{detail.amount.toLocaleString()}</Tag>}
+              </div>
+              <div style={{ fontSize: 13, color: '#6B6862', lineHeight: 2 }}>
+                <div>登记时间：{detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN', { hour12: false }) : '—'}</div>
+                <div>下次提醒：{detail.next_remind_at}</div>
+                <div>来源视频：{videos.find((v) => v.id === detail.source_video_id)?.title || detail.source_video_id}</div>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, margin: '16px 0 8px' }}>跟进纪要</div>
+              <Input.TextArea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={4} maxLength={500} placeholder="记录客户需求、报价、约跟进时间…" />
+              <Button size="small" type="primary" style={{ marginTop: 8 }} onClick={saveNote}>保存纪要</Button>
+              <div style={{ fontSize: 13, fontWeight: 600, margin: '18px 0 8px' }}>操作历史（最近{detail.history?.length || 0}条）</div>
+              {!detail.history?.length && <div style={{ fontSize: 12, color: '#A8A5A0' }}>暂无记录，改状态/记账/打标会自动留痕</div>}
+              {(detail.history || []).slice(0, 20).map((h, i) => (
+                <div key={i} style={{ fontSize: 12, padding: '6px 0', borderBottom: '1px solid #F0EEEA' }}>
+                  <span className="num" style={{ color: '#A8A5A0', marginRight: 8 }}>{new Date(h.at).toLocaleString('zh-CN', { hour12: false })}</span>
+                  {h.act}
+                </div>
+              ))}
+            </div>
+          )}
+        </Drawer>
       </div>
     </div>
   );
