@@ -21,6 +21,9 @@ export default function Dashboard() {
   const [allTrend, setAllTrend] = useState<Record<string, TrendPoint[]>>({});
   const [intents, setIntents] = useState<{ intent: string; n: number }[]>([]);
   const [topHigh, setTopHigh] = useState<CommentItem[]>([]);
+  const [allComments, setAllComments] = useState<CommentItem[]>([]);
+  const [followNicks, setFollowNicks] = useState<Set<string>>(new Set());
+  const [priceOn, setPriceOn] = useState(true);
   const [curl, setCurl] = useState('');
   const [csource, setCsource] = useState('manual');
   const [ckind, setCkind] = useState('note');
@@ -40,11 +43,14 @@ export default function Dashboard() {
     }).catch(() => setDerr(true));
     fetch('/api/comments?unread_only=0').then((r) => r.json()).then((d) => {
       const items = (d.items || []) as CommentItem[];
+      setAllComments(items);
       const m = new Map<string, number>();
       items.forEach((x) => m.set(x.intent, (m.get(x.intent) || 0) + 1));
       setIntents([...m.entries()].map(([intent, n]) => ({ intent, n })).sort((a, b) => b.n - a.n));
       setTopHigh(items.filter((x) => x.intent === '高意向').sort((a, b) => b.like_count - a.like_count).slice(0, 3));
     }).catch(() => {});
+    fetch('/api/follows').then((r) => r.json()).then((d) => setFollowNicks(new Set(((d.items || []) as { peer_nick: string }[]).map((f) => f.peer_nick)))).catch(() => {});
+    fetch('/api/settings').then((r) => r.json()).then((s) => setPriceOn(Array.isArray(s.price_list) && s.price_list.length > 0)).catch(() => {});
     loadComps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -146,6 +152,30 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+        {ov && videos.some((v) => v.id.startsWith('imp-')) && (() => {
+          const highUnfollowed = allComments.filter((c) => c.intent === '高意向' && !followNicks.has(c.user_nick)).length;
+          const unread = allComments.filter((c) => !c.is_read_local).length;
+          const tips: { t: string; d: string; btn: string; href: string }[] = [];
+          if (highUnfollowed > 0) tips.push({ t: `${highUnfollowed} 条高意向还没跟进`, d: '意向客户等越久越凉', btn: '去处理', href: '/comments?intent=' + encodeURIComponent('高意向') });
+          if (unread > 0) tips.push({ t: `${unread} 条未读评论`, d: '及时处理保持响应速度', btn: '去处理', href: '/comments' });
+          if (!priceOn) tips.push({ t: '还没配置价目表', d: '配好后报价话术自动带参考价，客户问价报得快', btn: '去配置', href: '/settings' });
+          if (tips.length === 0) return null;
+          return (
+            <div className="card" style={{ padding: 18, marginBottom: 16, borderLeft: '3px solid #1A1A18' }}>
+              <b>运营建议</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>按你当前数据实时计算</span>
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {tips.map((x) => (
+                  <div key={x.t} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, flexWrap: 'wrap' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 3, background: '#1A1A18', flexShrink: 0 }} />
+                    <b>{x.t}</b><span style={{ color: '#6B6862', fontSize: 12 }}>{x.d}</span>
+                    <span style={{ flex: 1 }} />
+                    <Button size="small" href={x.href}>{x.btn}</Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         {!ov ? (derr ? <div className="card" style={{ padding: 24, marginBottom: 16 }}>数据加载失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => { setDerr(false); reloadStats(); }}>重试</Button></div> : <div className="skel" style={{ height: 96 }}>loading</div>) : (
           <div style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
           {(() => {

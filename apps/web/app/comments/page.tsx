@@ -53,7 +53,9 @@ export default function Comments() {
   useEffect(() => {
     fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
     fetch('/api/settings').then((r) => r.json()).then((s) => { if (s?.service_name) setProduct(s.service_name); }).catch(() => {});
-    load();
+    // S46 URL深链（运营建议跳转带 ?intent= 高意向 等）
+    const urlIntent = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('intent') : null;
+    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent }); } else load();
     fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw)); }).catch(() => {});
     fetch('/api/scripts/templates?intent=普通').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {
       fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
