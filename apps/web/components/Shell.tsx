@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
+import { isDue } from '../lib/remind';
 import { ActivationGate } from './ActivationGate';
 
 /**
@@ -47,6 +48,35 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
   }, []);
+
+  // S44 跟进到期提醒：60s轮询待回访里到期的（今天/明天口语时间解析），系统通知提醒人去跟进——只提醒不自动操作
+  useEffect(() => {
+    if (!mounted) return;
+    const check = () => {
+      if (typeof window === 'undefined') return;
+      if (localStorage.getItem('notify_follow_due') !== '1') return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      fetch('/api/follows?status=待回访').then((r) => r.json()).then((d) => {
+        const today = new Date().toISOString().slice(0, 10);
+        let seen: string[] = [];
+        try {
+          const saved = JSON.parse(localStorage.getItem('follow_reminded') || '{}') as { date?: string; ids?: string[] };
+          if (saved.date === today) seen = saved.ids || [];
+        } catch { /* 损坏则当天重提醒，可接受 */ }
+        const due = ((d.items || []) as { id: string; peer_nick: string; next_remind_at: string }[])
+          .filter((f) => isDue(f.next_remind_at) && !seen.includes(f.id));
+        if (due.length === 0) return;
+        const names = due.map((x) => x.peer_nick);
+        try {
+          new Notification('跟进提醒', { body: `该联系 ${names.slice(0, 3).join('、')}${names.length > 3 ? ` 等${names.length}位` : ''} 了（台账·待回访）` });
+        } catch { /* 通知失败不打扰 */ }
+        localStorage.setItem('follow_reminded', JSON.stringify({ date: today, ids: [...seen, ...due.map((x) => x.id)] }));
+      }).catch(() => { /* 轮询自愈 */ });
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [mounted]);
   const switchAcc = async (id: string) => {
     const r = await fetch('/api/accounts/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).then((x) => x.json()).catch(() => null);
     if (r?.active_id) window.location.reload();

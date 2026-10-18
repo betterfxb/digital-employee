@@ -9,10 +9,11 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
+const { parseRemind, isDue } = require('./.tmp-crypto/remind.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -51,6 +52,14 @@ check(matchBind({ cpu: 'aaa', disk: 'xxx', mac: 'yyy' }, cur) === false, 'matchB
 check(matchBind({ cpu: 'aaa', disk: 'bbb', mac: '' }, cur) === true, 'matchBind 双因子绑定全命中放行');
 check(matchBind({ cpu: 'aaa', disk: '', mac: 'yyy' }, cur) === false, 'matchBind 双因子绑定不全拒绝');
 check(fingerprint({ cpu: '', disk: '', mac: '' }).cpu === '' && machineCode({ cpu: 'a', disk: 'b', mac: 'c' }) === 'a.b.c', 'machineId 空因子+机器码格式');
+
+// 5) S44 跟进提醒时间解析（口语今天/明天/后天 + ISO + 无法解析）
+const now = new Date('2026-10-18T12:00:00').getTime();
+const tmr = parseRemind('明天 18:00');
+check(tmr !== null && tmr.getTime() === new Date('2026-10-19T18:00:00').getTime(), 'remind 明天18点解析');
+check(isDue('今天 11:00', now) === true && isDue('明天 18:00', now) === false, 'remind 到期判定');
+check(isDue('2026-10-18T11:00:00', now) === true, 'remind ISO兼容');
+check(parseRemind('随便写的') === null && isDue(null) === false, 'remind 无法解析不提醒');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);
