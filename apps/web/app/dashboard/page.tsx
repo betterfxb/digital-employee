@@ -4,7 +4,7 @@ import { App, Button, Drawer, Input, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
-import type { Video, Competitor, Overview, TrendPoint, CommentItem } from '@/lib/types';
+import type { Video, Competitor, Overview, TrendPoint, CommentItem, Follow } from '@/lib/types';
 import { TaskBar } from '@/components/TaskBar';
 import { ImportWizard } from '@/components/ImportWizard';
 
@@ -23,6 +23,8 @@ export default function Dashboard() {
   const [topHigh, setTopHigh] = useState<CommentItem[]>([]);
   const [allComments, setAllComments] = useState<CommentItem[]>([]);
   const [followNicks, setFollowNicks] = useState<Set<string>>(new Set());
+  const [followRows, setFollowRows] = useState<Follow[]>([]);
+  const [hotHist, setHotHist] = useState<Record<string, Record<string, number>>>({});
   const [priceOn, setPriceOn] = useState(true);
   const [curl, setCurl] = useState('');
   const [csource, setCsource] = useState('manual');
@@ -49,7 +51,12 @@ export default function Dashboard() {
       setIntents([...m.entries()].map(([intent, n]) => ({ intent, n })).sort((a, b) => b.n - a.n));
       setTopHigh(items.filter((x) => x.intent === '高意向').sort((a, b) => b.like_count - a.like_count).slice(0, 3));
     }).catch(() => {});
-    fetch('/api/follows').then((r) => r.json()).then((d) => setFollowNicks(new Set(((d.items || []) as { peer_nick: string }[]).map((f) => f.peer_nick)))).catch(() => {});
+    fetch('/api/follows').then((r) => r.json()).then((d) => {
+      const items = (d.items || []) as Follow[];
+      setFollowRows(items);
+      setFollowNicks(new Set(items.map((f) => f.peer_nick)));
+    }).catch(() => {});
+    fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => setHotHist(d.history || {})).catch(() => {});
     fetch('/api/settings').then((r) => r.json()).then((s) => setPriceOn(Array.isArray(s.price_list) && s.price_list.length > 0)).catch(() => {});
     loadComps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,6 +221,71 @@ export default function Dashboard() {
               {topHigh.length === 0 && <div style={{ fontSize: 12, color: '#A8A5A0' }}>暂无</div>}
               {topHigh.map((c) => <div key={c.id} style={{ fontSize: 13, padding: '6px 0', borderBottom: '1px solid #F0EEEA' }}><b>{c.user_nick}</b> · {c.content.slice(0, 22)}{c.content.length > 22 ? '…' : ''} <span className="num" style={{ color: '#A8A5A0', fontSize: 12 }}>赞{c.like_count}</span></div>)}
             </div>
+          </div>
+        </div>
+        {/* S51 转化漏斗 + 热词趋势 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16, marginBottom: 16 }}>
+          <div className="card" style={{ padding: 18 }}>
+            <b>转化漏斗</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>曝光→成交全链路 · 本地真实数据</span>
+            {(() => {
+              const playSum = videos.reduce((a, v) => a + v.play, 0);
+              const engage = videos.reduce((a, v) => a + v.like + v.comment, 0);
+              const stages: { k: string; v: number }[] = [
+                { k: '曝光(播放)', v: playSum },
+                { k: '互动(赞+评)', v: engage },
+                { k: '高意向评论', v: allComments.filter((c) => c.intent === '高意向').length },
+                { k: '进入跟进', v: followRows.length },
+                { k: '成交', v: followRows.filter((f) => f.status === '已转化').length },
+              ];
+              const first = Math.max(stages[0].v, 1);
+              const w = (v: number) => (v <= 0 ? 0 : Math.max(6, Math.sqrt(v / first) * 100));
+              return stages.map((s, i) => (
+                <div key={s.k} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: i ? 8 : 14 }}>
+                  <span style={{ width: 84, fontSize: 12, color: '#6B6862', flexShrink: 0 }}>{s.k}</span>
+                  <div style={{ flex: 1, height: 22, background: '#F0EEEA', borderRadius: 3, minWidth: 0 }}>
+                    <div style={{ width: `${w(s.v)}%`, height: 22, background: i >= 3 ? '#1A1A18' : '#B5B0A8', borderRadius: 3, transition: 'width .3s' }} />
+                  </div>
+                  <span className="num" style={{ width: 76, fontSize: 13, fontWeight: 700, textAlign: 'right', flexShrink: 0 }}>{s.v.toLocaleString()}</span>
+                  <span className="num" style={{ width: 58, fontSize: 12, color: '#6B6862', textAlign: 'right', flexShrink: 0 }}>{i > 0 ? (stages[i - 1].v > 0 ? `${Math.round((s.v / stages[i - 1].v) * 100)}%` : '—') : ''}</span>
+                </div>
+              ));
+            })()}
+            <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 10 }}>漏斗按当前累计数据实时计算；级间百分比=本级/上一级</div>
+          </div>
+          <div className="card" style={{ padding: 18 }}>
+            <b>热词趋势</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>每日首次访问自动快照</span>
+            {(() => {
+              const dates = Object.keys(hotHist).sort();
+              if (dates.length === 0) return <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '20px 0', textAlign: 'center' }}>快照积累中，次日起显示每日变化</div>;
+              const lastDates = dates.slice(-4);
+              const agg = new Map<string, number>();
+              lastDates.forEach((d) => Object.entries(hotHist[d]).forEach(([k, n]) => agg.set(k, (agg.get(k) || 0) + n)));
+              const topKw = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k);
+              if (topKw.length === 0) return <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12, padding: '20px 0', textAlign: 'center' }}>暂无热词数据</div>;
+              return (
+                <div style={{ marginTop: 10, fontSize: 12 }}>
+                  <div style={{ display: 'flex', gap: 8, color: '#A8A5A0', paddingBottom: 4, borderBottom: '1px solid #F0EEEA' }}>
+                    <span style={{ width: 56 }}>关键词</span>
+                    {lastDates.map((d) => <span key={d} className="num" style={{ flex: 1, textAlign: 'right' }}>{d.slice(5)}</span>)}
+                  </div>
+                  {topKw.map((k) => {
+                    const vals = lastDates.map((d) => hotHist[d]?.[k] ?? null);
+                    return (
+                      <div key={k} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '1px solid #F0EEEA' }}>
+                        <span style={{ width: 56, fontWeight: 600 }}>{k}</span>
+                        {vals.map((v, i) => {
+                          const prev = i > 0 ? vals[i - 1] : null;
+                          const up = v != null && prev != null && v > prev;
+                          const down = v != null && prev != null && v < prev;
+                          return <span key={i} className="num" style={{ flex: 1, textAlign: 'right', color: v == null ? '#D8D5CF' : up ? '#B4443C' : down ? '#1677FF' : '#1A1A18', fontWeight: up ? 700 : 400 }}>{v == null ? '·' : `${v}${up ? '↑' : down ? '↓' : ''}`}</span>;
+                        })}
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>只记真实数据 · 保留30天 · ↑↓=与前一日对比</div>
+                </div>
+              );
+            })()}
           </div>
         </div>
         <div className="card">
