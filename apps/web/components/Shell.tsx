@@ -69,7 +69,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </nav>
         <div style={{ margin: 'auto 12px 12px', border: '1px solid #E8E6E1', borderRadius: 4, padding: 12, background: '#FCFBF9', fontSize: 12 }}>
           <b>升级蓝V后解锁</b><div style={{ color: '#6B6862', margin: '6px 0 10px' }}>私信自动同步 · 一键留资</div>
-          <Button size="small" href="/messages">查看指南</Button>
+          <Button size="small" href="/guide">查看指南</Button>
         </div>
       </aside>
       <div style={{ flex: 1, minWidth: 0 }}>

@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { App, Button, Input, Slider } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { App, Button, Input, Popconfirm, Slider } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 
@@ -43,6 +43,24 @@ export default function Settings() {
     setNpw(''); setCpw(''); setPwdAt(r.changed_at); message.success('密码已修改');
   };
 
+  // ── S37/S38 数据管理 ──
+  const restoreRef = useRef<HTMLInputElement>(null);
+  const doRestore = async (f?: File) => {
+    if (!f) return;
+    const text = await f.text().catch(() => '');
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { message.error('不是合法JSON备份文件'); return; }
+    const r = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '恢复失败'); return; }
+    message.success('恢复成功，界面即将刷新');
+    setTimeout(() => window.location.reload(), 1200);
+  };
+  const doClear = async () => {
+    const r = await fetch('/api/data/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: '清空' }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '清空失败'); return; }
+    message.success('业务数据已清空（授权与设置保留）');
+  };
+
   return (
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}><div><b style={{ fontSize: 15 }}>系统设置</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>调节即时预览，保存后持久化全局生效</div></div><div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}><Button size="small" type="primary" onClick={save}>保存全部</Button></div></div>
@@ -65,6 +83,18 @@ export default function Settings() {
               <Input.Password value={npw} onChange={(e) => setNpw(e.target.value)} placeholder="新密码" maxLength={32} />
               <Input.Password value={cpw} onChange={(e) => setCpw(e.target.value)} placeholder="确认新密码" maxLength={32} onPressEnter={changePwd} />
               <Button onClick={changePwd}>修改</Button>
+            </div>
+          </div>
+          <div className="card" style={{ padding: 18, marginTop: 16 }}>
+            <b>数据管理</b>
+            <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>备份=一个JSON文件（换电脑迁移+误删兜底）；清空只清业务数据（作品/评论/台账/话术），<b>授权与设置不动</b></div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Button href="/api/data/backup">下载备份</Button>
+              <Button onClick={() => restoreRef.current?.click()}>导入备份恢复</Button>
+              <Popconfirm title="清空全部业务数据？" description="作品/评论/跟进/回评/竞品/自定义话术将全部删除，不可撤销。建议先下载备份。" okText="确认清空" cancelText="取消" onConfirm={doClear}>
+                <Button danger>清空业务数据</Button>
+              </Popconfirm>
+              <input ref={restoreRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={(e) => { doRestore(e.target.files?.[0]); e.target.value = ''; }} />
             </div>
           </div>
         </div>

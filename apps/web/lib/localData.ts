@@ -25,6 +25,8 @@ interface LocalState {
   /** S25b 业务集合持久化（台账/回评/竞品/队列/设置/自定义话术/接待规则，重启不丢） */
   follows: unknown[]; replies: unknown[]; competitors: unknown[]; videoTasks: unknown[];
   settings: Record<string, unknown> | null; customScripts: unknown[]; replyRules: unknown[];
+  /** S37 清空标记：清空/恢复后示例种子永不复活（仅全新安装有示例） */
+  cleared_at?: string;
 }
 
 /** S30 数据目录外置（桌面端DATA_DIR指向%APPDATA%），默认兼容 cwd/data */
@@ -49,8 +51,11 @@ function hydrate() {
       if (raw.settings && typeof raw.settings === 'object') state.settings = raw.settings;
       if (Array.isArray(raw.customScripts)) state.customScripts = raw.customScripts;
       if (Array.isArray(raw.replyRules)) state.replyRules = raw.replyRules;
+      if (typeof raw.cleared_at === 'string') state.cleared_at = raw.cleared_at;
     }
   } catch { /* 文件损坏则忽略，保持内存态起跑 */ }
+  // S37 清空/恢复后示例种子不复活（先清种子再注文件数据；仅全新安装有示例）
+  if (state.cleared_at) { mockVideos.splice(0, mockVideos.length); mockComments.splice(0, mockComments.length); }
   state.accounts.forEach((a) => { if (!mockAccounts.some((x) => x.id === a.id)) mockAccounts.push(a); });
   state.videos.forEach((v) => { if (!mockVideos.some((x) => x.id === v.id)) mockVideos.push(v); });
   state.comments.forEach((c) => { if (!mockComments.some((x) => x.id === c.id)) mockComments.push(c); });
@@ -97,6 +102,68 @@ export function flushLocal() {
   const tmp = `${FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
   fs.renameSync(tmp, FILE);
+}
+
+/** S37 清空业务数据（保留账号授权/tokens/设置）：文件+内存数组同清，即时生效 */
+export function clearBusinessData() {
+  state.videos = []; state.comments = [];
+  state.follows = []; state.replies = []; state.competitors = []; state.videoTasks = [];
+  state.customScripts = []; state.replyRules = [];
+  state.cleared_at = new Date().toISOString();
+  mockVideos.splice(0, mockVideos.length);
+  mockComments.splice(0, mockComments.length);
+  const refs = collRefs;
+  if (refs) {
+    refs.follows.length = 0; refs.replies.length = 0; refs.competitors.length = 0;
+    refs.videoTasks.length = 0; refs.customScripts.length = 0; refs.replyRules.length = 0;
+  }
+  flushLocal();
+}
+
+/** S38 备份：全量业务数据JSON快照（含账号/授权引用/设置/台账） */
+export function backupAll(): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(state)) as Record<string, unknown>;
+}
+
+/** S38 恢复：校验后整体替换（文件+内存数组即时生效；tokens随文件走） */
+export function restoreBackup(data: Record<string, unknown>): { ok: boolean; error: string | null } {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, error: '备份格式不对' };
+  if (!['accounts', 'videos', 'comments'].every((k) => k in data)) return { ok: false, error: '缺少必要字段（不是本系统的备份文件）' };
+  const arrKeys = ['accounts', 'videos', 'comments', 'follows', 'replies', 'competitors', 'videoTasks', 'customScripts', 'replyRules'];
+  for (const k of arrKeys) if (k in data && !Array.isArray(data[k])) return { ok: false, error: `字段${k}格式不对` };
+  const arr = <T>(k: string): T[] => (Array.isArray(data[k]) ? (data[k] as T[]) : []);
+  state.accounts = arr<Account>('accounts');
+  state.videos = arr<Video>('videos');
+  state.comments = arr<CommentItem>('comments');
+  state.tokens = (data.tokens && typeof data.tokens === 'object' ? data.tokens : {}) as Record<string, StoredToken>;
+  state.follows = arr<unknown>('follows');
+  state.replies = arr<unknown>('replies');
+  state.competitors = arr<unknown>('competitors');
+  state.videoTasks = arr<unknown>('videoTasks');
+  state.customScripts = arr<unknown>('customScripts');
+  state.replyRules = arr<unknown>('replyRules');
+  state.settings = (data.settings && typeof data.settings === 'object' ? data.settings : null) as Record<string, unknown> | null;
+  state.cleared_at = typeof data.cleared_at === 'string' ? data.cleared_at : new Date().toISOString();
+  // 内存态同步（避免重启才能生效）
+  mockAccounts.splice(0, mockAccounts.length, ...state.accounts);
+  mockVideos.splice(0, mockVideos.length, ...state.videos);
+  mockComments.splice(0, mockComments.length, ...state.comments);
+  const refs = collRefs;
+  if (refs) {
+    refs.follows.length = 0; refs.follows.push(...(state.follows as { id: string }[]));
+    refs.replies.length = 0; refs.replies.push(...(state.replies as { id: string }[]));
+    refs.competitors.length = 0; refs.competitors.push(...(state.competitors as { id: string }[]));
+    refs.videoTasks.length = 0; refs.videoTasks.push(...(state.videoTasks as { id: string }[]));
+    refs.customScripts.length = 0; refs.customScripts.push(...(state.customScripts as { id: string }[]));
+    refs.replyRules.length = 0; refs.replyRules.push(...(state.replyRules as { id: string }[]));
+    if (state.settings) {
+      const s = refs.settings as Record<string, unknown>;
+      Object.keys(s).forEach((k) => { delete s[k]; });
+      Object.assign(s, state.settings);
+    }
+  }
+  flushLocal();
+  return { ok: true, error: null };
 }
 
 export function rememberAccount(a: Account) {

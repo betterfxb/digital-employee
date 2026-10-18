@@ -109,6 +109,14 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const cs = await fetch(base + '/api/auth/douyin/mock-consent?state=nope', { redirect: 'manual' });
     pass(cs.status === 410, 'S31 确认页过期state 410');
   } catch (e) { pass(false, 'S31 qr+popup flow', ` ${e.message}`); }
+  // S37/S38 数据管理：backup下载结构 + clear确认词防线
+  try {
+    const bk = await fetch(base + '/api/data/backup');
+    const bjt = bk.json().catch(() => null);
+    pass(bk.status === 200 && (bk.headers.get('content-disposition') || '').includes('attachment') && !!(await bjt).accounts, 'S38 backup下载');
+    const cl = await post('/api/data/clear', {});
+    pass(cl.s === 400 && cl.j.code === 'FATAL', 'S37 clear确认防线');
+  } catch (e) { pass(false, 'S37/S38 data mgmt', ` ${e.message}`); }
   // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
   try {
     const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });
