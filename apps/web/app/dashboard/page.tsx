@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Drawer, Input, Popconfirm, Select, Table } from 'antd';
+import { App, Button, Drawer, Input, Popconfirm, Segmented, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
@@ -31,6 +31,13 @@ export default function Dashboard() {
   /** S54 分版本能力（null=未加载按可用渲染防闪） */
   const [feats, setFeats] = useState<string[] | null>(null);
   const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
+  /** S63 指标口径：当前账号/全部账号汇总 */
+  const [scope, setScope] = useState<'active' | 'all'>('active');
+  const [ovAll, setOvAll] = useState<{ play: number; like: number; comment: number; share: number; note: string; accounts: { id: string; nick: string; videos: number; play: number; like: number }[] } | null>(null);
+  const switchScope = (v: 'active' | 'all') => {
+    setScope(v);
+    if (v === 'all' && !ovAll) fetch('/api/stats/overview?all=1').then((r) => r.json()).then(setOvAll).catch(() => {});
+  };
   const [curl, setCurl] = useState('');
   const [csource, setCsource] = useState('manual');
   const [ckind, setCkind] = useState('note');
@@ -179,8 +186,12 @@ export default function Dashboard() {
   return (
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1', display: 'flex', alignItems: 'center' }}>
-        <div><b style={{ fontSize: 15 }}>数据看板</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>{ov?.note || '昨日数据・今晨6点更新'}</div></div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>{syncMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{syncMsg}</span>}<Button size="small" onClick={sync} disabled={cool > 0}>{cool > 0 ? `${cool}s后可同步` : '手动同步'}</Button></div>
+        <div><b style={{ fontSize: 15 }}>数据看板</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>{scope === 'all' ? (ovAll?.note || '全部账号汇总加载中…') : (ov?.note || '昨日数据・今晨6点更新')}</div></div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Segmented size="small" options={['当前账号', '全部账号']} value={scope === 'all' ? '全部账号' : '当前账号'} onChange={(v) => switchScope(v === '全部账号' ? 'all' : 'active')} />
+          {syncMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{syncMsg}</span>}
+          <Button size="small" onClick={sync} disabled={cool > 0}>{cool > 0 ? `${cool}s后可同步` : '手动同步'}</Button>
+        </div>
       </div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
         <TaskBar />
@@ -230,10 +241,12 @@ export default function Dashboard() {
         {!ov ? (derr ? <div className="card" style={{ padding: 24, marginBottom: 16 }}>数据加载失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => { setDerr(false); reloadStats(); }}>重试</Button></div> : <div className="skel" style={{ height: 96 }}>loading</div>) : (
           <div style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
           {(() => {
-            const tp = videos.reduce((a, v) => a + v.play, 0);
-            const tl = videos.reduce((a, v) => a + v.like, 0);
-            const ts = videos.reduce((a, v) => a + v.share, 0);
-            const cells: [string, string][] = [['总播放', ov.play.toLocaleString()], ['总点赞', ov.like.toLocaleString()], ['总评论', ov.comment.toLocaleString()], ['转发总数', ts.toLocaleString()], ['平均点赞率', tp ? `${(tl / tp * 100).toFixed(1)}%` : '—']];
+            const isAll = scope === 'all' && !!ovAll;
+            const cur = (scope === 'all' && ovAll) ? ovAll : ov;
+            const tp = isAll ? cur.play : videos.reduce((a, v) => a + v.play, 0);
+            const tl = isAll ? cur.like : videos.reduce((a, v) => a + v.like, 0);
+            const ts = scope === 'all' ? (ovAll?.share ?? 0) : videos.reduce((a, v) => a + v.share, 0);
+            const cells: [string, string][] = [['总播放', cur.play.toLocaleString()], ['总点赞', cur.like.toLocaleString()], ['总评论', cur.comment.toLocaleString()], ['转发总数', ts.toLocaleString()], ['平均点赞率', tp ? `${(tl / tp * 100).toFixed(1)}%` : '—']];
             return cells.map(([k, v], i) => (
               <div key={k} style={{ flex: 1, padding: '16px 20px', borderLeft: i ? '1px solid #E8E6E1' : 'none', minWidth: 0 }}>
                 <div style={{ fontSize: 12, color: '#6B6862' }}>{k}</div>
@@ -267,6 +280,16 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        {/* S63 全部账号明细条（口径切到"全部账号"时展示每账号贡献） */}
+        {scope === 'all' && ovAll && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            {ovAll.accounts.map((a) => (
+              <span key={a.id} style={{ border: '1px solid #E8E6E1', background: '#FCFBF9', borderRadius: 12, padding: '3px 10px', fontSize: 12 }}>
+                <b>{a.nick}</b> · 播{a.play.toLocaleString()} · 赞{a.like.toLocaleString()} · {a.videos}条作品
+              </span>
+            ))}
+          </div>
+        )}
         {/* S51 转化漏斗 + 热词趋势（S54 基础版锁定为专业版占位） */}
         {!can('analytics') ? (
           <div style={{ marginBottom: 16 }}><ProLock feature="转化漏斗 + 热词趋势" desc="全链路转化分析与关键词每日趋势" /></div>

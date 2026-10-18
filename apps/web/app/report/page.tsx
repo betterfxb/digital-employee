@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Segmented } from 'antd';
+import { App, Button, Modal, Segmented } from 'antd';
 import { downloadCsv } from '@/lib/csv';
 import { buildReport, type Report } from '@/lib/report';
 import { trendSeries, type BizSnapshot } from '@/lib/bizTrend';
@@ -14,6 +14,8 @@ export default function ReportPage() {
   const [err, setErr] = useState(false);
   /** S55 业务趋势：打开报告页即记当日快照并取回历史 */
   const [hist, setHist] = useState<Record<string, Partial<BizSnapshot>>>({});
+  /** S62 分享图（canvas 生成，微信可发的日报长图） */
+  const [shareImg, setShareImg] = useState<string | null>(null);
 
   const snap = () => fetch('/api/report/snapshot', { method: 'POST' }).then((r) => r.json()).then((d) => setHist(d.history || {})).catch(() => {});
 
@@ -43,6 +45,71 @@ export default function ReportPage() {
     downloadCsv(`${kind === 'daily' ? '日报' : '周报'}指标.csv`, ['指标', '数值'], report.metrics.map((m) => [m.label, m.value]));
   };
 
+  /** S62 生成分享图：750宽微信友好长图（标题带+指标宫格+文字总结+行动建议+页脚） */
+  const genShare = () => {
+    if (!report) return;
+    const W = 750;
+    const cv = document.createElement('canvas');
+    const ctx = cv.getContext('2d');
+    if (!ctx) { message.error('当前环境不支持生成图片'); return; }
+    const FONT = '"Microsoft YaHei", "PingFang SC", sans-serif';
+    const wrap = (text: string, maxWidth: number): string[] => {
+      const lines: string[] = [];
+      let line = '';
+      for (const ch of text) {
+        if (ctx.measureText(line + ch).width > maxWidth) { lines.push(line); line = ch; } else line += ch;
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+    const metrics = report.metrics.slice(0, 10);
+    const metricRows = Math.ceil(metrics.length / 2);
+    const summaryLines = wrap(report.summary, W - 100);
+    const H = 160 + metricRows * 78 + 60 + summaryLines.length * 32 + report.suggestions.length * 62 + 120;
+    cv.width = W; cv.height = H;
+    // 底色
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+    // 头部
+    ctx.fillStyle = '#1A1A18'; ctx.fillRect(0, 0, W, 120);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = `bold 34px ${FONT}`;
+    ctx.fillText(`获客中台 · ${kind === 'daily' ? '经营日报' : '经营周报'}`, 40, 58);
+    ctx.fillStyle = '#C9C4BC'; ctx.font = `17px ${FONT}`;
+    ctx.fillText(new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }), 40, 94);
+    // 指标宫格
+    let y = 176;
+    ctx.fillStyle = '#6B6862'; ctx.font = `18px ${FONT}`;
+    ctx.fillText('核心指标', 40, y); y += 18;
+    metrics.forEach((m, i) => {
+      const x = 40 + (i % 2) * 355;
+      const my = y + Math.floor(i / 2) * 78;
+      ctx.fillStyle = '#8A8580'; ctx.font = `17px ${FONT}`;
+      ctx.fillText(m.label, x, my + 20);
+      ctx.fillStyle = '#1A1A18'; ctx.font = `bold 30px ${FONT}`;
+      ctx.fillText(m.value, x, my + 58);
+    });
+    y += metricRows * 78 + 30;
+    // 文字总结
+    ctx.fillStyle = '#FCFBF9'; ctx.fillRect(40, y, W - 80, summaryLines.length * 32 + 56);
+    ctx.fillStyle = '#6B6862'; ctx.font = `17px ${FONT}`;
+    ctx.fillText('文字总结', 60, y + 34);
+    ctx.fillStyle = '#1A1A18'; ctx.font = `19px ${FONT}`;
+    summaryLines.forEach((ln, i) => ctx.fillText(ln, 60, y + 72 + i * 32));
+    y += summaryLines.length * 32 + 86;
+    // 行动建议
+    ctx.fillStyle = '#6B6862'; ctx.font = `17px ${FONT}`;
+    ctx.fillText('行动建议', 40, y); y += 34;
+    report.suggestions.slice(0, 4).forEach((s) => {
+      ctx.fillStyle = '#1A1A18'; ctx.beginPath(); ctx.arc(48, y - 6, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#33312D'; ctx.font = `18px ${FONT}`;
+      wrap(s, W - 110).forEach((ln, i) => { ctx.fillText(ln, 64, y + i * 28); y += 28; });
+      y += 26;
+    });
+    // 页脚
+    ctx.fillStyle = '#A8A5A0'; ctx.font = `15px ${FONT}`;
+    ctx.fillText('本报告由获客中台基于本机真实数据生成', 40, H - 34);
+    setShareImg(cv.toDataURL('image/png'));
+  };
+
   const dateLabel = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   return (
     <div>
@@ -54,6 +121,7 @@ export default function ReportPage() {
           <span style={{ flex: 1 }} />
           <Button size="small" onClick={copySummary} disabled={!report}>复制总结</Button>
           <Button size="small" onClick={exportReport} disabled={!report}>导出指标CSV</Button>
+          <Button size="small" type="primary" onClick={genShare} disabled={!report}>生成分享图</Button>
         </div>
         {err && <div className="card" style={{ padding: 20 }}>报告生成失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => build(kind)}>重试</Button></div>}
         {!report && !err && <div className="skel" style={{ height: 240 }}>loading</div>}
@@ -110,6 +178,18 @@ export default function ReportPage() {
             </div>
           </>
         )}
+        {/* S62 分享图预览与下载 */}
+        <Modal title="分享图预览（可直接保存发微信）" open={!!shareImg} onCancel={() => setShareImg(null)} footer={null} width={460}>
+          {shareImg && (
+            <div style={{ textAlign: 'center' }}>
+              <img src={shareImg} alt="经营报告分享图" style={{ width: '100%', border: '1px solid #E8E6E1' }} />
+              <a href={shareImg} download={`${kind === 'daily' ? '经营日报' : '经营周报'}-${new Date().toISOString().slice(0, 10)}.png`}>
+                <Button type="primary" style={{ marginTop: 12 }}>下载图片</Button>
+              </a>
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>手机端可长按图片保存 · 图中数据均为本机真实聚合</div>
+            </div>
+          )}
+        </Modal>
       </div>
     </div>
   );
