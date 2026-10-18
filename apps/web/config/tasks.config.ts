@@ -24,6 +24,8 @@ export const tasksConfig = {
   quietHours: { start: 22, end: 8 } as { start: number; end: number },
   /** 每日同步上限(次) | 默认：24 | 范围：1–48 | 联动：超限按钮置灰+倒计时 */
   dailySyncCap: 24,
+  /** S74 评论自动回复每日上限（拟人节奏：不群发） */
+  autoReplyDailyCap: 12,
   /** 失败重试次数 | 默认：3 | 范围：0–5 | 联动：仅RETRYABLE错误重试，指数退避 */
   maxRetries: 3,
   /** 风控熔断开关 | 默认：true | 联动：触发后自动暂停commentPoll并通栏告警 */

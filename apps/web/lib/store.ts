@@ -50,6 +50,8 @@ export const settings = {
   password_changed_at: null as string | null,
   /** S69 访问密码scrypt哈希（null=未设置不锁；原文永不落盘） */
   password_hash: null as string | null,
+  /** S74 评论自动回复总开关（三重门之一，默认关） */
+  auto_reply_enabled: false as boolean,
   /** S45 价目表（档位→价格，话术{price}填充源） */
   price_list: [] as { tier: string; price: string }[],
 };

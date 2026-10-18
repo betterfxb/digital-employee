@@ -9,17 +9,18 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
-const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
-const vault = require('./.tmp-crypto/tokenVault.js');
-const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
-const { parseRemind, isDue, shouldNotifyReport, todayKey, daysUntilExpiry } = require('./.tmp-crypto/remind.js');
-const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
-const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
-const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
-const { trendSeries } = require('./.tmp-crypto/bizTrend.js');
-const { encryptBackup, decryptBackup } = require('./.tmp-crypto/backupCrypto.js');
-const { hashPassword, verifyPassword } = require('./.tmp-crypto/accessPw.js');
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
+const vault = require('./.tmp-crypto/lib/tokenVault.js');
+const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
+const { parseRemind, isDue, shouldNotifyReport, todayKey, daysUntilExpiry } = require('./.tmp-crypto/lib/remind.js');
+const { leadScore, scoreLevel } = require('./.tmp-crypto/lib/leadScore.js');
+const { parseCommentTime, buildReport } = require('./.tmp-crypto/lib/report.js');
+const { hasFeature, TIERS } = require('./.tmp-crypto/lib/tiers.js');
+const { trendSeries } = require('./.tmp-crypto/lib/bizTrend.js');
+const { encryptBackup, decryptBackup } = require('./.tmp-crypto/lib/backupCrypto.js');
+const { hashPassword, verifyPassword } = require('./.tmp-crypto/lib/accessPw.js');
+const { nextGapMs, replyGate } = require('./.tmp-crypto/lib/autoReply.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -120,6 +121,11 @@ const pwHash = hashPassword('secret-123');
 check(pwHash.startsWith('s1$') && !pwHash.includes('secret-123'), 'apw 哈希格式且不含原文');
 check(verifyPassword('secret-123', pwHash) === true && verifyPassword('wrong-pw', pwHash) === false, 'apw 口令对通过错拒绝');
 check(verifyPassword('x', null) === false && verifyPassword('x', 'garbage-format') === false, 'apw 空与坏格式一律拒绝');
+
+// 14) S74 自动回复节奏与三重门（纯函数）
+check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');
+check(replyGate('mock', false, '').gate.includes('live') && replyGate('live', false, 'https://x').gate.includes('能力'), 'areply 通道门先于能力门');
+check(replyGate('live', true, '').gate.includes('能力') && replyGate('live', true, 'https://x').ready === true, 'areply 能力空拒与三门就绪');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

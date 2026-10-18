@@ -17,6 +17,12 @@ export const douyinConfig = {
   /** S26 数据拉取端点（需video.data等能力授权；联调时以官方文档复核为准） */
   videoListUrl: 'https://open.douyin.com/api/douyin/v1/video/list/',
   commentListUrl: 'https://open.douyin.com/api/douyin/v1/video/comment/list/',
+  /**
+   * S74 官方「评论回复」自动化通道（红线三重门之一）：
+   * 能力审核通过 → DOUYIN_COMMENT_REPLY=1 且填入官方端点（联调复核，未确认前留空=执行器恒不外发）
+   */
+  commentReplyEnabled: process.env.DOUUYIN_COMMENT_REPLY === '1',
+  commentReplyUrl: process.env.DOUYIN_COMMENT_REPLY_URL || '',
   /** 授权状态一次性有效窗口(毫秒) */
   stateTtlMs: 10 * 60 * 1000,
   /** mock模式默认昵称（授权页可输入自定义） */

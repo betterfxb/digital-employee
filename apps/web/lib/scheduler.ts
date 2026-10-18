@@ -7,6 +7,7 @@ import { syncConfig } from '@/config/sync.config';
 import { tasksConfig } from '@/config/tasks.config';
 import { getRepos } from './repo';
 import { runLiveSync, liveSyncEnabled } from './liveSync';
+import { autoReplyTick } from './autoReply';
 
 export interface SchedulerStatus {
   enabled: boolean;
@@ -111,6 +112,8 @@ async function tick(): Promise<void> {
   const s = ensure();
   const st = s.state;
   st.lastTickAt = new Date().toISOString();
+  // S74 评论自动回复独立心跳（冷却/上限/静默自判，与同步开关和熔断无关）
+  try { autoReplyTick(); } catch { /* 执行器异常不拖垮调度 */ }
   if (!syncConfig.autoSyncEnabled || st.fused) return;
 
   const repos = getRepos();

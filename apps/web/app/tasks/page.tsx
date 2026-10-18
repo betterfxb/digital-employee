@@ -9,6 +9,8 @@ interface SchedStatus {
   enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: string | null;
   todayRunCount: number; nextInSec: number | null; failStreak: number; fused: boolean; minIntervalMin: number;
   history?: { at: string; trigger: string; ok: boolean; detail: string }[];
+  /** S74 自动回复执行器 */
+  auto_reply?: { enabled: boolean; ready: boolean; gate: string; sentToday: number; cap: number; nextInSec: number | null; log: { at: string; nick: string; text: string; via: string; status: string; note: string }[] };
 }
 
 /** S12a 任务中心：同步类任务队列（编号/对象/状态/上次执行/启停），只管同步节奏，不做自动执行 */
@@ -88,6 +90,14 @@ export default function Tasks() {
     const v = !reportNotify;
     setReportNotify(v);
     if (typeof window !== 'undefined') localStorage.setItem('notify_report', v ? '1' : '0');
+  };
+  /** S74 自动回复总开关（服务端settings持久化，三重门之一） */
+  const toggleAutoReply = async (v: boolean) => {
+    const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto_reply_enabled: v }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '开关保存失败'); return; }
+    loadSched();
+    if (v) message.success('已开启：通道就绪后按拟人节奏自动执行（当前会先开始自动起草）');
+    else message.success('已关闭自动回复');
   };
 
   const taskCols: ColumnsType<TaskItem> = [
@@ -175,6 +185,38 @@ export default function Tasks() {
             <span style={{ fontSize: 13, flex: 1 }}>日报提醒<span style={{ fontSize: 11, color: '#A8A5A0', marginLeft: 6 }}>每天9点提示看经营报告（页面开着时）</span></span>
             <Switch checked={reportNotify} onChange={toggleReportNotify} checkedChildren="已开启" unCheckedChildren="关闭" />
           </div>
+        </div>
+        <div className="card" style={{ padding: 16, marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <b>评论自动回复</b>
+            {!sched?.auto_reply ? <Tag style={{ marginLeft: 0 }}>…</Tag>
+              : sched.auto_reply.ready && sched.auto_reply.enabled ? <Tag color="success">运行中</Tag>
+              : sched.auto_reply.enabled ? <Tag color="warning">{sched.auto_reply.gate}</Tag>
+              : <Tag>未开启</Tag>}
+          </div>
+          <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px', lineHeight: 1.8 }}>
+            规则命中优先用<b>接待规则</b>文案，否则自动起草话术；<b>live通道 + 官方评论回复能力 + 本开关</b>三门齐备才真发送。
+            节奏：随机60-240秒/条 · 每日≤{sched?.auto_reply?.cap ?? 12}条 · 夜间22-8静默——像人，但只在平台给的通道里像。
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+            <span style={{ fontSize: 13, flex: 1 }}>
+              自动回复总开关
+              {sched?.auto_reply && sched.auto_reply.enabled && !sched.auto_reply.ready && <span style={{ fontSize: 11, color: '#8A6D1F', marginLeft: 6 }}>已开启 · {sched.auto_reply.gate}后自动生效</span>}
+            </span>
+            <Switch checked={sched?.auto_reply?.enabled ?? false} onChange={toggleAutoReply} checkedChildren="已开启" unCheckedChildren="关闭" />
+          </div>
+          {sched?.auto_reply && (
+            <div className="num" style={{ fontSize: 12, color: '#6B6862', marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span>今日已自动发送 {sched.auto_reply.sentToday}/{sched.auto_reply.cap}{sched.auto_reply.nextInSec !== null && sched.auto_reply.nextInSec > 0 ? ` · 下次检查 ${sched.auto_reply.nextInSec}s 后` : ''}</span>
+              {sched.auto_reply.log.length === 0 && <span style={{ color: '#A8A5A0' }}>尚无执行记录（开关打开后，收到新评论即开始自动起草）</span>}
+              {sched.auto_reply.log.map((l, i) => (
+                <span key={i} style={{ color: l.status === 'sent' ? '#1A1A18' : '#8A6D1F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {new Date(l.at).toLocaleString('zh-CN', { hour12: false }).slice(5)} · {l.status === 'sent' ? '已发送' : '已起草待人工'} · {l.via} · {l.nick}：{l.text.slice(0, 24)}…（{l.note}）
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>私信自动回复：等蓝V与IM能力审核（同架构预留，开通后并入本卡）</div>
         </div>
         <div className="card" style={{ padding: 16, marginTop: 16 }}>
           <b>调度与风控</b>

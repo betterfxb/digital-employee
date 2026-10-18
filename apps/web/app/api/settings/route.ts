@@ -35,6 +35,7 @@ export async function PATCH(req: Request) {
   if (body.theme_color !== undefined) {
     if (!settingsConfig.themePresets.some((t) => t.value === body.theme_color)) return fail('FATAL', '主题色不在候选内');
   }
+  if (body.auto_reply_enabled !== undefined && typeof body.auto_reply_enabled !== 'boolean') return fail('FATAL', 'auto_reply_enabled需为布尔');
   if (body.price_list !== undefined) {
     const arr = body.price_list;
     if (!Array.isArray(arr) || arr.length > 30) return fail('FATAL', '价目表需为不超过30行的数组');
@@ -44,10 +45,11 @@ export async function PATCH(req: Request) {
       }
     }
   }
-  const patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown } = {};
+  const patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean } = {};
   if (body.service_name !== undefined) patch.service_name = String(body.service_name).trim();
   if (body.font_size !== undefined) patch.font_size = Number(body.font_size);
   if (body.theme_color !== undefined) patch.theme_color = body.theme_color;
   if (body.price_list !== undefined) patch.price_list = (body.price_list as { tier: string; price: string }[]).map((r) => ({ tier: r.tier.trim(), price: r.price.trim() }));
+  if (body.auto_reply_enabled !== undefined) patch.auto_reply_enabled = body.auto_reply_enabled;
   return ok(repos.settings.update(patch));
 }

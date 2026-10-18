@@ -149,6 +149,12 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const f2 = await post('/api/follows', { peer_nick: '去重测试员', source_video_id: 'v2' });
     pass(f1.s === 200 && f2.s === 200 && f2.j.deduped === true && f2.j.id === f1.j.id, 'S66 跟进去重防呆');
   } catch (e) { pass(false, 'S66 去重', ` ${e.message}`); }
+  // S74 自动回复执行器状态（tasks/status含auto_reply三门与日志结构）
+  try {
+    const ts2 = await get('/api/tasks/status');
+    const ar = ts2.j.auto_reply;
+    pass(ts2.s === 200 && ar && typeof ar.enabled === 'boolean' && typeof ar.gate === 'string' && Array.isArray(ar.log) && ar.cap > 0, 'S74 自动回复状态');
+  } catch (e) { pass(false, 'S74 自动回复状态', ` ${e.message}`); }
   // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
   try {
     const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });
