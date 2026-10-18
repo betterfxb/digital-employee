@@ -31,6 +31,10 @@ export default function Messages() {
   const [rules, setRules] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
   const [rkw, setRkw] = useState('');
   const [rrp, setRrp] = useState('');
+  /** S52 话术库增强 */
+  const [sCat, setSCat] = useState('全部');
+  const [sQw, setSQw] = useState('');
+  const [scatNew, setScatNew] = useState('自定义');
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
   const loadFollows = (st = fstatus) => fetch(`/api/follows${st ? `?status=${encodeURIComponent(st)}` : ''}`).then((r) => r.json()).then((d) => setRows(d.items || [])).catch(() => { setRows([]); flash('台账加载失败，请刷新重试'); });
   /** S48 标签库（已用标签聚合） */
@@ -105,10 +109,15 @@ export default function Messages() {
   };
   const addScript = async () => {
     if (!stitle.trim() || !scontent.trim()) { flash('请填写标题与内容'); return; }
-    const r = await fetch('/api/scripts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: stitle.trim(), content: scontent.trim() }) }).then((x) => x.json()).catch(() => null);
+    const r = await fetch('/api/scripts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: stitle.trim(), content: scontent.trim(), category: scatNew }) }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { flash(r?.message || '添加失败'); return; }
     setStitle(''); setScontent('');
     fetch('/api/scripts').then((x) => x.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
+    flash('已添加', true);
+  };
+  /** S52 复制话术 */
+  const copyText = async (t: string) => {
+    try { await navigator.clipboard.writeText(t); flash('已复制', true); } catch { flash('复制失败，请手动复制'); }
   };
   const delScript = async (id: string) => {
     const r = await fetch(`/api/scripts/${id}`, { method: 'DELETE' }).then((x) => x.json()).catch(() => null);
@@ -211,13 +220,38 @@ export default function Messages() {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <div className="card" style={{ padding: 16, flex: 1 }}>
-            <b>话术库</b><div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 4 }}>内置3条＋自定义（删除仅删自定义）</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <b>话术库</b>
+              <span style={{ fontSize: 11, color: '#A8A5A0' }}>支持{'{nick}'}{'{product}'}变量</span>
+              <span style={{ flex: 1 }} />
+              <Input size="small" value={sQw} onChange={(e) => setSQw(e.target.value)} placeholder="搜索话术" style={{ width: 120 }} allowClear />
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              {['全部', ...new Set(scripts.map((s) => s.category))].map((c) => (
+                <Button key={c} size="small" type={sCat === c ? 'primary' : 'default'} onClick={() => setSCat(c)}>{c}</Button>
+              ))}
+            </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <Select size="small" value={scatNew} onChange={setScatNew} style={{ width: 90 }} options={['自定义', '欢迎语', '报价', '留资引导'].map((c) => ({ value: c, label: c }))} />
               <Input size="small" value={stitle} onChange={(e) => setStitle(e.target.value)} placeholder="标题" style={{ width: 90 }} />
               <Input size="small" value={scontent} onChange={(e) => setScontent(e.target.value)} placeholder="话术内容" onPressEnter={addScript} />
               <Button size="small" type="primary" onClick={addScript}>添加</Button>
             </div>
-            {scripts.map((s) => <div key={s.id} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '10px 12px', marginTop: 10 }}>{s.content}<div style={{ display: 'flex', gap: 6, marginTop: 6 }}>{!['s1', 's2', 's3'].includes(s.id) && <Button size="small" type="text" onClick={() => delScript(s.id)}>删除</Button>}</div></div>)}</div>
+            {(() => {
+              const filtered = scripts.filter((s) => (sCat === '全部' || s.category === sCat) && (!sQw.trim() || s.title.includes(sQw.trim()) || s.content.includes(sQw.trim())));
+              if (filtered.length === 0) return <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12 }}>无匹配话术，换个分类或搜索词试试</div>;
+              return filtered.map((s) => (
+                <div key={s.id} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '10px 12px', marginTop: 10 }}>
+                  <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}><Tag style={{ marginInlineEnd: 6 }}>{s.category}</Tag>{s.title}</div>
+                  {s.content}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <Button size="small" type="text" style={{ paddingInline: 0 }} onClick={() => copyText(s.content)}>复制</Button>
+                    {!['s1', 's2', 's3'].includes(s.id) && <Button size="small" type="text" danger onClick={() => delScript(s.id)}>删除</Button>}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
           <div className="card" style={{ padding: 16, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <b>手动跟进台账</b>
