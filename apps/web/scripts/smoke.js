@@ -117,6 +117,16 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const cl = await post('/api/data/clear', {});
     pass(cl.s === 400 && cl.j.code === 'FATAL', 'S37 clear确认防线');
   } catch (e) { pass(false, 'S37/S38 data mgmt', ` ${e.message}`); }
+  // S53 竞品记录更新：非法值拒 + 变化留历史
+  try {
+    const cps = await get('/api/competitors');
+    const cp = cps.j.items[0];
+    if (!cp) throw new Error('无竞品数据');
+    const patchCp = (body) => fetch(base + `/api/competitors/${cp.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+    const bad = await patchCp({ play: -1 });
+    const upd = await patchCp({ remark: 'S53冒烟备注' });
+    pass(bad.code === 'FATAL' && upd.remark === 'S53冒烟备注' && Array.isArray(upd.history) && upd.history.length >= 1, 'S53 竞品记录留历史+非法拒');
+  } catch (e) { pass(false, 'S53 竞品记录', ` ${e.message}`); }
   // S23 预真机闭环：授权→回调绑定→真实数据导入→意图分类→切回（全部mock占位密钥）
   try {
     const a1 = await fetch(base + '/api/auth/douyin/authorize?nick=' + encodeURIComponent('冒烟绑定'), { redirect: 'manual' });

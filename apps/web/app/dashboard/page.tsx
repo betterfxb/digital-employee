@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Drawer, Input, Select, Table } from 'antd';
+import { App, Button, Drawer, Input, Popconfirm, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
@@ -32,6 +32,9 @@ export default function Dashboard() {
   const KINDS: [string, string][] = [['note', '笔记'], ['author', '作者'], ['comment', '评论'], ['user', '用户']];
   const [cmsg, setCmsg] = useState('');
   const [wiz, setWiz] = useState(false);
+  /** S53 竞品记录 */
+  const [cpEdit, setCpEdit] = useState<{ id: string; play: string; like: string } | null>(null);
+  const [cpDetail, setCpDetail] = useState<Competitor | null>(null);
 
   const loadComps = () => fetch('/api/competitors').then((r) => r.json()).then((d) => setComps(d.items || [])).catch(() => {});
 
@@ -101,6 +104,14 @@ export default function Dashboard() {
     downloadCsv('作品数据.csv', ['标题', '发布时间', '播放', '点赞', '评论', '转发'], videos.map((v) => [v.title, v.publish_time, v.play, v.like, v.comment, v.share]));
   };
 
+  /** S53 记录竞品最新数据（有变化自动留历史） */
+  const saveCp = async () => {
+    if (!cpEdit) return;
+    const r = await fetch(`/api/competitors/${cpEdit.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ play: Number(cpEdit.play) || 0, like: Number(cpEdit.like) || 0 }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '记录失败'); return; }
+    setCpEdit(null); message.success('已记录，变化已留档'); loadComps();
+  };
+
   const spark = (rows: TrendPoint[]) => {
     const max = Math.max(...rows.map((r) => r.play), 1);
     return rows.map((r, i: number) => `${(i / Math.max(rows.length - 1, 1)) * 100},${34 - (r.play / max) * 32}`).join(' ');
@@ -124,6 +135,33 @@ export default function Dashboard() {
     { title: '链接/备注', dataIndex: 'url', key: 'url' },
     { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), render: (_, c) => c.play.toLocaleString() },
     { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), render: (_, c) => c.like.toLocaleString() },
+    { title: '变化', key: 'delta', width: 130, render: (_, c) => {
+      const h = c.history?.[0];
+      if (!h) return <span style={{ color: '#A8A5A0', fontSize: 12 }}>首次记录</span>;
+      const dp = c.play - h.play; const dl = c.like - h.like;
+      if (dp === 0 && dl === 0) return <span style={{ color: '#A8A5A0', fontSize: 12 }}>—</span>;
+      const txt = [dp !== 0 ? `播${dp > 0 ? '+' : ''}${dp.toLocaleString()}` : '', dl !== 0 ? `赞${dl > 0 ? '+' : ''}${dl}` : ''].filter(Boolean).join(' ');
+      return <span className="num" style={{ fontSize: 12, color: dp > 0 || dl > 0 ? '#B4443C' : '#1677FF', fontWeight: 700 }}>{txt}</span>;
+    } },
+    { title: '', key: 'act', width: 190, render: (_, c) => (
+      <>
+        <Popconfirm
+          title="记录竞品最新数据"
+          open={cpEdit?.id === c.id}
+          onOpenChange={(o) => { if (o) setCpEdit({ id: c.id, play: String(c.play), like: String(c.like) }); else setCpEdit(null); }}
+          description={
+            <div style={{ width: 210 }}>
+              <Input size="small" type="number" placeholder="播放" value={cpEdit?.id === c.id ? cpEdit.play : ''} onChange={(e) => cpEdit && setCpEdit({ ...cpEdit, play: e.target.value })} />
+              <Input size="small" type="number" placeholder="点赞" value={cpEdit?.id === c.id ? cpEdit.like : ''} onChange={(e) => cpEdit && setCpEdit({ ...cpEdit, like: e.target.value })} style={{ marginTop: 6 }} />
+            </div>
+          }
+          okText="记录" cancelText="取消" onConfirm={saveCp}
+        >
+          <Button size="small" style={{ marginRight: 6 }}>记录数据</Button>
+        </Popconfirm>
+        <Button size="small" type="text" onClick={() => setCpDetail(c)}>历史{c.history?.length ? `(${c.history.length})` : ''}</Button>
+      </>
+    ) },
   ];
 
   const trendRows: ColumnsType<TrendPoint> = [
@@ -315,6 +353,33 @@ export default function Dashboard() {
           </div>
           <Table<Competitor> size="small" pagination={false} style={{ marginTop: 10 }} columns={compCols} dataSource={comps} rowKey="id" locale={{ emptyText: '暂无竞品' }} />
         </div>
+        {/* S53 竞品记录历史抽屉 */}
+        <Drawer title={cpDetail ? `竞品历史 · ${cpDetail.url}` : ''} placement="right" width={400} open={!!cpDetail} onClose={() => setCpDetail(null)}>
+          {cpDetail && (
+            <div>
+              <div style={{ fontSize: 13, lineHeight: 2 }}>
+                <div>当前：播放 <b className="num">{cpDetail.play.toLocaleString()}</b> · 赞 <b className="num">{cpDetail.like.toLocaleString()}</b></div>
+                <div>来源：{cpDetail.source} · {({ note: '笔记', author: '作者', comment: '评论', user: '用户' } as Record<string, string>)[cpDetail.kind || 'note']}</div>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, margin: '14px 0 8px' }}>记录历史（{cpDetail.history?.length || 0}）</div>
+              {!cpDetail.history?.length && <div style={{ fontSize: 12, color: '#A8A5A0' }}>点「记录数据」更新竞品数值，每次变化自动留档，变化一目了然</div>}
+              {(cpDetail.history || []).map((h, i, arr) => {
+                const after = i === 0 ? { play: cpDetail.play, like: cpDetail.like } : { play: arr[i - 1].play, like: arr[i - 1].like };
+                const dp = after.play - h.play; const dl = after.like - h.like;
+                return (
+                  <div key={i} style={{ fontSize: 12, padding: '8px 0', borderBottom: '1px solid #F0EEEA' }}>
+                    <div className="num" style={{ color: '#A8A5A0', marginBottom: 2 }}>{new Date(h.at).toLocaleString('zh-CN', { hour12: false })}</div>
+                    <div>
+                      播放 {h.play.toLocaleString()} → {after.play.toLocaleString()} <b className="num" style={{ color: dp >= 0 ? '#B4443C' : '#1677FF' }}>{dp >= 0 ? `+${dp}` : dp}</b>
+                      <span style={{ color: '#D8D5CF', margin: '0 8px' }}>|</span>
+                      赞 {h.like.toLocaleString()} → {after.like.toLocaleString()} <b className="num" style={{ color: dl >= 0 ? '#B4443C' : '#1677FF' }}>{dl >= 0 ? `+${dl}` : dl}</b>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Drawer>
         <Drawer title={trend?.title || ''} placement="right" width={380} open={!!trend} onClose={() => setTrend(null)}>
           <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 4 }}>T+1</div>
           {!trend ? null : trend.rows === null ? <div className="skel" style={{ height: 120, marginTop: 12 }}>loading</div> : trend.rows.length === 0 ? (

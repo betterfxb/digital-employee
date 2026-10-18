@@ -33,6 +33,8 @@ export interface Follow {
 
 export interface Competitor {
   id: string; source: string; url: string; play: number; like: number; remark: string; kind?: string;
+  /** S53 竞品记录历史（每次手动更新留痕，最新在前，环形20条）：看变化趋势 */
+  history?: { at: string; play: number; like: number }[];
 }
 
 export interface ScriptItem { id: string; category: string; title: string; content: string }

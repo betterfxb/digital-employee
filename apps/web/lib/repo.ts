@@ -21,7 +21,7 @@ export interface CommentRepo {
   exists(id: string): boolean;
 }
 export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string }): Follow | null }
-export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor }
+export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor; update(id: string, patch: { play?: number; like?: number; remark?: string }): Competitor | null }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
   receive(eventId: string): boolean;
@@ -93,6 +93,20 @@ const memory: Repos = {
   competitors: {
     list: () => competitors,
     create: (input) => { const item = { id: `cp-${Date.now().toString(36)}`, play: 0, like: 0, ...input }; competitors.push(item); persistCollections(); return item; },
+    // S53 更新前把当前值记入历史（有变化才留痕），支持竞品变化追踪
+    update: (id, patch) => {
+      const c = competitors.find((x) => x.id === id);
+      if (!c) return null;
+      const changed = (patch.play !== undefined && patch.play !== c.play) || (patch.like !== undefined && patch.like !== c.like) || (patch.remark !== undefined && patch.remark !== c.remark);
+      if (changed) {
+        c.history = [{ at: new Date().toISOString(), play: c.play, like: c.like }, ...(c.history || [])].slice(0, 20);
+      }
+      if (patch.play !== undefined) c.play = patch.play;
+      if (patch.like !== undefined) c.like = patch.like;
+      if (patch.remark !== undefined) c.remark = patch.remark;
+      persistCollections();
+      return c;
+    },
   },
   events: {
     receive: (eventId) => { if (seenEvents.has(eventId)) return false; seenEvents.add(eventId); return true; },

@@ -15,7 +15,7 @@ export const follows: { id: string; peer_nick: string; source_video_id: string; 
   { id: 'f2', peer_nick: '熬夜选手Lin', source_video_id: 'v1', next_remind_at: '明天', status: '已手动回复' },
 ];
 /** 竞品手动导入 */
-export const competitors: { id: string; source: string; url: string; play: number; like: number; remark: string }[] = [
+export const competitors: { id: string; source: string; url: string; play: number; like: number; remark: string; kind?: string; history?: { at: string; play: number; like: number }[] }[] = [
   { id: 'cp1', source: 'feigua', url: '竞品A · 跑刀代练', play: 890000, like: 42000, remark: '' },
   { id: 'cp2', source: 'manual', url: '同城店B · 契约陪玩', play: 120000, like: 5400, remark: '' },
 ];
