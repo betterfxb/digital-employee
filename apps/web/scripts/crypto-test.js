@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
@@ -19,6 +19,7 @@ const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
 const { trendSeries } = require('./.tmp-crypto/bizTrend.js');
 const { encryptBackup, decryptBackup } = require('./.tmp-crypto/backupCrypto.js');
+const { hashPassword, verifyPassword } = require('./.tmp-crypto/accessPw.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -113,6 +114,12 @@ check(JSON.stringify(decryptBackup(encStr, 'pass-123456')) === JSON.stringify(bO
 check(decryptBackup(encStr, 'wrong-pass-xx') === null, 'bkenc 错误口令返回null');
 const tampered = JSON.parse(encStr); tampered.data = tampered.data.slice(0, -4) + 'AAAA';
 check(decryptBackup(JSON.stringify(tampered), 'pass-123456') === null, 'bkenc 数据篡改被GCM拒绝');
+
+// 13) S69 访问密码哈希（格式/原文不泄/校验/坏输入）
+const pwHash = hashPassword('secret-123');
+check(pwHash.startsWith('s1$') && !pwHash.includes('secret-123'), 'apw 哈希格式且不含原文');
+check(verifyPassword('secret-123', pwHash) === true && verifyPassword('wrong-pw', pwHash) === false, 'apw 口令对通过错拒绝');
+check(verifyPassword('x', null) === false && verifyPassword('x', 'garbage-format') === false, 'apw 空与坏格式一律拒绝');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

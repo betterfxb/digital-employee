@@ -48,6 +48,8 @@ export const settings = {
   font_size: 14,
   theme_color: '#1A1A18',
   password_changed_at: null as string | null,
+  /** S69 访问密码scrypt哈希（null=未设置不锁；原文永不落盘） */
+  password_hash: null as string | null,
   /** S45 价目表（档位→价格，话术{price}填充源） */
   price_list: [] as { tier: string; price: string }[],
 };

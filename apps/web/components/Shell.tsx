@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Select } from 'antd';
+import { Button, Input, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
 import { isDue, shouldNotifyReport, todayKey, daysUntilExpiry } from '../lib/remind';
@@ -27,6 +27,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [ver, setVer] = useState('');
   const [licState, setLicState] = useState<LicenseState | null>(null);
+  /** S69 本地访问密码解锁层 */
+  const [locked, setLocked] = useState(false);
+  const [unlockPw, setUnlockPw] = useState('');
+  const [unlockErr, setUnlockErr] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
   const prevUnread = useRef(0);
   const nav = [
     { href: '/auth', label: '授权管理' },
@@ -41,6 +46,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
     loadAndApplySettings();
     fetch('/api/accounts').then((r) => r.json()).then((d) => { setAccounts(d.items || []); setActiveId(d.active_id || ''); }).catch(() => {});
     fetch('/api/license/status').then((r) => r.json()).then((d) => { setVer(d.app_version || ''); setLicState(d as LicenseState); }).catch(() => {});
+    // S69 有访问密码且本标签未解锁 → 显示解锁层（sessionStorage按标签会话）
+    fetch('/api/settings').then((r) => r.json()).then((d) => {
+      if (d?.password_hash && sessionStorage.getItem('unlock_ok') !== '1') setLocked(true);
+    }).catch(() => {});
     const tick = () => fetch('/api/comments?unread_only=1').then((r) => r.json()).then((d) => {
       const n = (d.items || []).length;
       if (typeof window !== 'undefined' && localStorage.getItem('notify_new_comment') === '1' && 'Notification' in window && Notification.permission === 'granted' && n > prevUnread.current) {
@@ -125,9 +134,34 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const r = await fetch('/api/accounts/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).then((x) => x.json()).catch(() => null);
     if (r?.active_id) window.location.reload();
   };
+
+  /** S69 解锁：服务端scrypt校验，成功记本标签会话 */
+  const doUnlock = async () => {
+    if (!unlockPw) { setUnlockErr('请输入密码'); return; }
+    setUnlocking(true); setUnlockErr('');
+    try {
+      const r = await fetch('/api/auth/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: unlockPw }) }).then((x) => x.json()).catch(() => null);
+      if (r?.unlocked) {
+        sessionStorage.setItem('unlock_ok', '1');
+        setLocked(false); setUnlockPw('');
+      } else setUnlockErr(r?.message || '解锁失败，请重试');
+    } finally { setUnlocking(false); }
+  };
   return (
     <div className="app">
       <ActivationGate />
+      {/* S69 本地访问密码解锁层（在激活门之上：先解锁再看授权状态） */}
+      {locked && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#F7F6F3', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ maxWidth: 360, width: '100%', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 6, padding: '28px 30px' }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>工作台已锁定</div>
+            <div style={{ fontSize: 12, color: '#6B6862', marginTop: 6, lineHeight: 1.7 }}>本机设置了访问密码，输入后进入。每个窗口/标签需解锁一次，关窗即恢复锁定。</div>
+            <Input.Password value={unlockPw} onChange={(e) => { setUnlockPw(e.target.value); setUnlockErr(''); }} placeholder="访问密码" style={{ marginTop: 14 }} maxLength={32} onPressEnter={doUnlock} autoFocus />
+            {unlockErr && <div style={{ color: '#B4443C', fontSize: 12, marginTop: 8 }}>{unlockErr}</div>}
+            <Button type="primary" block loading={unlocking} style={{ marginTop: 12 }} onClick={doUnlock}>解锁</Button>
+          </div>
+        </div>
+      )}
       <aside className="side">
         <div style={{ padding: '18px 18px 10px', fontWeight: 700 }}>{appConfig.appName}<small style={{ display: 'block', fontSize: 11, color: '#A8A5A0', fontWeight: 400 }}>DOUYIN · P0</small></div>
         <div style={{ padding: '0 12px 8px' }}>

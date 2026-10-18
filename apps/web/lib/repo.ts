@@ -3,6 +3,7 @@
  * 路由只依赖本文件，不直连store/Prisma。切换：DATA_BACKEND=memory（默认）/prisma（目标态，需DB落地，见prisma/schema.prisma）。
  */
 import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, viewOf } from './store';
+import { hashPassword } from './accessPw';
 import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
 import { persistCollections } from './localData'; // S25b: 业务集合变更落盘
 import type { Account, Video, CommentItem, Follow, Competitor, DlqItem } from './types';
@@ -34,7 +35,8 @@ export interface TaskRepo { isPaused(type: string): boolean; setPaused(type: str
 export interface SettingsRepo {
   get(): Record<string, unknown>;
   update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown }): Record<string, unknown>;
-  setPassword(): string;
+  /** S69 设置/取消访问密码（pw='' → 清除），返回 changed_at 或 null */
+  setAccessPassword(pw: string): string | null;
 }
 export interface VideoTask { id: string; video_id: string; title: string; follow: boolean; like_done: boolean; fav_done: boolean; paused: boolean; interval_min: number; last_check: string | null; created_at: string }
 export interface VideoTaskRepo {
@@ -136,7 +138,7 @@ const memory: Repos = {
   settings: {
     get: () => {
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash };
     },
     update: (patch) => {
       if (typeof patch.service_name === 'string') settings.service_name = patch.service_name;
@@ -145,9 +147,21 @@ const memory: Repos = {
       if (Array.isArray(patch.price_list)) settings.price_list = patch.price_list as { tier: string; price: string }[];
       persistCollections();
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash };
     },
-    setPassword: () => { settings.password_changed_at = new Date().toISOString(); persistCollections(); return settings.password_changed_at as string; },
+    // S69 设置/取消访问密码（scrypt哈希，原文永不落盘）
+    setAccessPassword: (pw) => {
+      if (!pw) {
+        settings.password_hash = null;
+        settings.password_changed_at = null;
+        persistCollections();
+        return null;
+      }
+      settings.password_hash = hashPassword(pw);
+      settings.password_changed_at = new Date().toISOString();
+      persistCollections();
+      return settings.password_changed_at as string;
+    },
   },
   videoTasks: {
     list: () => videoTasks,

@@ -13,6 +13,7 @@ export default function Settings() {
   const [font, setFont] = useState<number>(settingsConfig.fontSizeDefault);
   const [theme, setTheme] = useState<string>(settingsConfig.themeDefault);
   const [pwdAt, setPwdAt] = useState<string | null>(null);
+  const [hasPw, setHasPw] = useState(false);
   const [npw, setNpw] = useState('');
   const [cpw, setCpw] = useState('');
   const [prices, setPrices] = useState<{ tier: string; price: string }[]>([]);
@@ -28,6 +29,7 @@ export default function Settings() {
       setFont(s.font_size || settingsConfig.fontSizeDefault);
       setTheme(s.theme_color || settingsConfig.themeDefault);
       setPwdAt(s.password_changed_at || null);
+      setHasPw(!!s.password_hash);
       if (Array.isArray(s.price_list)) setPrices(s.price_list);
     }).catch(() => message.error('设置加载失败，请刷新重试'));
     fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
@@ -49,7 +51,13 @@ export default function Settings() {
     if (npw !== cpw) { message.error('两次输入不一致'); return; }
     const r = await fetch('/api/settings/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_password: npw }) }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { message.error(r?.message || '修改失败，请重试'); return; }
-    setNpw(''); setCpw(''); setPwdAt(r.changed_at); message.success('密码已修改');
+    setNpw(''); setCpw(''); setPwdAt(r.changed_at); setHasPw(true); message.success('密码已修改，下次打开需解锁');
+  };
+  /** S69 取消访问密码 */
+  const clearPw = async () => {
+    const r = await fetch('/api/settings/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_password: '' }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '取消失败'); return; }
+    setHasPw(false); setPwdAt(null); message.success('已取消访问密码');
   };
 
   // ── S37/S38 数据管理 ──
@@ -134,12 +142,18 @@ export default function Settings() {
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>安全</b>
-            <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>修改登录密码（至少{settingsConfig.passwordMinLen}位）{pwdAt ? ` · 上次修改 ${pwdAt.slice(0, 10)}` : ''}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>修改访问密码（至少{settingsConfig.passwordMinLen}位，哈希存储不存原文）{pwdAt ? ` · 上次修改 ${pwdAt.slice(0, 10)}` : ''}{hasPw ? ' · 已启用，打开工作台需解锁' : ' · 未启用'}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Input.Password value={npw} onChange={(e) => setNpw(e.target.value)} placeholder="新密码" maxLength={32} />
               <Input.Password value={cpw} onChange={(e) => setCpw(e.target.value)} placeholder="确认新密码" maxLength={32} onPressEnter={changePwd} />
               <Button onClick={changePwd}>修改</Button>
+              {hasPw && (
+                <Popconfirm title="取消访问密码？" description="取消后任何人打开本机工作台不再需要密码。" okText="确认取消" cancelText="返回" onConfirm={clearPw}>
+                  <Button danger>取消密码</Button>
+                </Popconfirm>
+              )}
             </div>
+            {hasPw && <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>启动/刷新时会先要求解锁；每个窗口标签独立解锁一次</div>}
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>数据管理</b>
