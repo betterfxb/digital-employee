@@ -75,6 +75,31 @@ export default function Guide() {
           </div>
         </div>
         <div className="card" style={{ padding: 18, marginTop: 16 }}>
+          <b>版本说明</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>当前版本以授权管理页显示为准；升级授权文件导入即可解锁，数据不丢</span>
+          <Table
+            size="small"
+            pagination={false}
+            style={{ marginTop: 10 }}
+            rowKey="cap"
+            dataSource={[
+              { cap: '授权绑定 · 数据看板 · CSV导入', basic: '✓', pro: '✓' },
+              { cap: '评论工作台（意图分类+意向分+批量操作）', basic: '✓', pro: '✓' },
+              { cap: '话术生成（行业模板+口吻可调）', basic: '✓', pro: '✓' },
+              { cap: '跟进台账 · 任务中心 · 系统设置', basic: '✓', pro: '✓' },
+              { cap: '经营报告（日报/周报/7天趋势）', basic: '✕', pro: '✓' },
+              { cap: '转化漏斗 + 热词趋势', basic: '✕', pro: '✓' },
+              { cap: '线索标签 + 档案纪要', basic: '✕', pro: '✓' },
+              { cap: '竞品记录与变化历史', basic: '✕', pro: '✓' },
+              { cap: '价目表 + 报价话术自动带价', basic: '✕', pro: '✓' },
+            ]}
+            columns={[
+              { title: '能力', dataIndex: 'cap', key: 'cap' },
+              { title: '基础版', dataIndex: 'basic', key: 'b', width: 80, align: 'center' as const, render: (v: string) => <span style={{ color: v === '✓' ? '#1677FF' : '#A8A5A0', fontWeight: 700 }}>{v}</span> },
+              { title: '专业版', dataIndex: 'pro', key: 'p', width: 80, align: 'center' as const, render: () => <span style={{ color: '#1677FF', fontWeight: 700 }}>✓</span> },
+            ]}
+          />
+        </div>
+        <div className="card" style={{ padding: 18, marginTop: 16 }}>
           <b>快捷键（评论工作台）</b>
           <Table size="small" pagination={false} style={{ marginTop: 10 }} columns={hotCols} dataSource={HOTKEYS} rowKey="key" />
         </div>

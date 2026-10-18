@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
-import { isDue, shouldNotifyReport, todayKey } from '../lib/remind';
+import { isDue, shouldNotifyReport, todayKey, daysUntilExpiry } from '../lib/remind';
 import { hasFeature } from '../lib/tiers';
 import type { LicenseState } from '../lib/license';
 import { ActivationGate } from './ActivationGate';
@@ -101,6 +101,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
   }, [mounted]);
+
+  // S59 授权到期真实提醒：剩余≤7天且未过期时每日最多提醒一次（已过期由激活门/横幅负责，不重复打扰）
+  useEffect(() => {
+    if (!mounted || !licState) return;
+    const check = () => {
+      if (typeof window === 'undefined') return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const days = daysUntilExpiry(licState.expires_at);
+      if (days === null || days > 7 || days < 0) return;
+      const key = `license_reminded_${todayKey()}`;
+      if (localStorage.getItem(key)) return;
+      try {
+        new Notification('授权即将到期', { body: `还剩${days}天到期，联系服务商续期以免功能锁定（授权管理页可查看详情）` });
+      } catch { /* 通知失败不打扰 */ }
+      localStorage.setItem(key, '1');
+    };
+    check();
+    const id = setInterval(check, 3_600_000);
+    return () => clearInterval(id);
+  }, [mounted, licState]);
   const switchAcc = async (id: string) => {
     const r = await fetch('/api/accounts/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).then((x) => x.json()).catch(() => null);
     if (r?.active_id) window.location.reload();

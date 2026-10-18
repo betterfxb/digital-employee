@@ -105,11 +105,13 @@ export default function Settings() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button href="/api/data/backup">下载备份</Button>
               <Button onClick={() => restoreRef.current?.click()}>导入备份恢复</Button>
+              <Button href="/api/diag/bundle">导出诊断包</Button>
               <Popconfirm title="清空全部业务数据？" description="作品/评论/跟进/回评/竞品/自定义话术将全部删除，不可撤销。建议先下载备份。" okText="确认清空" cancelText="取消" onConfirm={doClear}>
                 <Button danger>清空业务数据</Button>
               </Popconfirm>
               <input ref={restoreRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={(e) => { doRestore(e.target.files?.[0]); e.target.value = ''; }} />
             </div>
+            <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>出问题点「导出诊断包」，把下载的 txt 文件发给服务商即可（含版本/授权状态/最近日志，不含业务数据）</div>
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>价目表{feats !== null && !hasFeature(feats, 'quote') && <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400, marginLeft: 8 }}>🔒专业版</span>}</b>

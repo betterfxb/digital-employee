@@ -167,6 +167,11 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const bad2 = await post('/api/import', { kind: 'videos', csv: '' });
     const bad3 = await post('/api/import', { kind: 'comments', csv: '昵称,内容\n烟友,没有视频标题列' });
     pass(bad1.s === 400 && bad1.j.code === 'FATAL' && bad2.s === 400 && bad3.s === 400, 'S23 import invalid FATAL');
+    // S59 列名别名容错（常见导出格式：用户昵称/评论内容/所属视频/评论时间）
+    const ali = await post('/api/import', { kind: 'comments', csv: '用户昵称,评论内容,所属视频,评论时间\n别名粉,跑刀怎么下单？多少钱,冒烟真机作品,2小时前,4' });
+    const cmts2 = await get('/api/comments?unread_only=0');
+    const aliNick = cmts2.j.items.find((x) => x.user_nick === '别名粉');
+    pass(ali.s === 200 && ali.j.created + ali.j.updated === 1 && aliNick && aliNick.intent === '高意向', 'S59 列名别名容错');
     await post('/api/accounts/switch', { id: 'acc_001' });
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');

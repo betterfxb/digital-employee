@@ -42,3 +42,14 @@ export function shouldNotifyReport(now: number, lastNotified: string | null, ena
   const d = new Date(now);
   return d.getHours() === hour && d.getMinutes() <= 5;
 }
+
+/**
+ * S59 授权剩余天数（到期日当天23:59为界，floor=完整剩余天数；买断/无法解析返回null不提醒）
+ * 正数=还有N天，0=不足1天/今天到期，负数=已过期
+ */
+export function daysUntilExpiry(expires: string | null | undefined, now = Date.now()): number | null {
+  if (!expires) return null;
+  const d = new Date(`${expires}T23:59:59`);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((d.getTime() - now) / 86_400_000);
+}

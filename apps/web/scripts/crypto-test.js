@@ -13,7 +13,7 @@ execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
-const { parseRemind, isDue, shouldNotifyReport, todayKey } = require('./.tmp-crypto/remind.js');
+const { parseRemind, isDue, shouldNotifyReport, todayKey, daysUntilExpiry } = require('./.tmp-crypto/remind.js');
 const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
@@ -99,6 +99,11 @@ const D0 = new Date('2026-10-18T09:03:00').getTime();
 check(shouldNotifyReport(D0, null, true) === true, 'report-notify 9:03窗口触发');
 check(shouldNotifyReport(D0, todayKey(D0), true) === false, 'report-notify 当天已提醒去重');
 check(shouldNotifyReport(new Date('2026-10-18T10:00:00').getTime(), null, true) === false && shouldNotifyReport(D0, null, false) === false, 'report-notify 非窗口/关开关不触发');
+
+// 11) S59 授权到期天数（买断null/未来按floor取整/已过为负）
+check(daysUntilExpiry(null, D0) === null && daysUntilExpiry(undefined, D0) === null, 'expiry 买断返回null不提醒');
+check(daysUntilExpiry('2026-10-20', D0) === 2, 'expiry 未来日期floor取整(18日9点→20日23:59=2整天)');
+check(daysUntilExpiry('2026-10-17', D0) === -1, 'expiry 已过期为负(ceil会得-0陷阱)');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

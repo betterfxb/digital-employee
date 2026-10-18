@@ -40,14 +40,40 @@ const num = (s: string | undefined) => {
 function colMap(header: string[]): Record<string, number> {
   const m: Record<string, number> = {};
   header.forEach((h, i) => { m[h.trim()] = i; });
+  // S59 常见导出格式别名归一（抖音后台/表格软件的列名差异）：规范名 ← 别名指向同一列
+  for (const [canon, aliasList] of Object.entries(COL_ALIASES)) {
+    if (m[canon] !== undefined) continue;
+    const hit = aliasList.find((a) => m[a] !== undefined);
+    if (hit !== undefined) m[canon] = m[hit];
+  }
   return m;
+}
+
+/** 列名别名表（支持的常见写法；报错时也会展示给用户对照） */
+const COL_ALIASES: Record<string, string[]> = {
+  标题: ['视频标题', '作品标题'],
+  发布时间: ['发布日期', '日期'],
+  播放: ['播放量', '观看量', '观看'],
+  点赞: ['点赞量', '获赞'],
+  评论: ['评论数', '评论量'],
+  转发: ['转发数', '分享', '分享数'],
+  昵称: ['用户昵称', '用户', '评论用户'],
+  内容: ['评论内容', '正文'],
+  视频标题: ['所属视频', '作品标题'],
+  时间: ['评论时间'],
+};
+
+/** S59 缺列报错：带别名提示+用户实际表头（客户一眼知道怎么改） */
+function missingColError(kind: string, missing: string[], actual: string[]): string {
+  const aliasHint = missing.map((c) => `「${c}」支持：${[c, ...(COL_ALIASES[c] || [])].join('/')}`).join('；');
+  return `${kind}缺少必需列 ${missing.map((c) => `「${c}」`).join('')}。${aliasHint}。你文件的表头是：${actual.map((h) => h.trim()).join(',') || '(空)'}`;
 }
 
 interface ImportResult { error?: string; created: number; updated: number; skipped?: number }
 
 function importVideos(rows: string[][], aid: string): ImportResult {
   const head = colMap(rows[0]);
-  if (head['标题'] === undefined) return { error: '作品CSV缺少「标题」列，可先下载模板', created: 0, updated: 0 };
+  if (head['标题'] === undefined) return { error: missingColError('作品CSV', ['标题'], rows[0]), created: 0, updated: 0 };
   let created = 0;
   let updated = 0;
   for (const r of rows.slice(1, douyinConfig.importMaxRows + 1)) {
@@ -71,8 +97,9 @@ function importVideos(rows: string[][], aid: string): ImportResult {
 
 function importComments(rows: string[][], aid: string): ImportResult {
   const head = colMap(rows[0]);
-  if (head['昵称'] === undefined || head['内容'] === undefined || head['视频标题'] === undefined) {
-    return { error: '评论CSV需含「昵称,内容,视频标题」列，可先下载模板', created: 0, updated: 0 };
+  const missing = ['昵称', '内容', '视频标题'].filter((c) => head[c] === undefined);
+  if (missing.length > 0) {
+    return { error: missingColError('评论CSV', missing, rows[0]), created: 0, updated: 0, skipped: 0 };
   }
   let created = 0;
   let updated = 0;
