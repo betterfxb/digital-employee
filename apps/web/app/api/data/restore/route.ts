@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'; // S38: 恢复写内存+文件，禁静�
 import { ok, fail } from '@/lib/response';
 import { restoreBackup } from '@/lib/localData';
 import { decryptBackup, type EncPack } from '@/lib/backupCrypto';
+import { writeHistory } from '@/lib/hotHistory';
+import { writeBizHistory } from '@/lib/businessHistory';
 
 /** 恢复前预览：结构/口令校验 + 计数，绝不写盘（S64 覆盖确认防线） */
 function previewOf(data: Record<string, unknown>) {
@@ -37,5 +39,11 @@ export async function POST(req: Request) {
   }
   const r = restoreBackup(data);
   if (!r.ok) return fail('FATAL', r.error || '恢复失败');
-  return ok({ restored: true });
+  // S71 趋势快照随备份回写（旧备份无snapshots则跳过，趋势从当日重新积累）
+  const snaps = data.snapshots as { hot?: Record<string, unknown>; biz?: Record<string, unknown> } | undefined;
+  if (snaps && typeof snaps === 'object') {
+    if (snaps.hot && typeof snaps.hot === 'object') writeHistory(snaps.hot as Parameters<typeof writeHistory>[0]);
+    if (snaps.biz && typeof snaps.biz === 'object') writeBizHistory(snaps.biz);
+  }
+  return ok({ restored: true, snapshots_restored: !!(snaps && typeof snaps === 'object') });
 }

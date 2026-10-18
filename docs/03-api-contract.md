@@ -20,7 +20,7 @@ GET /api/auth/douyin/callback?state&code -> 302 /auth?bind=ok|err（open_id按�
 ## Stats / Videos
 ```
 GET /api/videos?account_id&start&end&page,sort,order -> Video[]
-GET /api/stats/overview?account_id&date -> {play,like,comment,fans,环比,note}（S23b：作品指标按当前账号实时聚合，fans/mom仍mock口径，note=口径标注）
+GET /api/stats/overview?account_id&date[&all=1] -> {play,like,comment,note}（S29删无据硬编码指标只留真聚合；S63 ?all=1 →全部账号汇总+share+accounts明细行）
 GET /api/stats/trend?ids=a,b,c&days=7 -> {[id]:[{date,play,like}]}（键为请求传入id；imp_导入作品返回[]不画假线，S23b）
 POST /api/stats/sync -> {task_id, live_sync?} // S26: live模式入队后实际拉开放平台作品+评论（mock纯入队不变）；live_sync={mode,videos,comments,pages,error?}
 GET/POST /api/competitors -> {url,source,play,like,remark} // 手动导入区
@@ -31,11 +31,12 @@ POST /api/import {kind:videos|comments, csv} -> {created,updated,skipped?} | {co
 ```
 GET /api/comments?video_id&intent&keyword&unread_only&cursor,count=20
 POST /api/comments/read {ids[] | all_video_id}
-PATCH /api/comments/:id {intent:高/中/低/垃圾, ignore:bool}
-GET /api/comments/keywords/hot?days=7 -> [{kw,count}]
+PATCH /api/comments/:id {intent:高意向/咨询/留电话/普通/垃圾, ignore:bool} // S68起落盘，重启不丢
+GET /api/comments/keywords/hot?days=7 -> {items:[{kw,count}], history:{date:{kw:n}}}（S51附每日快照30天）
 GET /api/comments/:id/replies -> {items} / POST /api/comments/:id/replies {content} // 回评记录（S19，S25补进契约）
-POST /api/follows {comment_id, note} / GET /api/follows?status
-PATCH /api/follows/:id {status} // 状态流转，非法状态/未知id→FATAL（S13新增）
+POST /api/follows {peer_nick, source_video_id, next_remind_at?, status?} // S66活跃管线同昵称幂等返回{...follow,deduped:true}
+GET /api/follows?status&tag&tags=1 // S48 tag筛选；tags=1返回标签库[{tag,n}]（频次排序）
+PATCH /api/follows/:id {status?, amount?, tags?, note?, next_remind_at?} // 至少一项；金额0-10亿、标签≤10个≤8字、纪要≤500字、提醒≤40字；变更入history（S43/48/49/65）
 ```
 
 ## Assist（私信占位）
@@ -64,11 +65,10 @@ GET /api/stats/usage -> {usedToday,cap,left} // 频控余量
 
 ## License（S25新增）
 ```
-GET /api/license/status -> {mode:demo|licensed, valid, customer, expires_at, features[], seats, machine_slots, watermark, error}
-// demo无license文件→宽松不锁功能（红线docs/11§5）；验签Ed25519，canonical=key排序JSON
-// 溯源水印：响应头 X-Vendor-Watermark + HTML meta[name=x-vendor]，来源=license.watermark或WATERMARK_ID env
-// 发证：node scripts/license-gen.js keypair|issue --customer ...（私钥data/license_key.pem不进仓）
-// 功能闸挂载点 lib/license.ts requireLicense(feature)，live接真实API时启用
+GET /api/license/status -> {mode:demo|licensed, valid, customer, expires_at, features[], seats, machine_slots, watermark, machine_code, machine_ok, error, app_version}
+// S30起demo=UI激活门锁核心功能（API按策略开放）；验签Ed25519+机器绑定命中≥2因子
+// S39 app_version=桌面端版本透出；S54 features白名单分版（[]=专业版全开；basic七页面白名单，UI五处锁）
+// 溯源水印：响应头 X-Vendor-Watermark；发证：license-gen issue --tier pro|basic --bind 机器码（私钥不进仓）
 ```
 
 ## 表结构要点
@@ -76,4 +76,20 @@ GET /api/license/status -> {mode:demo|licensed, valid, customer, expires_at, fea
 - Video(aweme_id唯一, account_id, title, cover, create_time)
 - VideoStatDaily(video_id,date唯一, play,like,comment,share,fans_total)
 - Comment(comment_id唯一, video_id, content, user_nick, is_read_local, intent, keywords[])
-- Follow(peer_nick, source_video_id, next_remind_at, status)
+- Follow(peer_nick, source_video_id, next_remind_at, status, amount?, created_at?, tags?[], note?, history?[])
+- LocalState版本增量（local.json）：cleared_at(S37) / read_ids+all_read_videos+intent_overrides(S68协作态持久化) / settings.password_hash(S69) / settings.price_list(S45)
+
+## S36-S70 增补契约（数据管理/报告/诊断/分版/回收站）
+```
+GET  /api/data/backup[?pass=6+位] -> 备份JSON附件（S38；S61 pass=口令出AES-GCM密文包{__enc,v,salt,iv,tag,data}；S71附snapshots{hot,biz}趋势快照）
+POST /api/data/restore {data, pass?, preview?} -> preview=1返回{preview,accounts,videos,comments,follows,customScripts,cleared}零副作用（S64）| 执行返回{restored,snapshots_restored}（S61/64/71）
+POST /api/data/clear {confirm:'清空'} -> 缺确认词FATAL（S37；业务全清+seed不复活，账号授权设置保留）
+GET  /api/diag/bundle -> text/plain附件（S59：版本/环境/授权状态/双日志近150行，不含业务数据）
+POST /api/report/snapshot -> {snapshot, history}（S55：报告页打开记当日业务快照，每日一条30天）
+POST /api/auth/unlock {password} -> {unlocked}（S69：未设密码直接放行；错口令401 FATAL）
+GET  /api/scripts?trash=1 / DELETE /api/scripts/:id[?restore=1] -> 软删进回收站/恢复（S57；reply-rules同构）
+PATCH /api/competitors/:id {play?,like?,remark?} -> 变化自动留history（S53）
+```
+
+## 红线（永续有效）
+不爬虫/RPA/cookie；自动外呼/批量主动私信封存（自动回复只做被动辅助，人工确认后发送）；license私钥data/不进仓；接口没有的数据不展示。

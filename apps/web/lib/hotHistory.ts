@@ -45,3 +45,16 @@ export function appendToday(counts: Record<string, number>, keepDays = 30): Hist
   }
   return h;
 }
+
+/** S71 恢复备份时整份回写（保留30天裁剪）；损坏/缺字段由调用方过滤 */
+export function writeHistory(h: Hist): void {
+  try {
+    const keys = Object.keys(h).sort().slice(-30);
+    const trimmed: Hist = {};
+    keys.forEach((k) => { if (h[k] && typeof h[k] === 'object') trimmed[k] = h[k]; });
+    fs.mkdirSync(path.dirname(FILE()), { recursive: true });
+    const tmp = `${FILE()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(trimmed), 'utf8');
+    fs.renameSync(tmp, FILE());
+  } catch { /* 尽力恢复，失败不阻断主恢复流程 */ }
+}

@@ -45,6 +45,7 @@ const ICON_SRC = resP('icon.ico');
 let serverProc = null;
 let mainWindow = null;
 let quitting = false;
+let serverRestarts = 0;
 
 function pickPort() {
   return new Promise((resolve, reject) => {
@@ -102,8 +103,20 @@ function startServer(port) {
     serverProc.stdout.pipe(s);
     serverProc.stderr.pipe(s);
   } catch { /* 日志失败不影响服务 */ }
-  // 服务意外退出 → 整个应用退出（避免留下无服务的空壳窗口）
-  serverProc.on('exit', (code) => { if (!quitting) { crashLog(`[server] 意外退出 code=${code}`); quitting = true; app.exit(code || 0); } });
+  // S72 服务意外退出 → 先自愈重启一次（瞬时故障恢复），二次退出才退出整个应用
+  serverProc.on('exit', (code) => {
+    if (quitting) return;
+    if (serverRestarts < 1) {
+      serverRestarts += 1;
+      crashLog(`[server] 意外退出 code=${code}，2秒后自愈重启（第${serverRestarts}次）`);
+      serverProc = null;
+      setTimeout(() => { if (!quitting) startServer(port); }, 2000);
+      return;
+    }
+    crashLog(`[server] 再次退出 code=${code}，放弃自愈`);
+    quitting = true;
+    app.exit(code || 0);
+  });
   serverProc.on('error', (e) => { crashLog(`[server] 启动失败 ${e.message}`); console.error('[desktop] 服务进程启动失败', e); });
 }
 
