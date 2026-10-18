@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/crypto.js');
 const vault = require('./.tmp-crypto/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/machineId.js');
@@ -18,6 +18,7 @@ const { leadScore, scoreLevel } = require('./.tmp-crypto/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/tiers.js');
 const { trendSeries } = require('./.tmp-crypto/bizTrend.js');
+const { encryptBackup, decryptBackup } = require('./.tmp-crypto/backupCrypto.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -104,6 +105,14 @@ check(shouldNotifyReport(new Date('2026-10-18T10:00:00').getTime(), null, true) 
 check(daysUntilExpiry(null, D0) === null && daysUntilExpiry(undefined, D0) === null, 'expiry 买断返回null不提醒');
 check(daysUntilExpiry('2026-10-20', D0) === 2, 'expiry 未来日期floor取整(18日9点→20日23:59=2整天)');
 check(daysUntilExpiry('2026-10-17', D0) === -1, 'expiry 已过期为负(ceil会得-0陷阱)');
+
+// 12) S61 备份加密（往返/错口令/篡改）
+const bObj = { accounts: [{ id: 'a1' }], videos: [], note: '中文✓混合json' };
+const encStr = encryptBackup(bObj, 'pass-123456');
+check(JSON.stringify(decryptBackup(encStr, 'pass-123456')) === JSON.stringify(bObj), 'bkenc 加解密往返一致');
+check(decryptBackup(encStr, 'wrong-pass-xx') === null, 'bkenc 错误口令返回null');
+const tampered = JSON.parse(encStr); tampered.data = tampered.data.slice(0, -4) + 'AAAA';
+check(decryptBackup(JSON.stringify(tampered), 'pass-123456') === null, 'bkenc 数据篡改被GCM拒绝');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

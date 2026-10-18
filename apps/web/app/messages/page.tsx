@@ -34,6 +34,9 @@ export default function Messages() {
   const [scriptTrash, setScriptTrash] = useState<ScriptItem[]>([]);
   const [ruleTrash, setRuleTrash] = useState<{ id: string; keyword: string; reply: string; enabled: boolean }[]>([]);
   const [showTrash, setShowTrash] = useState(false);
+  /** S60 台账批量操作 */
+  const [fsel, setFsel] = useState<Set<string>>(new Set());
+  const [batchTagInput, setBatchTagInput] = useState('');
   const loadTrash = () => {
     fetch('/api/scripts?trash=1').then((r) => r.json()).then((d) => setScriptTrash(d.items || [])).catch(() => {});
     fetch('/api/reply-rules?trash=1').then((r) => r.json()).then((d) => setRuleTrash(d.items || [])).catch(() => {});
@@ -109,6 +112,17 @@ export default function Messages() {
     if (!r || r.code) { flash(r?.message || '纪要保存失败'); return; }
     setDetail(r as Follow); flash('纪要已保存', true); loadFollows();
   };
+  /** S60 台账批量：选中切换/批量改状态/批量追加标签 */
+  const toggleFsel = (id: string) => setFsel((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const clearFsel = () => setFsel(new Set());
+  const runBatch = async (patchOf: (f: Follow) => object, label: string) => {
+    const targets = (rows || []).filter((f) => fsel.has(f.id));
+    if (!targets.length) return;
+    const rs = await Promise.all(targets.map((f) => fetch(`/api/follows/${f.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patchOf(f)) }).then((x) => x.json()).catch(() => null)));
+    const okn = rs.filter((r) => r && !r.code).length;
+    flash(okn === targets.length ? `${label} ${okn} 条` : `完成 ${okn}/${targets.length} 条（失败的重试）`, okn > 0);
+    setFsel(new Set()); setBatchTagInput(''); loadFollows(); loadTagLib();
+  };
   const batches: Follow[][] = [];
   (rows || []).forEach((f, i) => {
     const g = Math.floor(i / tasksConfig.followBatchSize);
@@ -171,6 +185,7 @@ export default function Messages() {
   };
 
   const followCols: ColumnsType<Follow> = [
+    { title: '', key: 'sel', width: 36, render: (_, f) => <Checkbox checked={fsel.has(f.id)} onChange={() => toggleFsel(f.id)} /> },
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
     { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => (can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>) },
     { title: '状态', key: 'status', width: 120, render: (_, f) => <Select size="small" value={f.status} onChange={(v) => changeStatus(f.id, v)} style={{ width: '100%' }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} /> },
@@ -325,6 +340,15 @@ export default function Messages() {
               <Input size="small" value={fsearch} onChange={(e) => setFsearch(e.target.value)} placeholder="搜对方昵称" style={{ width: 120 }} allowClear />
               <Button size="small" onClick={exportFollows}>导出CSV</Button>
             </div>
+            {fsel.size > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap', background: '#FCFBF9', border: '1px solid #E8E6E1', borderRadius: 4, padding: '6px 10px' }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>已选 {fsel.size}</span>
+                <Select size="small" placeholder="批量改状态" value={null} onChange={(v) => runBatch(() => ({ status: v }), '状态已改')} style={{ width: 110 }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} />
+                <Input size="small" placeholder="追加标签(≤8字)" value={batchTagInput} onChange={(e) => setBatchTagInput(e.target.value)} maxLength={8} style={{ width: 140 }} onPressEnter={() => runBatch((f) => ({ tags: [...new Set([...(f.tags || []), batchTagInput.trim()])].slice(0, 10) }), '标签已加')} />
+                <Button size="small" disabled={!batchTagInput.trim()} onClick={() => runBatch((f) => ({ tags: [...new Set([...(f.tags || []), batchTagInput.trim()])].slice(0, 10) }), '标签已加')}>批量打标</Button>
+                <Button size="small" type="text" onClick={clearFsel}>取消选择</Button>
+              </div>
+            )}
             <Table<Follow> size="small" pagination={false} style={{ marginTop: 8 }} columns={followCols} dataSource={(rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)))} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
           </div>
         </div>

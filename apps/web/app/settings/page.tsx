@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Input, Popconfirm, Slider } from 'antd';
+import { App, Button, Input, Modal, Popconfirm, Slider } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
@@ -17,6 +17,10 @@ export default function Settings() {
   const [cpw, setCpw] = useState('');
   const [prices, setPrices] = useState<{ tier: string; price: string }[]>([]);
   const [feats, setFeats] = useState<string[] | null>(null);
+  /** S61 加密备份 */
+  const [encDownPass, setEncDownPass] = useState('');
+  const [encFile, setEncFile] = useState<Record<string, unknown> | null>(null);
+  const [encPass, setEncPass] = useState('');
 
   useEffect(() => {
     fetch('/api/settings').then((r) => r.json()).then((s) => {
@@ -55,8 +59,35 @@ export default function Settings() {
     const text = await f.text().catch(() => '');
     let data: unknown;
     try { data = JSON.parse(text); } catch { message.error('不是合法JSON备份文件'); return; }
+    // S61 加密备份：识别__enc结构 → 弹口令框走加密恢复
+    if ((data as { __enc?: number }).__enc === 1) { setEncFile(data as Record<string, unknown>); setEncPass(''); return; }
     const r = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { message.error(r?.message || '恢复失败'); return; }
+    message.success('恢复成功，界面即将刷新');
+    setTimeout(() => window.location.reload(), 1200);
+  };
+  /** S61 加密备份下载（口令≥6位，服务端AES-GCM加密） */
+  const downloadEnc = async () => {
+    if (encDownPass.length < 6) { message.error('口令至少6位'); return; }
+    try {
+      const r = await fetch(`/api/data/backup?pass=${encodeURIComponent(encDownPass)}`);
+      if (!r.ok) { const j = await r.json().catch(() => null); message.error(j?.message || '加密备份失败'); return; }
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `huoke-backup-enc-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setEncDownPass('');
+      message.success('加密备份已下载（口令请与文件分开保管）');
+    } catch { message.error('下载失败，请重试'); }
+  };
+  const doRestoreEnc = async () => {
+    if (!encFile) return;
+    if (encPass.length < 6) { message.error('口令至少6位'); return; }
+    const r = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: encFile, pass: encPass }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '恢复失败'); return; }
+    setEncFile(null); setEncPass('');
     message.success('恢复成功，界面即将刷新');
     setTimeout(() => window.location.reload(), 1200);
   };
@@ -66,8 +97,7 @@ export default function Settings() {
     message.success('业务数据已清空（授权与设置保留）');
   };
 
-  /** S45 价目表保存 */
-  const savePrices = async () => {
+  /** S45 价目表保存 */  const savePrices = async () => {
     const cleaned = prices.map((r) => ({ tier: r.tier.trim(), price: r.price.trim() })).filter((r) => r.tier && r.price);
     const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_list: cleaned }) }).then((x) => x.json()).catch(() => null);
     if (!r || r.code) { message.error(r?.message || '保存失败'); return; }
@@ -104,6 +134,13 @@ export default function Settings() {
             <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>备份=一个JSON文件（换电脑迁移+误删兜底）；清空只清业务数据（作品/评论/台账/话术），<b>授权与设置不动</b></div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button href="/api/data/backup">下载备份</Button>
+              <Popconfirm
+                title="加密备份（口令≥6位）"
+                description={<div style={{ width: 240 }}><Input.Password size="small" placeholder="设置备份口令" value={encDownPass} onChange={(e) => setEncDownPass(e.target.value)} maxLength={64} /><div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 6 }}>文件被别人拿到没有口令也打不开；口令别和文件一起发</div></div>}
+                okText="加密下载" cancelText="取消" onConfirm={downloadEnc}
+              >
+                <Button>加密备份</Button>
+              </Popconfirm>
               <Button onClick={() => restoreRef.current?.click()}>导入备份恢复</Button>
               <Button href="/api/diag/bundle">导出诊断包</Button>
               <Popconfirm title="清空全部业务数据？" description="作品/评论/跟进/回评/竞品/自定义话术将全部删除，不可撤销。建议先下载备份。" okText="确认清空" cancelText="取消" onConfirm={doClear}>
@@ -112,6 +149,12 @@ export default function Settings() {
               <input ref={restoreRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={(e) => { doRestore(e.target.files?.[0]); e.target.value = ''; }} />
             </div>
             <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>出问题点「导出诊断包」，把下载的 txt 文件发给服务商即可（含版本/授权状态/最近日志，不含业务数据）</div>
+            {/* S61 加密备份恢复：口令弹窗 */}
+            <Modal title="加密备份 · 输入口令恢复" open={!!encFile} okText="解密并恢复" cancelText="取消"
+              onOk={doRestoreEnc} onCancel={() => { setEncFile(null); setEncPass(''); }}>
+              <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 10 }}>此备份文件已加密，输入创建它时设置的口令（至少6位）。口令错误无法恢复。</div>
+              <Input.Password placeholder="备份口令" value={encPass} onChange={(e) => setEncPass(e.target.value)} maxLength={64} onPressEnter={doRestoreEnc} />
+            </Modal>
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>价目表{feats !== null && !hasFeature(feats, 'quote') && <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400, marginLeft: 8 }}>🔒专业版</span>}</b>
