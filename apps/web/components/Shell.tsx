@@ -21,6 +21,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [activeId, setActiveId] = useState('');
   const [unread, setUnread] = useState(0);
+  const [ver, setVer] = useState('');
   const prevUnread = useRef(0);
   const nav = [
     { href: '/auth', label: '授权管理' },
@@ -33,6 +34,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadAndApplySettings();
     fetch('/api/accounts').then((r) => r.json()).then((d) => { setAccounts(d.items || []); setActiveId(d.active_id || ''); }).catch(() => {});
+    fetch('/api/license/status').then((r) => r.json()).then((d) => setVer(d.app_version || '')).catch(() => {});
     const tick = () => fetch('/api/comments?unread_only=1').then((r) => r.json()).then((d) => {
       const n = (d.items || []).length;
       if (typeof window !== 'undefined' && localStorage.getItem('notify_new_comment') === '1' && 'Notification' in window && Notification.permission === 'granted' && n > prevUnread.current) {
@@ -71,6 +73,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <b>升级蓝V后解锁</b><div style={{ color: '#6B6862', margin: '6px 0 10px' }}>私信自动同步 · 一键留资</div>
           <Button size="small" href="/guide">查看指南</Button>
         </div>
+        {mounted && ver && <div className="num" style={{ padding: '0 18px 12px', fontSize: 11, color: '#A8A5A0' }}>v{ver}</div>}
       </aside>
       <div style={{ flex: 1, minWidth: 0 }}>
         {expired && <div style={{ background: '#FBF3E4', borderBottom: '1px solid #E8E6E1', padding: '10px 24px', fontSize: 12 }}>授权已过期或被取消，请重新扫码授权。 <Link href="/auth">去授权 →</Link></div>}

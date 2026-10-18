@@ -14,6 +14,28 @@ const path = require('node:path');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
+// ── S39 排障与体验：版本/日志/崩溃记录/窗口记忆 ──
+const APP_VERSION = require('./package.json').version;
+const userData = () => app.getPath('userData');
+function logFile(name, maxBytes = 2 * 1024 * 1024) {
+  const p = path.join(userData(), name);
+  try {
+    if (fs.existsSync(p) && fs.statSync(p).size > maxBytes) fs.writeFileSync(p, '');
+  } catch { /* 日志清理失败不阻塞 */ }
+  return p;
+}
+function crashLog(msg) {
+  try { fs.appendFileSync(logFile('crash.log'), `[${new Date().toISOString()}] ${msg}\n`); } catch { /* 尽力记录 */ }
+}
+process.on('uncaughtException', (e) => crashLog(`[main] uncaught: ${e.stack || e.message}`));
+function loadBounds() {
+  try { const b = JSON.parse(fs.readFileSync(path.join(userData(), 'window.json'), 'utf8')); if (b && b.width >= 1100 && b.height >= 700) return b; } catch { /* 无记忆或损坏则默认 */ }
+  return null;
+}
+function saveBounds() {
+  try { if (mainWindow && !mainWindow.isDestroyed()) fs.writeFileSync(path.join(userData(), 'window.json'), JSON.stringify(mainWindow.getBounds())); } catch { /* 尽力保存 */ }
+}
+
 /** extraResources原样拷贝到resources目录（不过滤node_modules、不进asar），路径直取process.resourcesPath */
 function resP(name) { return app.isPackaged ? path.join(process.resourcesPath, name) : path.join(__dirname, 'resources', name); }
 const STANDALONE_DIR = resP('standalone');
@@ -63,6 +85,7 @@ function startServer(port) {
     NODE_ENV: 'production',
     NEXT_TELEMETRY_DISABLED: '1',
     TOKEN_MASTER_KEY: masterKey,
+    APP_VERSION,
     // 打包态execPath是electron.exe，必须以Node模式跑standalone服务（否则被当成新应用启动）
     ELECTRON_RUN_AS_NODE: '1',
   };
@@ -70,22 +93,35 @@ function startServer(port) {
     cwd: STANDALONE_DIR,
     env,
     windowsHide: true,
-    stdio: process.env.DESKTOP_DEBUG ? 'inherit' : 'ignore',
+    stdio: 'pipe',
   });
+  // S39 服务日志落盘（客户报障时让用户把 %APPDATA%/获客中台/server.log 发回来即可排障）
+  try {
+    const s = fs.createWriteStream(logFile('server.log'), { flags: 'a' });
+    s.write(`\n===== ${new Date().toISOString()} v${APP_VERSION} 服务启动 port=${port} =====\n`);
+    serverProc.stdout.pipe(s);
+    serverProc.stderr.pipe(s);
+  } catch { /* 日志失败不影响服务 */ }
   // 服务意外退出 → 整个应用退出（避免留下无服务的空壳窗口）
-  serverProc.on('exit', (code) => { if (!quitting) { quitting = true; app.exit(code || 0); } });
-  serverProc.on('error', (e) => { console.error('[desktop] 服务进程启动失败', e); });
+  serverProc.on('exit', (code) => { if (!quitting) { crashLog(`[server] 意外退出 code=${code}`); quitting = true; app.exit(code || 0); } });
+  serverProc.on('error', (e) => { crashLog(`[server] 启动失败 ${e.message}`); console.error('[desktop] 服务进程启动失败', e); });
 }
 
 function createWindow(port) {
+  const bounds = loadBounds();
   mainWindow = new BrowserWindow({
     width: 1360, height: 860, minWidth: 1100, minHeight: 700,
-    title: '获客中台',
+    ...(bounds || {}),
+    title: `获客中台 v${APP_VERSION}`,
     icon: fs.existsSync(ICON_SRC) ? ICON_SRC : undefined,
     autoHideMenuBar: true,
     backgroundColor: '#F7F6F3',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
+  // S39 窗口尺寸位置记忆
+  mainWindow.on('close', saveBounds);
+  app.on('render-process-gone', (_e, _w, details) => crashLog(`[render] 进程消失 reason=${details.reason}`));
+  app.on('child-process-gone', (_e, details) => crashLog(`[child] 进程消失 reason=${details.reason} exit=${details.exitCode}`));
   mainWindow.loadURL(`http://127.0.0.1:${port}/`);
   // S31 弹窗授权：本机页面的window.open（授权弹窗）开应用内子窗口——“抖音界面融入工作台”形态；
   // 其余http(s)外链走系统浏览器；站内导航限制在本机服务

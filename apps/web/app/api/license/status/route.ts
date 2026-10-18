@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'; // S25: license状态读文件+缓存，
 import { ok } from '@/lib/response';
 import { getLicenseState } from '@/lib/license';
 
-/** GET /api/license/status（S25：demo宽松/正式授权双态，占位期只展示不锁功能） */
+/** GET /api/license/status（S25：demo宽松/正式授权双态，占位期只展示不锁功能；S39带版本号供桌面端显示） */
 export async function GET() {
-  return ok(getLicenseState());
+  return ok({ ...getLicenseState(), app_version: process.env.APP_VERSION || '' });
 }
