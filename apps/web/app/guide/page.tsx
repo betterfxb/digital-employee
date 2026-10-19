@@ -13,11 +13,11 @@ const STEPS = [
 const PAGE_MAP = [
   { page: '授权管理', what: '绑定抖音账号、查看授权有效期、系统授权状态' },
   { page: '数据看板', what: '导入数据、看播放/点赞/评论汇总、导出作品 CSV、竞品记录' },
-  { page: '评论工作台', what: '意图分类、批量操作、生成回复话术、登记跟进' },
+  { page: '评论工作台', what: '意图分类、批量操作、生成回复话术、登记跟进、保存常用筛选视图' },
   { page: '任务中心', what: '定时任务状态、启停控制、自动化参数（间隔/上限/静默时段）（自动同步等官方通道开通后自动生效）' },
   { page: '经营报告', what: '日报/周报、指标趋势与行动建议（专业版）' },
   { page: '智能营销', what: '机会雷达、智能客群圈选、话术A/B实验、活动方案复盘（专业版；系统只出主意，触达由你人工执行）' },
-  { page: '私信辅助', what: '话术库（可自定义）、跟进台账、接待规则' },
+  { page: '私信辅助', what: '话术库（可自定义）、跟进台账（表格/看板拖拽/日历三视图）、接待规则' },
   { page: '系统设置', what: '字体/主题、数据备份恢复、修改访问密码' },
 ];
 
@@ -27,6 +27,7 @@ const HOTKEYS = [
   { key: '1 / 2 / 3', what: '改意图（高意向/咨询/…，按设置顺序）' },
   { key: 'c', what: '复制当前评论内容' },
   { key: 'a', what: '全选 / 取消全选' },
+  { key: 'Ctrl+K', what: '全局命令面板（跳页/搜台账话术/快捷动作）——任意页面可用' },
 ];
 
 const FAQ = [
@@ -118,7 +119,7 @@ export default function Guide() {
           </div>
         </div>
         <div className="card" style={{ padding: 18, marginTop: 16 }}>
-          <b>快捷键（评论工作台）</b>
+          <b>快捷键</b>
           <Table size="small" pagination={false} style={{ marginTop: 10 }} columns={hotCols} dataSource={HOTKEYS} rowKey="key" />
         </div>
         <div className="card" style={{ padding: 18, marginTop: 16 }}>

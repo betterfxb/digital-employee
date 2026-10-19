@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -18,6 +18,7 @@ const { leadScore, scoreLevel } = require('./.tmp-crypto/lib/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/lib/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/lib/tiers.js');
 const { computeSegments, computeInsights, computeExperiments, campaignStats, hotKeys } = require('./.tmp-crypto/lib/marketing.js');
+const { sanitizeViews } = require('./.tmp-crypto/lib/commentViews.js');
 const { trendSeries } = require('./.tmp-crypto/lib/bizTrend.js');
 const { encryptBackup, decryptBackup } = require('./.tmp-crypto/lib/backupCrypto.js');
 const { hashPassword, verifyPassword } = require('./.tmp-crypto/lib/accessPw.js');
@@ -178,6 +179,13 @@ const mst = campaignStats(mcamp, mcs, mfs, NOWD);
 check(mst.status === '进行中' && mst.match_count === 3 && mst.follow_new === 1 && mst.done_in_period === 1 && mst.revenue_in_period === 120 && mst.progress === 50, 'mktg 活动复盘口径全套');
 check(campaignStats({ ...mcamp, start_at: iso(2).slice(0, 10), end_at: iso(9).slice(0, 10) }, mcs, mfs, NOWD).status === '未开始', 'mktg 活动状态边界');
 check(hasFeature(TIERS.basic.features, 'marketing') === false, 'mktg 基础版锁marketing键');
+
+// 18) S93 评论保存视图钳制
+check(sanitizeViews(null).length === 0 && sanitizeViews('x').length === 0 && sanitizeViews([null, 1, 'a']).length === 0, 'views 坏输入全滤空');
+const vs = sanitizeViews([{ name: '这个名字特别特别长的视图超十二个字了', kw: '一'.repeat(30), intent: '高意向高意向高意向高', unreadOnly: 'yes' }]);
+check(vs.length === 1 && vs[0].name.length === 12 && vs[0].kw.length === 20 && vs[0].intent.length === 8 && vs[0].unreadOnly === false, 'views 越界钳制与坏布尔回退false');
+check(sanitizeViews([{ name: '重复', kw: 'a' }, { name: '重复', kw: 'b' }, {}]).length === 1, 'views 同名去重与无名丢弃');
+check(sanitizeViews(Array.from({ length: 12 }, (_, i) => ({ name: 'v' + i }))).length === 8, 'views 总量封顶8');
 
 // 14) S74 自动回复节奏与三重门（纯函数）
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');

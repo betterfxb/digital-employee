@@ -58,6 +58,8 @@ export const settings = {
   auto_config: null as Record<string, unknown> | null,
   /** S45 价目表（档位→价格，话术{price}填充源） */
   price_list: [] as { tier: string; price: string }[],
+  /** S93 评论保存视图（读写均过sanitizeViews钳制） */
+  comment_views: [] as import('./commentViews').CommentView[],
 };
 
 export function isRead(c: { id: string; video_id: string; is_read_local: boolean }) {

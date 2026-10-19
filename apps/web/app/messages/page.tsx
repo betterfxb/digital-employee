@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { App, Button, Checkbox, Drawer, Input, Popconfirm, Select, Table, Tag } from 'antd';
+import { App, Button, Checkbox, Drawer, Input, Popconfirm, Radio, Select, Table, Tag } from 'antd';
+import { parseRemind } from '@/lib/remind';
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
@@ -39,6 +40,17 @@ export default function Messages() {
   const [batchTagInput, setBatchTagInput] = useState('');
   /** S65 提醒时间编辑 */
   const [remindEdit, setRemindEdit] = useState<{ id: string; val: string } | null>(null);
+  /** S91/S92 台账三视图：表格/看板(拖拽改状态)/日历(提醒排布)，偏好持久化+URL直达 */
+  const [fmode, setFmode] = useState<'table' | 'board' | 'cal'>('table');
+  useEffect(() => {
+    const usp = new URLSearchParams(window.location.search);
+    const v = usp.get('view');
+    const p = usp.get('peer');
+    if (p) setFsearch(p);
+    if (v === 'board' || v === 'cal') { setFmode(v); try { localStorage.setItem('follow_view', v); } catch { /* 隐私模式忽略 */ } }
+    else { try { const s = localStorage.getItem('follow_view'); if (s === 'board' || s === 'cal') setFmode(s); } catch { /* ignore */ } }
+  }, []);
+  const switchMode = (m: 'table' | 'board' | 'cal') => { setFmode(m); try { localStorage.setItem('follow_view', m); } catch { /* ignore */ } };
   const loadTrash = () => {
     fetch('/api/scripts?trash=1').then((r) => r.json()).then((d) => setScriptTrash(d.items || [])).catch(() => {});
     fetch('/api/reply-rules?trash=1').then((r) => r.json()).then((d) => setRuleTrash(d.items || [])).catch(() => {});
@@ -356,6 +368,7 @@ export default function Messages() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <b>手动跟进台账</b>
               <span style={{ flex: 1 }} />
+              <Radio.Group size="small" value={fmode} onChange={(e) => switchMode(e.target.value)} optionType="button" options={[{ value: 'table', label: '表格' }, { value: 'board', label: '看板' }, { value: 'cal', label: '日历' }]} />
               <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
@@ -377,7 +390,79 @@ export default function Messages() {
                 <Button size="small" type="text" onClick={clearFsel}>取消选择</Button>
               </div>
             )}
-            <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+            {fmode === 'table' && (
+              <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+            )}
+            {fmode === 'board' && (
+              <div>
+                <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8, marginBottom: 6 }}>卡片在状态列之间拖动=改跟进状态（走既有保存接口）；点卡片看档案</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
+                  {assistConfig.followStatuses.map((st) => {
+                    const list = fview.filter((f) => f.status === st);
+                    return (
+                      <div
+                        key={st}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); const f = fview.find((x) => x.id === id); if (f && f.status !== st) changeStatus(id, st); }}
+                        style={{ background: '#FCFBF9', border: '1px dashed #E8E6E1', borderRadius: 6, padding: 8, minHeight: 200 }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#6B6862', marginBottom: 8 }}>{st} <span className="num" style={{ color: '#A8A5A0' }}>{list.length}</span></div>
+                        {list.map((f) => (
+                          <div
+                            key={f.id}
+                            draggable
+                            onDragStart={(e) => e.dataTransfer.setData('text/plain', f.id)}
+                            onClick={() => { if (can('lead')) openDetail(f); }}
+                            style={{ background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, padding: '7px 9px', marginBottom: 6, cursor: 'grab', fontSize: 12 }}
+                          >
+                            <div style={{ fontWeight: 700 }}>{f.peer_nick}</div>
+                            <div style={{ color: '#A8A5A0', marginTop: 2 }}>提醒 {f.next_remind_at}</div>
+                            {st === '已转化' && f.amount != null && <div className="num" style={{ marginTop: 2 }}>¥{f.amount.toLocaleString()}</div>}
+                            {f.tags && f.tags.length > 0 && <div style={{ marginTop: 3 }}>{f.tags.slice(0, 3).map((t) => <Tag key={t} style={{ marginInlineEnd: 4, fontSize: 10 }}>{t}</Tag>)}</div>}
+                          </div>
+                        ))}
+                        {list.length === 0 && <div style={{ fontSize: 11, color: '#C8C5BE', textAlign: 'center', paddingTop: 24 }}>拖到这里</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {fmode === 'cal' && (() => {
+              const dkey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const days: { key: string; label: string; items: Follow[] }[] = [];
+              const overdue: Follow[] = [];
+              for (let i = 0; i < 7; i++) { const d = new Date(today); d.setDate(d.getDate() + i); days.push({ key: dkey(d), label: `${d.getMonth() + 1}/${d.getDate()}${i === 0 ? '（今天）' : ''}`, items: [] }); }
+              for (const f of fview) {
+                if (!['待回访', '已手动回复'].includes(f.status)) continue;
+                const d = parseRemind(f.next_remind_at);
+                if (!d) continue;
+                const col = days.find((x) => x.key === dkey(d));
+                if (col) col.items.push(f);
+                else if (d.getTime() < today.getTime()) overdue.push(f);
+              }
+              const col = (label: string, items: Follow[], red = false) => (
+                <div key={label} style={{ background: '#FCFBF9', border: `1px solid ${red ? '#F0D4D1' : '#E8E6E1'}`, borderRadius: 6, padding: 8, minHeight: 120 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: red ? '#B4443C' : '#6B6862', marginBottom: 6 }}>{label} <span className="num">{items.length}</span></div>
+                  {items.slice(0, 12).map((f) => (
+                    <div key={f.id} onClick={() => { if (can('lead')) openDetail(f); }} style={{ background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, padding: '5px 8px', marginBottom: 5, fontSize: 12, cursor: can('lead') ? 'pointer' : 'default' }}>
+                      <b>{f.peer_nick}</b> <span style={{ color: '#A8A5A0' }}>{f.next_remind_at}</span>
+                    </div>
+                  ))}
+                  {items.length > 12 && <div style={{ fontSize: 11, color: '#A8A5A0' }}>另有{items.length - 12}条…</div>}
+                </div>
+              );
+              return (
+                <div>
+                  <div style={{ fontSize: 11, color: '#A8A5A0', margin: '8px 0 6px' }}>按「下次提醒」排布未来7天+逾期（仅待回访/已手动回复；口语提醒按今天解析）。到点提醒需开着工作台。</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+                    {overdue.length > 0 && col('逾期', overdue, true)}
+                    {days.map((c) => col(c.label, c.items))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
         <div className="card" style={{ marginTop: 16, padding: 16 }}>

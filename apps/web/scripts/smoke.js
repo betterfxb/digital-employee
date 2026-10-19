@@ -226,6 +226,14 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     pass(cu.s === 200 && cu.j.checklist[0].done === true && cd.status === 200 && !(cl2.j.items || []).some((x) => x.id === cp.j.id), 'S87 campaigns 清单勾选+删除自清理');
     const cbad = await post('/api/campaigns', { name: '', start_at: '2026-01-01', end_at: '2099-12-31' });
     pass(cbad.s === 400, 'S87 campaigns 空名拒绝');
+    // S93 保存视图：往返钳制（同名去重/坏项丢/越界截）+ 非数组拒 + 清空自恢复
+    const vpatch = async (body) => { const rr = await fetch(base + '/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return { s: rr.status, j: await rr.json() }; };
+    const vr = await vpatch({ comment_views: [{ name: '冒烟高意向', intent: '高意向', unreadOnly: true }, { name: 'x'.repeat(20) }, 'bad', { name: '冒烟高意向', kw: 'dup' }] });
+    pass(vr.s === 200 && vr.j.comment_views.length === 2 && vr.j.comment_views[0].unreadOnly === true && vr.j.comment_views[1].name.length === 12, 'S93 views 往返去重+钳制+坏项丢弃');
+    const vbad = await vpatch({ comment_views: 'nope' });
+    pass(vbad.s === 400, 'S93 views 非数组拒绝');
+    const vclr = await vpatch({ comment_views: [] });
+    pass(vclr.s === 200 && vclr.j.comment_views.length === 0, 'S93 views 清空自恢复');
     await post('/api/accounts/switch', { id: 'acc_001' });
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');

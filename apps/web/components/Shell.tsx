@@ -9,6 +9,7 @@ import { isDue, shouldNotifyReport, todayKey, daysUntilExpiry } from '../lib/rem
 import { hasFeature } from '../lib/tiers';
 import type { LicenseState } from '../lib/license';
 import { ActivationGate } from './ActivationGate';
+import { CommandPalette } from './CommandPalette';
 import { ProLock } from './ProLock';
 
 /**
@@ -154,6 +155,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app">
       <ActivationGate />
+      {/* S90 全局命令面板（访问密码锁定期间禁用，Ctrl+K） */}
+      <CommandPalette enabled={!locked} />
       {/* S69 本地访问密码解锁层（在激活门之上：先解锁再看授权状态） */}
       {locked && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#F7F6F3', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>

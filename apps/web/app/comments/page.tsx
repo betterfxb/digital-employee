@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Checkbox, Input, Select } from 'antd';
+import { App, Button, Checkbox, Input, Popconfirm, Select } from 'antd';
+import type { CommentView } from '@/lib/commentViews';
 import { commentsConfig } from '@/config/comments.config';
 import { downloadCsv } from '@/lib/csv';
 import { leadScore, scoreLevel } from '@/lib/leadScore';
@@ -24,6 +25,15 @@ export default function Comments() {
   const [product, setProduct] = useState('跑刀代跑');
   const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
   const [replyVariant, setReplyVariant] = useState(0); // S86 话术A/B：当前输入框内容来自候选第几位（0=手写）
+  /** S93 保存视图：常用筛选组合一键切换（服务端钳制存储） */
+  const [views, setViews] = useState<CommentView[]>([]);
+  const [viewName, setViewName] = useState('');
+  const saveViews = async (next: CommentView[]) => {
+    const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment_views: next }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '视图保存失败'); return; }
+    setViews(Array.isArray(r.comment_views) ? r.comment_views : next);
+  };
+  const applyView = (v: CommentView) => { setKw(v.kw); setIntent(v.intent); setUnreadOnly(v.unreadOnly); load({ k: v.kw, it: v.intent, uo: v.unreadOnly }); };
   const [genBusy, setGenBusy] = useState(false);
   const [tone, setTone] = useState('亲切');
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -59,10 +69,13 @@ export default function Comments() {
 
   useEffect(() => {
     fetch('/api/videos').then((r) => r.json()).then((d) => setVideos(d.items || [])).catch(() => {});
-    fetch('/api/settings').then((r) => r.json()).then((s) => { if (s?.service_name) setProduct(s.service_name); }).catch(() => {});
+    fetch('/api/settings').then((r) => r.json()).then((s) => { if (s?.service_name) setProduct(s.service_name); if (Array.isArray(s?.comment_views)) setViews(s.comment_views); }).catch(() => {});
     // S46 URL深链（运营建议跳转带 ?intent= 高意向 等）
-    const urlIntent = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('intent') : null;
-    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent }); } else load();
+    const usp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlIntent = usp ? usp.get('intent') : null;
+    const urlKw = usp ? usp.get('kw') : null; // S90 命令面板搜索直达
+    if (urlKw) setKw(urlKw);
+    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent, k: urlKw || '' }); } else if (urlKw) load({ k: urlKw }); else load();
     fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw).slice(0, 8)); }).catch(() => {});
     fetch('/api/scripts/templates?intent=普通').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {
       fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
@@ -203,6 +216,25 @@ export default function Comments() {
     <div>
       <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>评论工作台</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>只看自己视频 · 本地已读 · 快捷键 j/k/e/1/2/3/c/a（a=全选）</div></div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
+        {/* S93 保存视图条 */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: '#A8A5A0' }}>视图</span>
+          {views.map((v) => (
+            <span key={v.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid #E8E6E1', background: '#fff', borderRadius: 12, padding: '2px 10px', fontSize: 12 }}>
+              <span style={{ cursor: 'pointer', color: kw === v.kw && intent === v.intent && unreadOnly === v.unreadOnly ? '#1677FF' : '#1A1A18' }} onClick={() => applyView(v)}>{v.name}</span>
+              <span style={{ cursor: 'pointer', color: '#C8C5BE' }} title="删除视图" onClick={() => saveViews(views.filter((x) => x.name !== v.name))}>×</span>
+            </span>
+          ))}
+          <Popconfirm
+            title="把当前筛选存为视图"
+            description={<Input size="small" placeholder="视图名（≤12字）" value={viewName} onChange={(e) => setViewName(e.target.value)} maxLength={12} style={{ width: 160 }} />}
+            okText="保存" cancelText="取消"
+            onConfirm={() => { if (viewName.trim()) { saveViews([...views.filter((x) => x.name !== viewName.trim()), { name: viewName.trim(), kw, intent, unreadOnly }]); setViewName(''); } }}
+          >
+            <Button size="small" type="text" style={{ fontSize: 12 }}>+ 存当前筛选</Button>
+          </Popconfirm>
+          <span style={{ fontSize: 11, color: '#C8C5BE' }}>最多8个；同改名即覆盖</span>
+        </div>
         <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <Input size="small" value={kw} onChange={(e) => setKw(e.target.value)} onPressEnter={() => load({ k: kw })} placeholder="搜索关键词" style={{ width: 200 }} allowClear />
           <Select size="small" value={intent} onChange={(v) => { setIntent(v); load({ it: v }); }} style={{ width: 120 }} options={intentOpts} />

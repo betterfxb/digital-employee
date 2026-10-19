@@ -81,6 +81,10 @@ export default function Dashboard() {
     loadComps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadTick]);
+  // S90 命令面板直达：/dashboard?import=1 自动开导入向导
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('import') === '1') setWiz(true);
+  }, []);
 
   // S75 自动刷新（面板配置，页面隐藏时暂停）
   useEffect(() => {

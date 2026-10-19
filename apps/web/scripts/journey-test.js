@@ -147,6 +147,21 @@ const tag = Date.now().toString(36);
     if (ls2.some((x) => x.id === camp.j.id)) throw new Error('删除未生效');
     pass(true, 'J10 位次实验差值+活动生命周期');
   } catch (e) { pass(false, 'J10 位次实验+活动生命周期', ` ${e.message}`); }
+  // J11 保存视图跨接口回声（S93）：存→settings回显→坏类型400不动原值→清空复原（自清理）
+  try {
+    const v1 = await send('PATCH', '/api/settings', { comment_views: [{ name: 'J11视图', kw: '价格', intent: '', unreadOnly: false }] });
+    if (v1.s !== 200 || !v1.j.comment_views || v1.j.comment_views[0].kw !== '价格') throw new Error('存视图未回声');
+    const st = await get('/api/settings');
+    if (!st.comment_views || !st.comment_views.some((x) => x.name === 'J11视图')) throw new Error('GET不见视图');
+    const vbad = await send('PATCH', '/api/settings', { comment_views: 42 });
+    if (vbad.s !== 400) throw new Error('非数组未拒');
+    const st2 = await get('/api/settings');
+    if (!st2.comment_views.some((x) => x.name === 'J11视图')) throw new Error('坏请求动了原值');
+    await send('PATCH', '/api/settings', { comment_views: [] });
+    const st3 = await get('/api/settings');
+    if (st3.comment_views.length !== 0) throw new Error('清空未复原');
+    pass(true, 'J11 视图回声+坏请求不动原值+复原');
+  } catch (e) { pass(false, 'J11 视图回声与复原', ` ${e.message}`); }
   console.log(fail === 0 ? 'JOURNEY ALL GREEN' : `JOURNEY ${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();
