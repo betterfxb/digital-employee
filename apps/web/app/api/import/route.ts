@@ -4,70 +4,12 @@ import { douyinConfig } from '@/config/douyin.config';
 import { getRepos } from '@/lib/repo';
 import { pushAuthLog, withBatch } from '@/lib/localData';
 import { upsertVideo, upsertComment } from '@/lib/importData';
-
-/** CSV解析：支持引号转义/逗号换行/BOM，返回二维数组 */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cur = '';
-  let inQ = false;
-  const src = text.replace(/^\uFEFF/, '');
-  for (let i = 0; i < src.length; i++) {
-    const c = src[i];
-    if (inQ) {
-      if (c === '"' && src[i + 1] === '"') { cur += '"'; i++; }
-      else if (c === '"') inQ = false;
-      else cur += c;
-    } else if (c === '"') inQ = true;
-    else if (c === ',') { row.push(cur); cur = ''; }
-    else if (c === '\n' || c === '\r') {
-      if (c === '\r' && src[i + 1] === '\n') i++;
-      row.push(cur); cur = '';
-      if (row.some((x) => x.trim() !== '')) rows.push(row);
-      row = [];
-    } else cur += c;
-  }
-  row.push(cur);
-  if (row.some((x) => x.trim() !== '')) rows.push(row);
-  return rows;
-}
+import { parseCsv, colMap, missingColError, normalizeDateTime } from '@/lib/csvParse';
 
 const num = (s: string | undefined) => {
-  const n = Number(String(s || '').replace(/[,，\s]/g, ''));
+  const n = Number(String(s || '').replace(/[,，\s%]/g, ''));
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
 };
-
-function colMap(header: string[]): Record<string, number> {
-  const m: Record<string, number> = {};
-  header.forEach((h, i) => { m[h.trim()] = i; });
-  // S59 常见导出格式别名归一（抖音后台/表格软件的列名差异）：规范名 ← 别名指向同一列
-  for (const [canon, aliasList] of Object.entries(COL_ALIASES)) {
-    if (m[canon] !== undefined) continue;
-    const hit = aliasList.find((a) => m[a] !== undefined);
-    if (hit !== undefined) m[canon] = m[hit];
-  }
-  return m;
-}
-
-/** 列名别名表（支持的常见写法；报错时也会展示给用户对照） */
-const COL_ALIASES: Record<string, string[]> = {
-  标题: ['视频标题', '作品标题'],
-  发布时间: ['发布日期', '日期'],
-  播放: ['播放量', '观看量', '观看'],
-  点赞: ['点赞量', '获赞'],
-  评论: ['评论数', '评论量'],
-  转发: ['转发数', '分享', '分享数'],
-  昵称: ['用户昵称', '用户', '评论用户'],
-  内容: ['评论内容', '正文'],
-  视频标题: ['所属视频', '作品标题'],
-  时间: ['评论时间'],
-};
-
-/** S59 缺列报错：带别名提示+用户实际表头（客户一眼知道怎么改） */
-function missingColError(kind: string, missing: string[], actual: string[]): string {
-  const aliasHint = missing.map((c) => `「${c}」支持：${[c, ...(COL_ALIASES[c] || [])].join('/')}`).join('；');
-  return `${kind}缺少必需列 ${missing.map((c) => `「${c}」`).join('')}。${aliasHint}。你文件的表头是：${actual.map((h) => h.trim()).join(',') || '(空)'}`;
-}
 
 interface ImportResult { error?: string; created: number; updated: number; skipped?: number }
 
@@ -79,7 +21,8 @@ function importVideos(rows: string[][], aid: string): ImportResult {
   for (const r of rows.slice(1, douyinConfig.importMaxRows + 1)) {
     const title = (r[head['标题']] || '').trim();
     if (!title) continue;
-    const pt = (head['发布时间'] !== undefined ? (r[head['发布时间']] || '').trim() : '') || `${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+    const ptRaw = head['发布时间'] !== undefined ? (r[head['发布时间']] || '').trim() : '';
+    const pt = normalizeDateTime(ptRaw) || `${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`; // S79 Excel绝对日期归一MM-DD
     const c = upsertVideo(aid, {
       title,
       publish_time: pt,
@@ -114,7 +57,7 @@ function importComments(rows: string[][], aid: string): ImportResult {
       nick,
       content,
       like: num(head['点赞'] !== undefined ? r[head['点赞']] : ''),
-      time: (head['时间'] !== undefined ? (r[head['时间']] || '').trim() : '') || '刚刚',
+      time: normalizeDateTime(head['时间'] !== undefined ? (r[head['时间']] || '').trim() : '') || '刚刚', // S79 评论时间归一（2026-10-18 12:00→10-18；相对时间原样）
     });
     created += c.created;
     updated += c.updated;

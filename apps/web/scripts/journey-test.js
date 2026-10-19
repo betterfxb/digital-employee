@@ -32,7 +32,8 @@ const tag = Date.now().toString(36);
     const me2 = await get('/api/accounts/me');
     await send('POST', '/api/accounts/switch', { id: 'acc_001' });
     const v1 = await get('/api/videos');
-    pass(v2.items.length === 3 && v2.items.some((v) => v.id === 'v3') && me2.id === 'acc_002' && v1.items.length === 2 && v1.items.every((v) => v.id !== 'v3'), 'J3 切号隔离往返');
+    // 断言口径（S81防污染）：只数种子行（非imp-前缀），历史旅程导入残留不影响隔离判定
+    pass(v2.items.filter((x) => !String(x.id).startsWith('imp-')).length === 3 && v2.items.some((v) => v.id === 'v3') && me2.id === 'acc_002' && v1.items.filter((x) => !String(x.id).startsWith('imp-')).length === 2 && v1.items.every((v) => v.id !== 'v3'), 'J3 切号隔离往返');
   } catch (e) { pass(false, 'J3 切号隔离往返', ` ${e.message}`); }
   // J4 垃圾意图返回处理建议而非话术
   try {
@@ -104,6 +105,29 @@ const tag = Date.now().toString(36);
     if (rst.j.auto_config.sync_interval_min !== 30 || rst.j.auto_config.reply_daily_cap !== 12) throw new Error('恢复默认失败');
     pass(true, 'J8 自动化钳制+三重门+回默认');
   } catch (e) { pass(false, 'J8 自动化钳制与三重门', ` ${e.message}`); }
+  // J9 S79/S80 导入容错与备份闭环：TSV建→CSV改（同规范列跨格式幂等）→备份快照含新值→preview可用
+  try {
+    const tagT = 'J9旅程作品' + tag;
+    const r1 = await send('POST', '/api/import', { kind: 'videos', csv: `作品标题\t发布日期\t播放量\t获赞数\n${tagT}\t2026年10月16日\t100\t5` });
+    if (r1.j.created + r1.j.updated !== 1) throw new Error('TSV建失败');
+    const vidsA = await get('/api/videos');
+    const rowA = vidsA.items.find((v) => v.title === tagT);
+    if (!rowA || rowA.publish_time !== '10-16') throw new Error('中文日期未归一10-16');
+    const r2 = await send('POST', '/api/import', { kind: 'videos', csv: `标题,发布时间,播放,点赞,评论,转发\n${tagT},10-16,300,9,0,0` });
+    if (r2.j.updated !== 1 || r2.j.created !== 0) throw new Error('跨格式未走更新');
+    const vidsB = await get('/api/videos');
+    const rowB = vidsB.items.find((v) => v.title === tagT);
+    if (!rowB || rowB.play !== 300) throw new Error('更新值未生效');
+    const bk = await send('POST', '/api/data/backups/run', {});
+    if (!bk.j.created) throw new Error('备份未落盘');
+    const snapTxt = await (await fetch(base + '/api/data/backups/download?name=' + encodeURIComponent(bk.j.entry.name))).text();
+    const snap = JSON.parse(snapTxt);
+    const inSnap = (snap.videos || []).find((v) => v.title === tagT);
+    if (!inSnap || inSnap.play !== 300) throw new Error('快照缺新值（备份非实时）');
+    const pv = await send('POST', '/api/data/restore', { data: snap, preview: true });
+    if (!pv.j.preview || pv.j.videos < 1) throw new Error('快照preview不可用');
+    pass(true, 'J9 跨格式幂等+备份快照闭环');
+  } catch (e) { pass(false, 'J9 跨格式幂等+备份闭环', ` ${e.message}`); }
   console.log(fail === 0 ? 'JOURNEY ALL GREEN' : `JOURNEY ${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();

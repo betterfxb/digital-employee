@@ -8,6 +8,7 @@ import { tasksConfig } from '@/config/tasks.config';
 import { getRepos } from './repo';
 import { runLiveSync, liveSyncEnabled } from './liveSync';
 import { autoReplyTick } from './autoReply';
+import { backupTick } from './autoBackup';
 import { autoCfgOf } from './autoCfg';
 import type { AutoConfig } from './autoCfg';
 
@@ -123,6 +124,8 @@ async function tick(): Promise<void> {
   st.lastTickAt = new Date().toISOString();
   // S74 评论自动回复独立心跳（冷却/上限/静默自判，与同步开关和熔断无关）
   try { autoReplyTick(); } catch { /* 执行器异常不拖垮调度 */ }
+  // S80 本地自动备份轮转：心跳顺带检查（3点后当日未落盘则补一份，保留14份，异常不拖垮调度）
+  try { backupTick(); } catch { /* ignore */ }
   // S75 自动化面板可调：同步总开关/间隔/日限/静默读用户配置（config为出厂默认）
   const cfg = autoCfgOf(getRepos().settings.get() as { auto_config?: unknown });
   if (!cfg.sync_enabled) return;

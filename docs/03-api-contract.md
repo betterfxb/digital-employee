@@ -24,7 +24,7 @@ GET /api/stats/overview?account_id&date[&all=1] -> {play,like,comment,note}（S2
 GET /api/stats/trend?ids=a,b,c&days=7 -> {[id]:[{date,play,like}]}（键为请求传入id；imp_导入作品返回[]不画假线，S23b）
 POST /api/stats/sync -> {task_id, live_sync?} // S26: live模式入队后实际拉开放平台作品+评论（mock纯入队不变）；live_sync={mode,videos,comments,pages,error?}
 GET/POST /api/competitors -> {url,source,play,like,remark} // 手动导入区
-POST /api/import {kind:videos|comments, csv} -> {created,updated,skipped?} | {code:FATAL}（S23：按账号+标题/昵称upsert，imp_前缀，首行表头，≤200行）
+POST /api/import {kind:videos|comments, csv} -> {created,updated,skipped?} | {code:FATAL}（S23：按账号+标题/昵称upsert，imp_前缀，首行表头，≤200行；S79容错：csv字段为解码后文本——客户端file.arrayBuffer→UTF-8严格失败转GBK嗅探，服务端TSV自动识别、列名别名表（lib/csvParse同表前后端共用）、2026-10-18/2026年10月8日等绝对日期归一MM-DD、千分位/百分号剥离，缺列报错回显用户实际表头）
 ```
 
 ## Comments / Follows
@@ -83,6 +83,9 @@ GET /api/license/status -> {mode:demo|licensed, valid, customer, expires_at, fea
 ```
 GET  /api/data/backup[?pass=6+位] -> 备份JSON附件（S38；S61 pass=口令出AES-GCM密文包{__enc,v,salt,iv,tag,data}；S71附snapshots{hot,biz}趋势快照）
 POST /api/data/restore {data, pass?, preview?} -> preview=1返回{preview,accounts,videos,comments,follows,customScripts,cleared}零副作用（S64）| 执行返回{restored,snapshots_restored}（S61/64/71）
+GET  /api/data/backups -> {list:[{name,size,mtime,kind:auto|manual}],keep:14,last_auto,total_size}（S80 本地自动备份目录盘点）
+POST /api/data/backups/run -> {created,entry}立即存manual快照（S80；auto每日凌晨3点后由调度器心跳幂等落一份，轮转保留最近14份）
+GET  /api/data/backups/download?name= -> 快照文件附件（S80；命名白名单auto-/manual-正则，穿越400）；恢复走既有/api/data/restore（客户端download→JSON→preview→覆盖确认）
 POST /api/data/clear {confirm:'清空'} -> 缺确认词FATAL（S37；业务全清+seed不复活，账号授权设置保留）
 GET  /api/diag/bundle -> text/plain附件（S59：版本/环境/授权状态/双日志近150行，不含业务数据）
 POST /api/report/snapshot -> {snapshot, history}（S55：报告页打开记当日业务快照，每日一条30天）

@@ -15,6 +15,7 @@ pnpm build:win                            # = make-icon → web构建(standalone
 
 技术要点：
 - web 以 `NEXT_OUTPUT_STANDALONE=1` 构建（next.config 按 env 开关，不影响日常 start）
+- **S79 低内存机器构建防崩**：`Static worker exited 0xC0000409` 是静态生成 worker OOM，非代码问题。设 `NEXT_BUILD_CPUS=2`（next.config 已支持该 env 限 worker 数）+ 重试循环；S81 实测本机 6 连崩后 cpus=2 一次过
 - `apps/web/.npmrc` `node-linker=hoisted`：Windows 下 pnpm 符号链接拷贝 standalone 会 EPERM
 - standalone 经 `extraResources` 原样拷贝（files 会滤掉 node_modules，必须走 extraResources）
 - 主进程用 `http` 模块选端口/探活（Electron 内置 `net` 阴影了 Node 的 net，`node:` 前缀也逃不掉）

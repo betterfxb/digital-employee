@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Input, Modal, Popconfirm, Slider } from 'antd';
+import { App, Button, Input, Modal, Popconfirm, Slider, Table, Tag } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
@@ -64,6 +64,27 @@ export default function Settings() {
   const restoreRef = useRef<HTMLInputElement>(null);
   /** S64 恢复覆盖确认（preview 校验+计数 → 确认弹窗 → 才真恢复） */
   const [restorePlan, setRestorePlan] = useState<{ data: Record<string, unknown>; pass?: string; counts: Record<string, number | boolean> } | null>(null);
+
+  // ── S80 本地自动备份轮转 ──
+  interface BEntry { name: string; size: number; mtime: string; kind: 'auto' | 'manual' }
+  const [backs, setBacks] = useState<{ list: BEntry[]; keep: number; last_auto: string | null } | null>(null);
+  const loadBacks = () => { fetch('/api/data/backups').then((r) => r.json()).then(setBacks).catch(() => setBacks({ list: [], keep: 14, last_auto: null })); };
+  useEffect(loadBacks, []);
+  const runBackupNow = async () => {
+    const r = await fetch('/api/data/backups/run', { method: 'POST' }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '备份失败'); return; }
+    message.success('已备份一份到本机 data/backups/'); loadBacks();
+  };
+  /** S80 从本地备份恢复：下载→preview校验→走S64既有覆盖确认 */
+  const restoreFromLocal = async (b: BEntry) => {
+    const text = await fetch(`/api/data/backups/download?name=${encodeURIComponent(b.name)}`).then((x) => x.ok ? x.text() : Promise.reject(new Error('读取失败'))).catch(() => null);
+    if (text === null) { message.error('读取备份文件失败'); return; }
+    let data: Record<string, unknown>;
+    try { data = JSON.parse(text); } catch { message.error('备份文件已损坏（非法JSON）'); return; }
+    const pv = await fetch('/api/data/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data, preview: true }) }).then((x) => x.json()).catch(() => null);
+    if (!pv || pv.code) { message.error(pv?.message || '备份校验失败'); return; }
+    setRestorePlan({ data, counts: pv });
+  };
 
   const doRestore = async (f?: File) => {
     if (!f) return;
@@ -200,6 +221,33 @@ export default function Settings() {
                 </div>
               )}
             </Modal>
+          </div>
+          <div className="card" style={{ padding: 18, marginTop: 16 }}>
+            <b>本地自动备份</b> <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400 }}>每天凌晨3点后系统自动存一份快照（保留最近{backs?.keep ?? 14}份），防文件损坏/误恢复</span>
+            <div style={{ display: 'flex', gap: 8, margin: '10px 0' }}>
+              <Button size="small" onClick={runBackupNow}>立即备份一份</Button>
+              <Button size="small" type="text" onClick={loadBacks}>刷新</Button>
+              {backs?.last_auto && <span style={{ fontSize: 12, color: '#6B6862', alignSelf: 'center' }}>最近自动：{backs.last_auto}</span>}
+            </div>
+            <Table
+              size="small" pagination={false} rowKey="name"
+              dataSource={backs?.list ?? []}
+              locale={{ emptyText: '还没有备份文件（有数据后自动产生，或点上方立即备份）' }}
+              columns={[
+                { title: '文件', dataIndex: 'name', key: 'n', render: (v: string, b: BEntry) => <span><Tag color={b.kind === 'auto' ? 'blue' : 'green'}>{b.kind === 'auto' ? '自动' : '手动'}</Tag>{v}</span> },
+                { title: '大小', dataIndex: 'size', key: 's', width: 80, render: (v: number) => `${Math.max(1, Math.round(v / 1024))} KB` },
+                { title: '时间', dataIndex: 'mtime', key: 'm', width: 150, render: (v: string) => v.slice(0, 16).replace('T', ' ') },
+                { title: '操作', key: 'a', width: 150, render: (_: unknown, b: BEntry) => (
+                  <span style={{ display: 'inline-flex', gap: 6 }}>
+                    <Button size="small" type="link" href={`/api/data/backups/download?name=${encodeURIComponent(b.name)}`}>下载</Button>
+                    <Popconfirm title="用这份备份恢复？" description="当前业务数据将被整体替换，恢复前也会先弹窗让你核对数量。" okText="下一步（校验）" cancelText="取消" onConfirm={() => restoreFromLocal(b)}>
+                      <Button size="small" type="link" danger>恢复</Button>
+                    </Popconfirm>
+                  </span>
+                ) },
+              ]}
+            />
+            <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>备份文件只存在你这台电脑的数据目录里；若软件已打不开，把 local.json 损坏情况告诉服务商，可用这些快照手工救回</div>
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>价目表{feats !== null && !hasFeature(feats, 'quote') && <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400, marginLeft: 8 }}>🔒专业版</span>}</b>

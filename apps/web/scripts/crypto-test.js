@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -22,6 +22,7 @@ const { encryptBackup, decryptBackup } = require('./.tmp-crypto/lib/backupCrypto
 const { hashPassword, verifyPassword } = require('./.tmp-crypto/lib/accessPw.js');
 const { nextGapMs, replyGate } = require('./.tmp-crypto/lib/autoReply.js');
 const { mergeAutoCfg, AUTO_DEFAULTS } = require('./.tmp-crypto/lib/autoCfg.js');
+const { detectDelim, parseCsv, colMap, missingCols, normalizeDateTime, decodeTextBuffer } = require('./.tmp-crypto/lib/csvParse.js');
 
 // 1) 真模块往返（key()每次调用重读env，换key无需清缓存）
 const secret = 'access-token-敏感内容-123';
@@ -62,10 +63,14 @@ check(matchBind({ cpu: 'aaa', disk: '', mac: 'yyy' }, cur) === false, 'matchBind
 check(fingerprint({ cpu: '', disk: '', mac: '' }).cpu === '' && machineCode({ cpu: 'a', disk: 'b', mac: 'c' }) === 'a.b.c', 'machineId 空因子+机器码格式');
 
 // 5) S44 跟进提醒时间解析（口语今天/明天/后天 + ISO + 无法解析）
-const now = new Date('2026-10-18T12:00:00').getTime();
+// S79修脆弱性：parseRemind/isDue的口语按真实"今天"解析，断言必须用运行日动态基准（原硬编码2026-10-19跨零点即挂）
+const realRef = Date.now();
+const now = new Date('2026-10-18T12:00:00').getTime(); // ISO断言用钉死基准（两边都是绝对日期，跨天稳定）
 const tmr = parseRemind('明天 18:00');
-check(tmr !== null && tmr.getTime() === new Date('2026-10-19T18:00:00').getTime(), 'remind 明天18点解析');
-check(isDue('今天 11:00', now) === true && isDue('明天 18:00', now) === false, 'remind 到期判定');
+const tmrExpect = new Date(); tmrExpect.setDate(tmrExpect.getDate() + 1); tmrExpect.setHours(18, 0, 0, 0);
+check(tmr !== null && tmr.getTime() === tmrExpect.getTime(), 'remind 明天18点解析');
+const todayRef = new Date(); todayRef.setHours(0, 0, 0, 0);
+check(isDue(todayRef.toISOString(), realRef) === true && isDue('明天 18:00', realRef) === false, 'remind 到期判定');
 check(isDue('2026-10-18T11:00:00', now) === true, 'remind ISO兼容');
 check(parseRemind('随便写的') === null && isDue(null) === false, 'remind 无法解析不提醒');
 
@@ -127,6 +132,13 @@ check(def.sync_interval_min === AUTO_DEFAULTS.sync_interval_min && def.dashboard
 const clamped = mergeAutoCfg({ sync_interval_min: 999, reply_gap_min_sec: 500, reply_gap_max_sec: 100, reply_tone: '怪' });
 check(clamped.sync_interval_min === 240 && clamped.reply_gap_min_sec === 100 && clamped.reply_tone === '亲切', 'acfg 越界钳制+倒挂修正+坏枚举回退');
 check(mergeAutoCfg({ quiet_enabled: 'x' }).quiet_enabled === true, 'acfg 坏布尔回退默认');
+
+// 16) S79 导入容错共享层（编码/TSV/别名/日期）
+check(detectDelim('标题\t播放\r\nx\t1') === '\t' && parseCsv('a\tb\n1\t2').length === 2, 'csv TSV自动识别（Excel复制粘贴）');
+check(colMap(['用户昵称', '正文', '所属视频'])['昵称'] === 0 && colMap(['用户昵称', '正文', '所属视频'])['视频标题'] === 2, 'csv 别名归一（前后端同表）');
+check(missingCols('comments', ['用户', '内容']).join() === '视频标题', 'csv 缺列精确报（别名过后仅剩一缺）');
+check(normalizeDateTime('2026-10-18 12:00:00') === '10-18' && normalizeDateTime('2026年10月8日') === '10-08' && normalizeDateTime('2小时前') === '2小时前' && normalizeDateTime('10-08') === '10-08', 'csv 日期归一四形态');
+check(decodeTextBuffer(Buffer.from([0xB1, 0xEA, 0xCC, 0xE2, 0xC1, 0xBF])) === '标题量' && decodeTextBuffer(Buffer.from('\uFEFFabc', 'utf8')) === 'abc', 'csv GBK嗅探与BOM剥离');
 
 // 14) S74 自动回复节奏与三重门（纯函数）
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');

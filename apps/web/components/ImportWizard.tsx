@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { App, Button, Modal, Radio, Upload } from 'antd';
 import { downloadCsv } from '@/lib/csv';
+import { decodeTextBuffer, parseCsv, missingCols, missingColError } from '@/lib/csvParse';
 
 /**
- * S32 导入向导：模板下载 → 拖拽上传（前端列头/行数预校验）→ 结果明细（建/更/跳+原因）
- * 目标：客户 5 分钟把自己的数据导进系统；复用 POST /api/import，无新接口
+ * S32 导入向导：模板下载 → 拖拽上传 → 结果明细（建/更/跳+原因）
+ * S79 容错升级：UTF-8/GBK编码嗅探（中文Excel导出ANSI不再乱码）、列头按别名表预检（与后端同口径，抖音后台直接导出也能过）、TSV自动识别（Excel复制粘贴产物）
  */
 const TPL: Record<'videos' | 'comments', { label: string; cols: string[]; sample: string[][] }> = {
   videos: { label: '作品', cols: ['标题', '发布时间', '播放', '点赞', '评论', '转发'], sample: [['三角洲跑刀实录 · 一局爆仓', '10-08', '48201', '4102', '312', '410']] },
@@ -24,15 +25,19 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
 
   const handleFile = async (file: File) => {
     setErr('');
-    const csv = await file.text().catch(() => '');
+    const buf = await file.arrayBuffer().catch(() => null);
+    if (!buf) { setErr('文件读取失败，请重试'); return; }
+    const csv = decodeTextBuffer(buf); // S79 UTF-8严格失败→GBK（中文Excel ANSI导出）
     if (!csv.trim()) { setErr('文件是空的，请用模板填写后再上传'); return; }
-    const header = csv.split(/\r?\n/)[0].replace(/^\uFEFF/, '').trim();
-    if (header !== TPL[kind].cols.join(',')) {
-      setErr(`列头与模板不一致。正确列头：${TPL[kind].cols.join(',')}（可先「下载模板」照着填）`);
+    const rows = parseCsv(csv); // S79 逗号/制表符自动识别（Excel复制粘贴=TSV也能进）
+    const head = rows[0] || [];
+    const missing = missingCols(kind, head);
+    if (missing.length > 0) {
+      setErr(missingColError(`${TPL[kind].label}文件`, missing, head));
       return;
     }
-    const rows = csv.trim().split(/\r?\n/).length - 1;
-    if (rows > 200) { setErr(`单次最多 200 行，本文件 ${rows} 行，请拆分后再传`); return; }
+    const n = rows.length - 1;
+    if (n > 200) { setErr(`单次最多 200 行，本文件 ${n} 行，请拆分后再传`); return; }
     setBusy(true);
     const r = await fetch('/api/import', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, csv }),
@@ -60,8 +65,8 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
             accept=".csv,text/csv" showUploadList={false} disabled={busy}
             beforeUpload={(f) => { handleFile(f); return false; }}
           >
-            <div style={{ padding: '10px 0', color: busy ? '#A8A5A0' : '#1A1A18' }}>{busy ? '正在导入…' : '把填好的 CSV 拖到这里，或点击选择文件'}</div>
-            <div style={{ fontSize: 12, color: '#A8A5A0', paddingBottom: 8 }}>单次 ≤200 行 · 先下模板照着填</div>
+            <div style={{ padding: '10px 0', color: busy ? '#A8A5A0' : '#1A1A18' }}>{busy ? '正在导入…' : '把 CSV / Excel 另存的表格拖到这里，或点击选择文件'}</div>
+            <div style={{ fontSize: 12, color: '#A8A5A0', paddingBottom: 8 }}>单次 ≤200 行 · UTF-8/GBK 自动识别 · 抖音后台导出/Excel 复制粘贴都能直接进</div>
           </Upload.Dragger>
           {err && <div style={{ color: '#B4443C', fontSize: 12, marginTop: 10, lineHeight: 1.7 }}>{err}</div>}
           <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 12, lineHeight: 1.7 }}>

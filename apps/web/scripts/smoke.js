@@ -170,7 +170,7 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const iv1 = await post('/api/import', { kind: 'videos', csv: csvV });
     const iv2 = await post('/api/import', { kind: 'videos', csv: csvV });
     const vids = await get('/api/videos');
-    pass(iv1.s === 200 && iv2.s === 200 && iv1.j.created + iv1.j.updated === 1 && iv2.j.created + iv2.j.updated === 1 && vids.j.items.length === 1 && vids.j.items[0].title === '冒烟真机作品', 'S23 import video upsert幂等');
+    pass(iv1.s === 200 && iv2.s === 200 && iv1.j.created + iv1.j.updated === 1 && iv2.j.created + iv2.j.updated === 1 && vids.j.items.filter((x) => x.title === '冒烟真机作品').length === 1 && vids.j.items.some((x) => x.title === '冒烟真机作品'), 'S23 import video upsert幂等');
     const ic = await post('/api/import', { kind: 'comments', csv: '昵称,内容,视频标题,时间,点赞\n烟友,跑刀怎么下单？多少钱,冒烟真机作品,1小时前,2' });
     const cmts = await get('/api/comments?unread_only=0');
     const mine = cmts.j.items.find((x) => x.user_nick === '烟友');
@@ -184,6 +184,26 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const cmts2 = await get('/api/comments?unread_only=0');
     const aliNick = cmts2.j.items.find((x) => x.user_nick === '别名粉');
     pass(ali.s === 200 && ali.j.created + ali.j.updated === 1 && aliNick && aliNick.intent === '高意向', 'S59 列名别名容错');
+    // S79 导入容错三件套：TSV（Excel复制粘贴）+ 别名表头 + 绝对日期归一
+    const tsv = '作品标题\t发布日期\t播放量\t获赞数\n冒烟TSV作品\t2026-10-15 14:30:00\t1,234\t56';
+    const it = await post('/api/import', { kind: 'videos', csv: tsv });
+    const vidsT = await get('/api/videos');
+    const tRow = vidsT.j.items.find((x) => x.title === '冒烟TSV作品');
+    pass(it.s === 200 && tRow && tRow.publish_time === '10-15' && tRow.play === 1234 && tRow.like === 56, 'S79 TSV+别名+日期归一+千分位');
+    // S79 缺列报错带用户表头回显（可自助修正）
+    const miss = await post('/api/import', { kind: 'videos', csv: '名称,数据\nx,1' });
+    pass(miss.s === 400 && String(miss.j.message).includes('你文件的表头是：名称,数据'), 'S79 缺列报错回显实际表头');
+    // S80 本地自动备份轮转三端点
+    const bl = await get('/api/data/backups');
+    pass(bl.s === 200 && Array.isArray(bl.j.list) && bl.j.keep === 14, 'S80 backups list 结构');
+    const br = await post('/api/data/backups/run', {});
+    pass(br.s === 200 && br.j.created === true && /^manual-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(br.j.entry?.name || ''), 'S80 手动备份落盘命名规范');
+    const dl = await fetch(base + '/api/data/backups/download?name=' + encodeURIComponent(br.j.entry.name));
+    const dlText = dl.status === 200 ? await dl.text() : '';
+    let dlJson = null; try { dlJson = JSON.parse(dlText); } catch { /* invalid */ }
+    pass(dl.status === 200 && dlJson && Array.isArray(dlJson.accounts) && Array.isArray(dlJson.videos), 'S80 备份下载=合法快照JSON');
+    const evil = await fetch(base + '/api/data/backups/download?name=../local.json');
+    pass(evil.status === 400, 'S80 备份名穿越拒绝');
     await post('/api/accounts/switch', { id: 'acc_001' });
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');
