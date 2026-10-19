@@ -7,10 +7,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return page(getRepos().replies.list(params.id), null);
 }
 
-/** POST /api/comments/:id/replies {content} */
+/** POST /api/comments/:id/replies {content, variant?}（S86 variant=话术候选位次1-4，供A/B实验聚合） */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   if (!getRepos().comments.exists(params.id)) return fail('FATAL', '评论不存在', 404);
   const body = await req.json().catch(() => null);
   if (!body?.content?.trim()) return fail('FATAL', '缺少 content');
-  return ok(getRepos().replies.create(params.id, body.content));
+  return ok(getRepos().replies.create(params.id, body.content, body.variant));
 }

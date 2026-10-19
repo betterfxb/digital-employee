@@ -84,6 +84,11 @@ GET /api/license/status -> {mode:demo|licensed, valid, customer, expires_at, fea
 GET  /api/data/backup[?pass=6+位] -> 备份JSON附件（S38；S61 pass=口令出AES-GCM密文包{__enc,v,salt,iv,tag,data}；S71附snapshots{hot,biz}趋势快照）
 POST /api/data/restore {data, pass?, preview?} -> preview=1返回{preview,accounts,videos,comments,follows,customScripts,cleared}零副作用（S64）| 执行返回{restored,snapshots_restored}（S61/64/71）
 GET  /api/data/backups -> {list:[{name,size,mtime,kind:auto|manual}],keep:14,last_auto,total_size}（S80 本地自动备份目录盘点）
+GET  /api/marketing/segments -> {segments:[{key,label,desc,action,count,members[]}]}（S84 智能客群五规则群：hot_untracked/overdue/silent/repeat/hotkw，本地推导只出主意；lib/marketing纯函数可单测）
+GET  /api/marketing/insights -> {items:[{label,value,sub,link}]}（S85 机会雷达：待处理高意向/逾期/可唤醒/7日成交/昨日新增/热词；无数据=少一条不造假）
+GET  /api/marketing/experiments -> {buckets:[{variant,used,leads,done}],total,sufficient}（S86 话术A/B：POST /api/comments/:id/replies 可选variant=1-4候选位次，手改内容自动归零位次；样本<20如实不足）
+GET  /api/campaigns -> {items:[Campaign+{status,match_count,follow_new,done_in_period,revenue_in_period,progress}]}（S87 期间复盘只用ISO可信字段） | POST /api/campaigns {name,start_at,end_at,keyword?,note?,checklist?} -> Campaign | PATCH /api/campaigns/:id | DELETE /api/campaigns/:id
+能力键新增 marketing（S83）：专业版专属；基础版白名单不含 → /marketing 页与侧栏显示ProLock（API按既有策略开放）；发证脚本无需改（白名单机制自动锁）
 POST /api/data/backups/run -> {created,entry}立即存manual快照（S80；auto每日凌晨3点后由调度器心跳幂等落一份，轮转保留最近14份）
 GET  /api/data/backups/download?name= -> 快照文件附件（S80；命名白名单auto-/manual-正则，穿越400）；恢复走既有/api/data/restore（客户端download→JSON→preview→覆盖确认）
 POST /api/data/clear {confirm:'清空'} -> 缺确认词FATAL（S37；业务全清+seed不复活，账号授权设置保留）
@@ -99,3 +104,4 @@ PATCH /api/settings {auto_config:{sync_enabled,sync_interval_min,sync_daily_cap,
 不爬虫/RPA/cookie/拟人化绕检测（S73用户令全自动化后仍保留此半——绕过平台技术措施是法律问题，不因风险自担而放开）；
 自动外呼/批量主动私信永不做；**自动回复修订为三重门内可做（S74）：官方接口+能力审核+用户开关，缺一不外发**——未过门时执行器只起草入日志供人工发送；
 license私钥data/不进仓；接口没有的数据不展示。
+**智能营销套件（S83-87）合规边界**：segments/insights/experiments/campaigns 全部只从本地已有数据推导"建议与复盘"，不产生任何自动触达（无群发任务、不外呼、不自动私信）；campaigns 的 checklist 是人工动作清单，勾选=人做完了记一笔；话术A/B仅统计既有回评记账的位次分布，不改发送行为。

@@ -2,7 +2,7 @@
  * S9 持久化抽象层：Repository接口 + 内存实现
  * 路由只依赖本文件，不直连store/Prisma。切换：DATA_BACKEND=memory（默认）/prisma（目标态，需DB落地，见prisma/schema.prisma）。
  */
-import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, viewOf } from './store';
+import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, campaigns, viewOf } from './store';
 import { hashPassword } from './accessPw';
 import { autoCfgOf, mergeAutoCfg } from './autoCfg';
 import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
@@ -56,9 +56,12 @@ export interface ReplyRuleRepo {
   remove(id: string): boolean;
   restore(id: string): boolean;
 }
-export interface Reply { id: string; comment_id: string; content: string; at: string }
-export interface ReplyRepo { list(comment_id: string): Reply[]; create(comment_id: string, content: string): Reply | null }
-export interface Repos { comments: CommentRepo; videos: VideoRepo; follows: FollowRepo; competitors: CompetitorRepo; events: EventRepo; sync: SyncRepo; accounts: AccountRepo; tasks: TaskRepo; settings: SettingsRepo; videoTasks: VideoTaskRepo; scripts: ScriptRepo; replyRules: ReplyRuleRepo; replies: ReplyRepo }
+export interface Reply { id: string; comment_id: string; content: string; at: string; variant?: number }
+export interface ReplyRepo { list(comment_id: string): Reply[]; all(): Reply[]; create(comment_id: string, content: string, variant?: number): Reply | null }
+/** S87 营销活动：人工执行checklist+期间复盘（数据层只管存储，统计在lib/marketing纯函数） */
+export interface Campaign { id: string; name: string; note?: string; keyword?: string; start_at: string; end_at: string; checklist: { text: string; done: boolean }[]; created_at: string }
+export interface CampaignRepo { list(): Campaign[]; create(input: { name: string; note?: string; keyword?: string; start_at: string; end_at: string; checklist?: { text: string; done: boolean }[] }): Campaign | null; update(id: string, patch: { name?: string; note?: string; keyword?: string; start_at?: string; end_at?: string; checklist?: { text: string; done: boolean }[] }): Campaign | null; remove(id: string): boolean }
+export interface Repos { comments: CommentRepo; videos: VideoRepo; follows: FollowRepo; competitors: CompetitorRepo; events: EventRepo; sync: SyncRepo; accounts: AccountRepo; tasks: TaskRepo; settings: SettingsRepo; videoTasks: VideoTaskRepo; scripts: ScriptRepo; replyRules: ReplyRuleRepo; replies: ReplyRepo; campaigns: CampaignRepo }
 
 const memory: Repos = {
   videos: {
@@ -228,12 +231,47 @@ const memory: Repos = {
   },
   replies: {
     list: (comment_id) => replies.filter((r) => r.comment_id === comment_id),
-    create: (comment_id, content) => {
+    all: () => replies,
+    create: (comment_id, content, variant) => {
       if (!content.trim()) return null;
-      const item = { id: `rp-${Date.now().toString(36)}`, comment_id, content: content.trim(), at: new Date().toISOString().slice(5, 16).replace('T', ' ') };
+      const v = Number(variant);
+      const item: Reply = { id: `rp-${Date.now().toString(36)}`, comment_id, content: content.trim(), at: new Date().toISOString().slice(5, 16).replace('T', ' ') };
+      if (Number.isInteger(v) && v >= 1 && v <= 4) item.variant = v; // S86 话术候选位次（越界=未标注，不进实验）
       replies.push(item);
       persistCollections();
       return item;
+    },
+  },
+  campaigns: {
+    list: () => campaigns,
+    create: (input) => {
+      const name = String(input?.name || '').trim();
+      if (!name || !input.start_at || !input.end_at) return null;
+      if (Date.parse(input.start_at) > Date.parse(input.end_at)) return null;
+      const c: Campaign = { id: `mk-${Date.now().toString(36)}`, name, note: String(input.note || '').slice(0, 200), keyword: String(input.keyword || '').slice(0, 20), start_at: input.start_at, end_at: input.end_at, checklist: (input.checklist || []).slice(0, 30), created_at: new Date().toISOString() };
+      campaigns.push(c);
+      persistCollections();
+      return c;
+    },
+    update: (id, patch) => {
+      const c = campaigns.find((x) => x.id === id);
+      if (!c) return null;
+      if (patch.name !== undefined) { const n = String(patch.name).trim(); if (!n) return null; c.name = n; }
+      if (patch.note !== undefined) c.note = String(patch.note).slice(0, 200);
+      if (patch.keyword !== undefined) c.keyword = String(patch.keyword).slice(0, 20);
+      if (patch.start_at !== undefined) c.start_at = patch.start_at;
+      if (patch.end_at !== undefined) c.end_at = patch.end_at;
+      if (patch.checklist !== undefined) c.checklist = patch.checklist.slice(0, 30);
+      if (Date.parse(c.start_at) > Date.parse(c.end_at)) return null;
+      persistCollections();
+      return c;
+    },
+    remove: (id) => {
+      const i = campaigns.findIndex((x) => x.id === id);
+      if (i < 0) return false;
+      campaigns.splice(i, 1);
+      persistCollections();
+      return true;
     },
   },
 };

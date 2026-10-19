@@ -204,6 +204,28 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     pass(dl.status === 200 && dlJson && Array.isArray(dlJson.accounts) && Array.isArray(dlJson.videos), 'S80 备份下载=合法快照JSON');
     const evil = await fetch(base + '/api/data/backups/download?name=../local.json');
     pass(evil.status === 400, 'S80 备份名穿越拒绝');
+    // S83-87 智能营销套件端点
+    const mg = await get('/api/marketing/segments');
+    const keys = (mg.j.segments || []).map((s) => s.key).join(',');
+    pass(mg.s === 200 && mg.j.segments.length === 5 && ['hot_untracked', 'overdue', 'silent', 'repeat', 'hotkw'].every((k) => keys.includes(k)), 'S84 segments 五规则群齐');
+    const mi = await get('/api/marketing/insights');
+    pass(mi.s === 200 && Array.isArray(mi.j.items) && mi.j.items.every((x) => x.label && x.value && x.link), 'S85 insights 简报结构');
+    const me = await get('/api/marketing/experiments');
+    pass(me.s === 200 && (me.j.buckets || []).length === 4 && typeof me.j.sufficient === 'boolean', 'S86 experiments 四桶+样本如实');
+    const cmt = (await get('/api/comments?unread_only=0')).j.items[0];
+    const rv = await post(`/api/comments/${cmt.id}/replies`, { content: '冒烟位次回评', variant: 2 });
+    const rvs = await get(`/api/comments/${cmt.id}/replies`);
+    pass(rv.s === 200 && rv.j.variant === 2 && (rvs.j.items || []).some((x) => x.content === '冒烟位次回评' && x.variant === 2), 'S86 回评位次记录落账');
+    const cp = await post('/api/campaigns', { name: '冒烟冲单周', start_at: '2026-01-01', end_at: '2099-12-31', keyword: '价格', checklist: [{ text: '发3条新作品', done: false }] });
+    const cl = await get('/api/campaigns');
+    const found = (cl.j.items || []).find((x) => x.id === (cp.j.id || ''));
+    pass(cp.s === 200 && cp.j.id && found && found.status === '进行中' && typeof found.match_count === 'number' && found.progress === 0, 'S87 campaigns 创建与复盘口径');
+    const cu = await (async () => { const rr = await fetch(base + `/api/campaigns/${cp.j.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ checklist: [{ text: '发3条新作品', done: true }] }) }); return { s: rr.status, j: await rr.json() }; })();
+    const cd = await fetch(base + `/api/campaigns/${cp.j.id}`, { method: 'DELETE' });
+    const cl2 = await get('/api/campaigns');
+    pass(cu.s === 200 && cu.j.checklist[0].done === true && cd.status === 200 && !(cl2.j.items || []).some((x) => x.id === cp.j.id), 'S87 campaigns 清单勾选+删除自清理');
+    const cbad = await post('/api/campaigns', { name: '', start_at: '2026-01-01', end_at: '2099-12-31' });
+    pass(cbad.s === 400, 'S87 campaigns 空名拒绝');
     await post('/api/accounts/switch', { id: 'acc_001' });
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');

@@ -40,8 +40,10 @@ export const customScripts: { id: string; category: string; title: string; conte
 export const replyRules: { id: string; keyword: string; reply: string; enabled: boolean; deleted?: boolean }[] = [
   { id: 'rr1', keyword: '价格', reply: '报价已私信发送，详询请留联系方式。', enabled: true },
 ];
-/** 评论回评记账（S20：作者回评自有视频，mock本地记账） */
-export const replies: { id: string; comment_id: string; content: string; at: string }[] = [];
+/** 评论回评记账（S20：作者回评自有视频，mock本地记账；S86 variant=话术候选位次1-4供A/B实验） */
+export const replies: { id: string; comment_id: string; content: string; at: string; variant?: number }[] = [];
+/** S87 营销活动计划（人工执行checklist+期间复盘；执行永远人工，系统只跟踪） */
+export const campaigns: import('./marketing').Campaign[] = [];
 /** 系统设置（内存持久化：同进程有效，重启回默认；生产进DB。初值对齐settings.config） */
 export const settings = {
   service_name: '跑刀代跑',
@@ -68,4 +70,4 @@ export function viewOf(c: (typeof mockComments)[number]) {
 }
 
 // S25b：业务集合水合（模块尾部，数组已定义）；repo变更点调persistCollections落盘；S68协作态一并注入
-hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules, readIds, allReadVideos, intentOverrides });
+hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules, campaigns, readIds, allReadVideos, intentOverrides });

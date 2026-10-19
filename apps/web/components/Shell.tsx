@@ -40,6 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: '/comments', label: '评论工作台' },
     { href: '/tasks', label: '任务中心' },
     { href: '/report', label: '经营报告' },
+    { href: '/marketing', label: '智能营销' },
     { href: '/messages', label: '私信辅助' },
     { href: '/settings', label: '系统设置' },
   ];

@@ -23,6 +23,7 @@ export default function Comments() {
   const [replyText, setReplyText] = useState('');
   const [product, setProduct] = useState('跑刀代跑');
   const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
+  const [replyVariant, setReplyVariant] = useState(0); // S86 话术A/B：当前输入框内容来自候选第几位（0=手写）
   const [genBusy, setGenBusy] = useState(false);
   const [tone, setTone] = useState('亲切');
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -139,9 +140,9 @@ export default function Comments() {
   const loadReplies = (id: string) => fetch(`/api/comments/${id}/replies`).then((r) => r.json()).then((d) => setReplies(d.items || [])).catch(() => {});
   const sendReply = async () => {
     if (!sel || !replyText.trim()) { flash('先写回评内容'); return; }
-    const j = await call(fetch(`/api/comments/${sel.id}/replies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: replyText.trim() }) }), '发送回评');
+    const j = await call(fetch(`/api/comments/${sel.id}/replies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: replyText.trim(), variant: replyVariant || undefined }) }), '发送回评'); // S86 位次随记
     if (!j) return;
-    setReplyText(''); loadReplies(sel.id);
+    setReplyText(''); setReplyVariant(0); loadReplies(sel.id);
   };
   const genDrafts = async () => {
     if (!sel) return;
@@ -281,17 +282,18 @@ export default function Comments() {
                 </div>
                 {drafts.length > 0 && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {drafts.map((d) => (
+                    {drafts.map((d, di) => (
                       <div key={d.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', fontSize: 13 }}>
-                        <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}>{d.label}</div>
+                        <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}>{d.label} · 候选{di + 1}</div>
                         {d.content}
-                        <div><Button size="small" type="text" style={{ marginTop: 6, paddingInline: 0 }} onClick={() => { setReplyText(d.content); setDrafts([]); }}>用这条</Button></div>
+                        <div><Button size="small" type="text" style={{ marginTop: 6, paddingInline: 0 }} onClick={() => { setReplyText(d.content); setReplyVariant(di + 1); setDrafts([]); }}>用这条</Button></div>
                       </div>
                     ))}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <Input size="small" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="写下你的回评…" onPressEnter={sendReply} />
+                  <Input size="small" value={replyText} onChange={(e) => { setReplyText(e.target.value); setReplyVariant(0); }} placeholder="写下你的回评…" onPressEnter={sendReply} />
+                  {replyVariant > 0 && <span style={{ alignSelf: 'center', fontSize: 11, color: '#1677FF', whiteSpace: 'nowrap' }}>候选{replyVariant}</span>}
                   <Button size="small" type="primary" onClick={sendReply}>发送</Button>
                 </div>
                 {replies.map((r) => <div key={r.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{r.content}<div className="num" style={{ fontSize: 11, color: '#A8A5A0', marginTop: 4 }}>{r.at}</div></div>)}

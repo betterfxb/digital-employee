@@ -128,6 +128,25 @@ const tag = Date.now().toString(36);
     if (!pv.j.preview || pv.j.videos < 1) throw new Error('快照preview不可用');
     pass(true, 'J9 跨格式幂等+备份快照闭环');
   } catch (e) { pass(false, 'J9 跨格式幂等+备份闭环', ` ${e.message}`); }
+  // J10 智能营销（S83-87）：回评位次进实验桶（before/after差值防污染）；活动创建→勾选→复盘数→删除自清理
+  try {
+    const listC = await get('/api/comments?unread_only=0');
+    const cm = listC.items[0];
+    const before = (await get('/api/marketing/experiments')).buckets.find((b) => b.variant === 3).used;
+    await send('POST', `/api/comments/${cm.id}/replies`, { content: 'J10位次回评' + tag, variant: 3 });
+    const after = (await get('/api/marketing/experiments')).buckets.find((b) => b.variant === 3).used;
+    if (after !== before + 1) throw new Error(`位次3未+1（${before}->${after}）`);
+    const camp = await send('POST', '/api/campaigns', { name: 'J10旅程活动' + tag, start_at: new Date(Date.now() - 86400000).toISOString().slice(0, 10), end_at: new Date(Date.now() + 86400000).toISOString().slice(0, 10), keyword: '价格', checklist: [{ text: '动作一', done: false }, { text: '动作二', done: false }] });
+    if (!camp.j.id) throw new Error('活动创建失败');
+    const ls1 = (await get('/api/campaigns')).items.find((x) => x.id === camp.j.id);
+    if (!ls1 || ls1.status !== '进行中' || ls1.progress !== 0) throw new Error('活动初始复盘态不对');
+    const up = await send('PATCH', `/api/campaigns/${camp.j.id}`, { checklist: [{ text: '动作一', done: true }, { text: '动作二', done: true }] });
+    if (up.j.checklist.filter((x) => x.done).length !== 2) throw new Error('勾选未持久');
+    await send('DELETE', `/api/campaigns/${camp.j.id}`, undefined);
+    const ls2 = (await get('/api/campaigns')).items;
+    if (ls2.some((x) => x.id === camp.j.id)) throw new Error('删除未生效');
+    pass(true, 'J10 位次实验差值+活动生命周期');
+  } catch (e) { pass(false, 'J10 位次实验+活动生命周期', ` ${e.message}`); }
   console.log(fail === 0 ? 'JOURNEY ALL GREEN' : `JOURNEY ${fail} FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();

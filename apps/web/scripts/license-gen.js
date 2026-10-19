@@ -75,6 +75,6 @@ if (cmd === 'keypair') {
   console.log(`  features=${features.length ? features.join(',') : '(全开=专业版)'} watermark=${watermark} 机器绑定=${machine_bind ? '已绑定（命中≥2因子）' : '无（勿商用分发）'}${tier ? ` 分档=${tier}` : ''}`);
 } else {
   console.log('用法: keypair | issue --customer <客户> [--days 365] [--tier pro|basic] [--features a,b] [--seats 5] [--slots 2] [--bind cpuHash.diskHash.macHash] [--watermark wl-xxxxxxxx]');
-  console.log('  --tier basic=基础版（锁经营报告/漏斗热词/线索档案/竞品记录/价目表）；pro或省略=专业版全开');
+  console.log('  --tier basic=基础版（锁经营报告/漏斗热词/线索档案/竞品记录/价目表/智能营销）；pro或省略=专业版全开');
   console.log('  --bind 从客户激活页复制机器码（激活页可一键复制）；商用发证必须带 --bind');
 }

@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -17,6 +17,7 @@ const { parseRemind, isDue, shouldNotifyReport, todayKey, daysUntilExpiry } = re
 const { leadScore, scoreLevel } = require('./.tmp-crypto/lib/leadScore.js');
 const { parseCommentTime, buildReport } = require('./.tmp-crypto/lib/report.js');
 const { hasFeature, TIERS } = require('./.tmp-crypto/lib/tiers.js');
+const { computeSegments, computeInsights, computeExperiments, campaignStats, hotKeys } = require('./.tmp-crypto/lib/marketing.js');
 const { trendSeries } = require('./.tmp-crypto/lib/bizTrend.js');
 const { encryptBackup, decryptBackup } = require('./.tmp-crypto/lib/backupCrypto.js');
 const { hashPassword, verifyPassword } = require('./.tmp-crypto/lib/accessPw.js');
@@ -139,6 +140,44 @@ check(colMap(['用户昵称', '正文', '所属视频'])['昵称'] === 0 && colM
 check(missingCols('comments', ['用户', '内容']).join() === '视频标题', 'csv 缺列精确报（别名过后仅剩一缺）');
 check(normalizeDateTime('2026-10-18 12:00:00') === '10-18' && normalizeDateTime('2026年10月8日') === '10-08' && normalizeDateTime('2小时前') === '2小时前' && normalizeDateTime('10-08') === '10-08', 'csv 日期归一四形态');
 check(decodeTextBuffer(Buffer.from([0xB1, 0xEA, 0xCC, 0xE2, 0xC1, 0xBF])) === '标题量' && decodeTextBuffer(Buffer.from('\uFEFFabc', 'utf8')) === 'abc', 'csv GBK嗅探与BOM剥离');
+
+// 17) S83-87 智能营销纯函数层（动态时间基准，防跨零点脆弱）
+const NOWD = Date.now();
+const iso = (off) => new Date(NOWD + off * 86400000).toISOString();
+const mcs = [
+  { id: 'c1', user_nick: 'A', content: '一单多少钱', intent: '高意向', is_read_local: false, keywords: ['价格'] },
+  { id: 'c2', user_nick: 'B', content: '下单', intent: '高意向', is_read_local: true, keywords: ['价格'] },
+  { id: 'c3', user_nick: 'C', content: '好玩', intent: '闲聊', is_read_local: false },
+];
+const mfs = [
+  { id: 'f1', peer_nick: 'B', status: '待回访', next_remind_at: iso(-2), created_at: iso(-20), history: [{ at: iso(-20), act: '建档' }] },
+  { id: 'f2', peer_nick: 'D', status: '已转化', amount: 120, history: [{ at: iso(-1), act: '状态→已转化' }] },
+  { id: 'f3', peer_nick: 'E', status: '待回访', next_remind_at: iso(3), created_at: iso(-2), history: [] },
+];
+const mseg = (k) => computeSegments(mcs, mfs, NOWD).find((s) => s.key === k);
+check(mseg('hot_untracked').count === 1 && mseg('hot_untracked').members[0].nick === 'A', 'mktg 客群高意向未登记');
+check(mseg('overdue').count === 1 && mseg('overdue').members[0].nick === 'B', 'mktg 客群逾期跟进');
+check(mseg('silent').count === 1 && mseg('silent').members[0].nick === 'B', 'mktg 客群沉默14天可唤醒');
+check(mseg('repeat').count === 1 && mseg('repeat').members[0].extra === '¥120', 'mktg 客群成交老客带金额');
+check(hotKeys(mcs, 2)[0].word === '价格' && mseg('hotkw').count === 1, 'mktg 热词与热词人群');
+const mins = computeInsights(mcs, mfs, {}, NOWD);
+check(mins.some((x) => x.label === '待处理高意向' && x.value === '1') && mins.some((x) => x.label === '7日成交' && x.value === '1 单'), 'mktg 简报高意向与成交条目');
+check(computeInsights([], [], {}, NOWD).length === 0, 'mktg 空数据诚实空态');
+const mexp = computeExperiments(
+  [
+    { id: 'r1', comment_id: 'c1', content: 'x', at: '', variant: 1 },
+    { id: 'r2', comment_id: 'c2', content: 'x', at: '', variant: 2 },
+    { id: 'r3', comment_id: 'c3', content: 'x', at: '' },
+    { id: 'r4', comment_id: 'c9', content: 'x', at: '', variant: 3 },
+  ],
+  new Map(mcs.map((c) => [c.id, c])), mfs
+);
+check(mexp.total === 2 && mexp.buckets[0].used === 1 && mexp.buckets[1].leads === 1 && mexp.sufficient === false, 'mktg A/B位次过滤与样本不足如实');
+const mcamp = { id: 'k1', name: 'n', start_at: iso(-7).slice(0, 10), end_at: iso(7).slice(0, 10), checklist: [{ text: 'a', done: true }, { text: 'b', done: false }], created_at: iso(-8) };
+const mst = campaignStats(mcamp, mcs, mfs, NOWD);
+check(mst.status === '进行中' && mst.match_count === 3 && mst.follow_new === 1 && mst.done_in_period === 1 && mst.revenue_in_period === 120 && mst.progress === 50, 'mktg 活动复盘口径全套');
+check(campaignStats({ ...mcamp, start_at: iso(2).slice(0, 10), end_at: iso(9).slice(0, 10) }, mcs, mfs, NOWD).status === '未开始', 'mktg 活动状态边界');
+check(hasFeature(TIERS.basic.features, 'marketing') === false, 'mktg 基础版锁marketing键');
 
 // 14) S74 自动回复节奏与三重门（纯函数）
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');

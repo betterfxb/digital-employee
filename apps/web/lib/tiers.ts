@@ -1,10 +1,10 @@
 /**
  * S54 授权分版本（license features 白名单落地，S25 预留字段首次启用）
  * 语义：features=[] → 全开（=专业版，向后兼容所有已发 license）；非空 → 仅列表内能力可用
- * 能力键（专业版专属）：report 经营报告 / analytics 漏斗热词 / lead 线索标签与档案 / competitor 竞品记录 / quote 价目表
+ * 能力键（专业版专属）：report 经营报告 / analytics 漏斗热词 / lead 线索标签与档案 / competitor 竞品记录 / quote 价目表 / marketing 智能营销套件（S83）
  * 基础版 = 全部页面可用但上述专业能力锁（页面级+卡级锁定，API 按既有策略保持开放）
  */
-export type ProFeature = 'report' | 'analytics' | 'lead' | 'competitor' | 'quote';
+export type ProFeature = 'report' | 'analytics' | 'lead' | 'competitor' | 'quote' | 'marketing';
 
 export const TIERS: Record<string, { name: string; features: string[] }> = {
   // 专业版：空数组=全开（与历史 license 兼容）
