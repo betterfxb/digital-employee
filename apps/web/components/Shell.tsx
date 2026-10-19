@@ -29,6 +29,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [ver, setVer] = useState('');
   const [licState, setLicState] = useState<LicenseState | null>(null);
   const [reportHour, setReportHour] = useState(9);
+  /** S99 快捷键悬浮层：任意界面按 ? 呼出（Esc/点背景关闭） */
+  const [helpOpen, setHelpOpen] = useState(false);
   /** S69 本地访问密码解锁层 */
   const [locked, setLocked] = useState(false);
   const [unlockPw, setUnlockPw] = useState('');
@@ -152,6 +154,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
       } else setUnlockErr(r?.message || '解锁失败，请重试');
     } finally { setUnlocking(false); }
   };
+  // S99 全局快捷键帮助层：? 开 / Esc 关（输入框聚焦与锁定态不触发）
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (locked) return;
+      const t = e.target as HTMLElement;
+      if (e.key === 'Escape') { setHelpOpen(false); return; }
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
+      if (e.key === '?') { e.preventDefault(); setHelpOpen((v) => !v); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [locked]);
   return (
     <div className="app">
       <ActivationGate />
@@ -196,6 +210,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
           ? <div style={{ padding: 24, maxWidth: 680, margin: '0 auto' }}><ProLock feature="经营报告" desc="日报/周报、文字总结与行动建议" /></div>
           : children}
       </div>
+      {helpOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(26,26,24,0.28)' }} onClick={() => setHelpOpen(false)} />
+          <div style={{ position: 'fixed', left: '50%', top: '16%', transform: 'translateX(-50%)', zIndex: 9991, width: 420, maxWidth: '92vw', background: '#FCFBF9', border: '1px solid #E8E6E1', borderRadius: 8, boxShadow: '0 18px 48px rgba(26,26,24,0.22)', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}><b style={{ fontSize: 15 }}>快捷键</b><span style={{ flex: 1 }} /><Button size="small" onClick={() => setHelpOpen(false)}>关闭 (Esc)</Button></div>
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '88px 1fr', gap: '6px 10px', fontSize: 13 }}>
+              <span className="num"><b>Ctrl+K</b></span><span>命令面板：跳页 / 搜台账昵称 / 搜话术 / 快捷动作</span>
+              <span className="num"><b>?</b></span><span>打开或关闭本帮助</span>
+              <span style={{ gridColumn: '1 / -1', fontSize: 11, color: '#A8A5A0', marginTop: 4 }}>评论工作台内另有：</span>
+              <span className="num"><b>j / k</b></span><span>下一条 / 上一条评论</span>
+              <span className="num"><b>e</b></span><span>标已读</span>
+              <span className="num"><b>1 / 2 / 3</b></span><span>改意图（高意向 / 咨询 / 留电话）</span>
+              <span className="num"><b>c</b></span><span>复制当前评论内容</span>
+              <span className="num"><b>a</b></span><span>全选 / 取消全选</span>
+              <span className="num"><b>右键</b></span><span>评论行右键出快捷菜单（跟进 / 改意图 / 搜此人）</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 10 }}>快捷键只在输入框之外生效；台账「看板」视图可拖拽卡片改状态。</div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

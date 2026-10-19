@@ -25,6 +25,8 @@ export default function Comments() {
   const [product, setProduct] = useState('跑刀代跑');
   const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
   const [replyVariant, setReplyVariant] = useState(0); // S86 话术A/B：当前输入框内容来自候选第几位（0=手写）
+  /** S97 评论行右键菜单（桌面感快捷操作，全复用既有处理函数） */
+  const [ctx, setCtx] = useState<{ x: number; y: number; c: CommentItem } | null>(null);
   /** S93 保存视图：常用筛选组合一键切换（服务端钳制存储） */
   const [views, setViews] = useState<CommentView[]>([]);
   const [viewName, setViewName] = useState('');
@@ -268,9 +270,10 @@ export default function Comments() {
               </div>
             ))}
           </div>
-          <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}>
+          <div style={{ borderRight: '1px solid #E8E6E1', overflow: 'auto' }}
+            onScroll={(e) => { const el = e.currentTarget; if (items.length > renderCap && el.scrollTop + el.clientHeight >= el.scrollHeight - 140) setRenderCap((c) => Math.min(c + 100, items.length)); }}>
             {vis.length === 0 ? <div style={{ padding: 24, color: '#A8A5A0' }}>暂无数据</div> : vis.map((c) => (
-              <div key={c.id} onClick={() => setSelId(c.id)} style={{ padding: '10px 14px 10px 16px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selId === c.id ? '#F5F4F1' : 'transparent', borderLeft: `2px solid ${colorOf(c.intent)}` }}>
+              <div key={c.id} onClick={() => setSelId(c.id)} onContextMenu={(e) => { e.preventDefault(); setSelId(c.id); setCtx({ x: Math.min(e.clientX, window.innerWidth - 190), y: Math.min(e.clientY, window.innerHeight - 280), c }); }} style={{ padding: '10px 14px 10px 16px', borderBottom: '1px solid #F0EEEA', cursor: 'pointer', background: selId === c.id ? '#F5F4F1' : 'transparent', borderLeft: `2px solid ${colorOf(c.intent)}` }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Checkbox checked={checked.has(c.id)} onClick={(e: React.MouseEvent) => e.stopPropagation()} onChange={() => toggleCheck(c.id)} style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -333,6 +336,33 @@ export default function Comments() {
             )}
           </div>
         </div>
+        {/* S97 右键菜单：全部复用既有处理函数，无新API */}
+        {ctx && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 997 }} onClick={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null); }} />
+            <div style={{ position: 'fixed', left: ctx.x, top: ctx.y, zIndex: 998, background: '#fff', border: '1px solid #E8E6E1', borderRadius: 6, boxShadow: '0 10px 28px rgba(26,26,24,0.18)', padding: '4px 0', minWidth: 176 }}>
+              <div style={{ padding: '4px 14px 6px', fontSize: 11, color: '#A8A5A0', borderBottom: '1px solid #F0EEEA', marginBottom: 4 }}>{ctx.c.user_nick} · {ctx.c.intent}</div>
+              {[
+                { t: '标已读', f: () => markRead(ctx.c.id) },
+                { t: '登记跟进', f: () => replied(ctx.c) },
+              ].map((it) => (
+                <div key={it.t} onClick={() => { it.f(); setCtx(null); }} style={{ padding: '6px 14px', fontSize: 13, cursor: 'pointer' }}>{it.t}</div>
+              ))}
+              <div style={{ padding: '4px 14px 2px', fontSize: 11, color: '#A8A5A0' }}>改意图</div>
+              {commentsConfig.intentOptions.map((o) => (
+                <div key={o} onClick={() => { setIntentOf(ctx.c.id, o); setCtx(null); }} style={{ padding: '4px 14px 4px 22px', fontSize: 12, cursor: 'pointer', color: ctx.c.intent === o ? '#A8A5A0' : '#1A1A18' }}>{o}{ctx.c.intent === o ? '（当前）' : ''}</div>
+              ))}
+              <div style={{ borderTop: '1px solid #F0EEEA', margin: '4px 0' }} />
+              {[
+                { t: '复制内容', f: () => copy(ctx.c.content) },
+                { t: '搜此人全部评论', f: () => { setKw(ctx.c.user_nick); load({ k: ctx.c.user_nick }); } },
+                { t: '在台账中打开', f: () => { window.location.href = '/messages?peer=' + encodeURIComponent(ctx.c.user_nick); } },
+              ].map((it) => (
+                <div key={it.t} onClick={() => { it.f(); setCtx(null); }} style={{ padding: '6px 14px', fontSize: 13, cursor: 'pointer' }}>{it.t}</div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

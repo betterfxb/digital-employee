@@ -42,6 +42,14 @@ export default function Messages() {
   const [remindEdit, setRemindEdit] = useState<{ id: string; val: string } | null>(null);
   /** S91/S92 台账三视图：表格/看板(拖拽改状态)/日历(提醒排布)，偏好持久化+URL直达 */
   const [fmode, setFmode] = useState<'table' | 'board' | 'cal'>('table');
+  /** S98 列自定义：批次/标签/成交/提醒四列可藏（对方与状态为核心列不可藏），偏好持久化 */
+  const HIDABLE_COLS: { key: string; label: string }[] = [{ key: 'batch', label: '批次' }, { key: 'tags', label: '标签' }, { key: 'amt', label: '成交' }, { key: 'remind', label: '下次提醒' }];
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
+  const [colsOpen, setColsOpen] = useState(false);
+  useEffect(() => {
+    try { const s = JSON.parse(localStorage.getItem('follow_cols_hidden') || '[]'); if (Array.isArray(s)) setHiddenCols(new Set(s.filter((x) => typeof x === 'string'))); } catch { /* 坏配置=全显 */ }
+  }, []);
+  const toggleCol = (k: string) => setHiddenCols((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); try { localStorage.setItem('follow_cols_hidden', JSON.stringify([...n])); } catch { /* ignore */ } return n; });
   useEffect(() => {
     const usp = new URLSearchParams(window.location.search);
     const v = usp.get('view');
@@ -372,6 +380,19 @@ export default function Messages() {
               <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
+              <span style={{ position: 'relative' }}>
+                <Button size="small" onClick={() => setColsOpen((v) => !v)}>列设置</Button>
+                {colsOpen && (
+                  <div style={{ position: 'absolute', right: 0, top: 26, zIndex: 50, background: '#fff', border: '1px solid #E8E6E1', borderRadius: 6, boxShadow: '0 10px 28px rgba(26,26,24,0.16)', padding: '8px 12px', width: 130 }}>
+                    <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 6 }}>显示列（对方/状态固定）</div>
+                    {HIDABLE_COLS.map((c) => (
+                      <label key={c.key} style={{ display: 'block', fontSize: 12, margin: '3px 0', cursor: 'pointer' }}>
+                        <Checkbox checked={!hiddenCols.has(c.key)} onChange={() => toggleCol(c.key)} style={{ marginRight: 6 }} />{c.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </span>
             </div>
             <div className="num" style={{ fontSize: 12, color: '#6B6862', marginTop: 4 }}>每批{tasksConfig.followBatchSize}个 · 每{tasksConfig.groupFollowIntervalMin}分钟一批 · 默认{assistConfig.defaultRemindHour}:00提醒（纯展示，不自动发送）</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -391,7 +412,7 @@ export default function Messages() {
               </div>
             )}
             {fmode === 'table' && (
-              <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+              <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols.filter((col) => !hiddenCols.has(String(col.key)))} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
             )}
             {fmode === 'board' && (
               <div>
