@@ -22,3 +22,12 @@ apps/web/data/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 迭代过程中的临时验证截图（new-*.png / shot-*.png 等），不入仓
+/root-verify-*.png
+/new-*.png
+/newshot-*.png
+
+# 独立子产品：拾墨内容工场（自带 git 仓库，不并入本仓）
+easel-content-platform/
+starboat-shorts/
