@@ -29,6 +29,7 @@ Thumbs.db
 /newshot-*.png
 /upstream-*.png
 /rehearsal-*.png
+/own-*.png
 
 # 独立子产品：拾墨内容工场（自带 git 仓库，不并入本仓）
 easel-content-platform/
