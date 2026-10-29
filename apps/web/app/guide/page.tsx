@@ -60,7 +60,10 @@ export default function Guide() {
   ];
   return (
     <div>
-      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>使用指南</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>五分钟上手 · 常见问题</div></div>
+      <div style={{ borderBottom: '1px solid #E8E6E1' }}>
+        {/* S112 头与内容同列宽居中（横向padding与内容同值，任意宽度下左边缘对齐） */}
+        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '14px 32px' }}><b style={{ fontSize: 15 }}>使用指南</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>五分钟上手 · 常见问题</div></div>
+      </div>
       <div style={{ padding: '24px 32px', maxWidth: 1080, margin: '0 auto' }}>
         <div className="card" style={{ padding: 18 }}>
           <b>从这里开始（四步）</b>

@@ -113,7 +113,10 @@ export default function ReportPage() {
   const dateLabel = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   return (
     <div>
-      <div style={{ padding: '14px 24px', borderBottom: '1px solid #E8E6E1' }}><b style={{ fontSize: 15 }}>经营报告</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>本地真实数据自动汇总 · 可复制给合伙人/老板</div></div>
+      <div style={{ borderBottom: '1px solid #E8E6E1' }}>
+        {/* S112 头与内容同列宽居中（宽屏下标题不再漂在左上角；横向padding与内容同值保证任意宽度对齐） */}
+        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '14px 32px' }}><b style={{ fontSize: 15 }}>经营报告</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>本地真实数据自动汇总 · 可复制给合伙人/老板</div></div>
+      </div>
       <div style={{ padding: '24px 32px', maxWidth: 1080, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <Segmented options={['日报', '周报']} value={kind === 'daily' ? '日报' : '周报'} onChange={switchKind} />
