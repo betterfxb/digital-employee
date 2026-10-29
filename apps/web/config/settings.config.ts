@@ -3,15 +3,15 @@
  * 字体用body zoom全局缩放（基准14px，见lib/settings-client.ts；生产建议迁rem）
  */
 export const settingsConfig = {
-  /** 基准字号(px) | 默认：14 | 联动：zoom=fontSize/base；globals body同步14 */
-  fontSizeDefault: 14,
-  /** 字号下限 | 默认：12 | 范围：10–14 */
-  fontSizeMin: 12,
-  /** 字号上限 | 默认：20 | 范围：16–24 */
-  fontSizeMax: 20,
+  /** 基准字号(px) | 默认：16（S111：高密度小字被用户反馈“太小”，新用户默认整体放大≈14%）| 联动：zoom=fontSize/fontZoomBase */
+  fontSizeDefault: 16,
+  /** 字号下限 | 默认：14 | 保留“标准14”紧凑选项 */
+  fontSizeMin: 14,
+  /** 字号上限 | 默认：24 | 大字体友好 */
+  fontSizeMax: 24,
   /** 字号步长 | 默认：1 */
   fontSizeStep: 1,
-  /** zoom换算基准（=fontSizeDefault） */
+  /** zoom换算基准=globals body设计字号14（刻意与默认解耦：默认16→新用户全局zoom≈1.14） */
   fontZoomBase: 14,
   /** 默认主题色 | 必须在themePresets内 */
   themeDefault: '#1A1A18',

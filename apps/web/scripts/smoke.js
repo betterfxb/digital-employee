@@ -243,6 +243,10 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const au2 = await vpatch({ desktop_autostart: false });
     pass(au1.s === 200 && au1.j.desktop_autostart === true && auG.j.desktop_autostart === true, 'S104 自启开关布尔往返');
     pass(auBad.s === 400 && au2.s === 200 && au2.j.desktop_autostart === false, 'S104 坏类型拒+复位');
+    // S111 界面比例：字号上限校验（25>max24拒）+ 新用户默认16可写回
+    const fBad25 = await vpatch({ font_size: 25 });
+    const fOk16 = await vpatch({ font_size: 16 });
+    pass(fBad25.s === 400 && fOk16.s === 200 && fOk16.j.font_size === 16, 'S111 字号范围校验+默认16');
     // S108 草稿收件箱：暂存→在途去重→标处理出队 + 非法参数
     const cListA = await get('/api/comments?unread_only=0');
     const anyC = (cListA.j.items || [])[0];

@@ -42,7 +42,7 @@ check(/imEnabled:\s*false/.test(files.app), 'P0红线 app.imEnabled=false');
 
 check(num(files.settings, 'fontSizeStep') >= 1, 'settings字号步长≥1');
 check(num(files.settings, 'fontSizeMin') < num(files.settings, 'fontSizeDefault') && num(files.settings, 'fontSizeDefault') < num(files.settings, 'fontSizeMax'), 'settings字号min<默认<max');
-check(num(files.settings, 'fontZoomBase') === num(files.settings, 'fontSizeDefault'), 'settings zoom基准=默认字号');
+check(num(files.settings, 'fontZoomBase') <= num(files.settings, 'fontSizeDefault'), 'settings zoom基准≤默认字号（S111解耦：默认即带全局放大）');
 check(num(files.settings, 'shopNameMinLen') < num(files.settings, 'shopNameMaxLen'), 'settings店名min<max');
 check(num(files.settings, 'passwordMinLen') >= 6, 'settings密码长≥6');
 check(files.settings.includes('#1A1A18'), 'settings默认主题在候选内');

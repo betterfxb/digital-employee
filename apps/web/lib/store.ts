@@ -49,7 +49,7 @@ export const drafts: { id: string; comment_id: string; nick: string; text: strin
 /** 系统设置（内存持久化：同进程有效，重启回默认；生产进DB。初值对齐settings.config） */
 export const settings = {
   service_name: '跑刀代跑',
-  font_size: 14,
+  font_size: 16, // S111：默认16（原14被反馈太小；14仍在范围可切回）
   theme_color: '#1A1A18',
   password_changed_at: null as string | null,
   /** S69 访问密码scrypt哈希（null=未设置不锁；原文永不落盘） */

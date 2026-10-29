@@ -301,9 +301,19 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: '#6B6862', margin: '6px 0 10px' }}>字号 {settingsConfig.fontSizeMin}-{settingsConfig.fontSizeMax}px · 主题色全局生效（含按钮与导航标识）</div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>界面字号</span>
-            <span className="num" style={{ fontSize: 22, fontWeight: 700 }}>{font}px · {font <= 12 ? '紧凑' : font <= 14 ? '标准' : font <= 16 ? '舒适' : font <= 18 ? '大' : '超大'}</span>
+            <span className="num" style={{ fontSize: 22, fontWeight: 700 }}>{font}px · {font <= 14 ? '标准' : font <= 16 ? '舒适' : font <= 18 ? '大' : font <= 21 ? '特大' : '超大'}</span>
           </div>
-          <Slider min={settingsConfig.fontSizeMin} max={settingsConfig.fontSizeMax} step={settingsConfig.fontSizeStep} value={font} onChange={previewFont} marks={{ 12: '12', 14: '14', 16: '16', 18: '18', 20: '20' }} tooltip={{ formatter: (v) => `${v}px` }} />
+          <Slider min={settingsConfig.fontSizeMin} max={settingsConfig.fontSizeMax} step={settingsConfig.fontSizeStep} value={font} onChange={previewFont} marks={{ 14: '14', 16: '16', 18: '18', 20: '20', 22: '22', 24: '24' }} tooltip={{ formatter: (v) => `${v}px` }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: '#A8A5A0' }}>一键预设：</span>
+            {([[14, '标准'], [16, '舒适（推荐）'], [18, '大'], [20, '特大']] as [number, string][]).map(([v, label]) => (
+              <Button key={v} size="small" type={font === v ? 'primary' : 'default'} onClick={async () => {
+                setFont(v); applySettings({ font_size: v, theme_color: theme });
+                const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ font_size: v }) }).then((x) => x.json()).catch(() => null);
+                if (r && !r.code) message.success(`已切换 ${v}px 并保存，全局即时生效`); else message.error(r?.message || '保存失败');
+              }}>{label}</Button>
+            ))}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10, marginTop: 14 }}>
             {settingsConfig.themePresets.map((t) => {
               const on = theme === t.value;
