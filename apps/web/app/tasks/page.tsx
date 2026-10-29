@@ -47,6 +47,7 @@ export default function Tasks() {
     message.success('已复制，去抖音粘贴发送；已标处理');
   };
   const drSet = (id: string, status: string) => { fetch(`/api/drafts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then((r) => r.json()).then((j) => { if (j?.code) message.error(j.message); loadDr(); }).catch(() => message.error('操作失败')); };
+  const drAllDone = async () => { const list = dr.filter((d) => d.status === 'pending').slice(0, 50); await Promise.all(list.map((d) => fetch(`/api/drafts/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done' }) }).catch(() => null))); message.success(`已批量标处理 ${list.length} 条`); loadDr(); };
   const DR_LABELS: Record<string, string> = { pending: '待确认', done: '已处理', discarded: '已废弃', all: '全部' };
 
   useEffect(() => {
@@ -263,6 +264,7 @@ export default function Tasks() {
             {(['pending', 'done', 'discarded', 'all'] as const).map((f) => (
               <Button key={f} size="small" type={drFilter === f ? 'primary' : 'text'} onClick={() => setDrFilter(f)}>{DR_LABELS[f]}</Button>
             ))}
+            {drFilter === 'pending' && drPending > 0 && <Button size="small" onClick={drAllDone}>全部标已处理</Button>}
           </div>
           <div style={{ fontSize: 11, color: '#A8A5A0', margin: '4px 0 6px' }}>自动起草与评论页「暂存」的话术都进这里。复制后你去抖音粘贴发送——发送永远在人，这是红线。</div>
           {dr.length === 0 && <div style={{ padding: '12px 0', fontSize: 13, color: '#A8A5A0' }}>{drFilter === 'pending' ? '没有待确认的草稿' : '这个状态还没有记录'}</div>}

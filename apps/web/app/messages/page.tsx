@@ -44,8 +44,8 @@ export default function Messages() {
   const [remindEdit, setRemindEdit] = useState<{ id: string; val: string } | null>(null);
   /** S91/S92 台账三视图：表格/看板(拖拽改状态)/日历(提醒排布)，偏好持久化+URL直达 */
   const [fmode, setFmode] = useState<'table' | 'board' | 'cal'>('table');
-  /** S98 列自定义：批次/标签/成交/提醒四列可藏（对方与状态为核心列不可藏），偏好持久化 */
-  const HIDABLE_COLS: { key: string; label: string }[] = [{ key: 'batch', label: '批次' }, { key: 'tags', label: '标签' }, { key: 'amt', label: '成交' }, { key: 'remind', label: '下次提醒' }];
+  /** S98 列自定义：批次/标签/成交/提醒/联系方式列可藏（对方与状态为核心列不可藏），偏好持久化 */
+  const HIDABLE_COLS: { key: string; label: string }[] = [{ key: 'batch', label: '批次' }, { key: 'tags', label: '标签' }, { key: 'amt', label: '成交' }, { key: 'remind', label: '下次提醒' }, { key: 'contact', label: '联系方式' }];
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
   const [colsOpen, setColsOpen] = useState(false);
   useEffect(() => {
@@ -54,6 +54,25 @@ export default function Messages() {
   const toggleCol = (k: string) => setHiddenCols((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); try { localStorage.setItem('follow_cols_hidden', JSON.stringify([...n])); } catch { /* ignore */ } return n; });
   /** S102 台账行右键菜单 + 排序（催办紧急/最新建档） */
   const [fctx, setFctx] = useState<{ x: number; y: number; f: Follow } | null>(null);
+  /** S115 联系方式行内编辑 + 一句话速记 */
+  const [cEdit, setCEdit] = useState<{ id: string; val: string } | null>(null);
+  const [qn, setQn] = useState('');
+  const saveContact = async (id: string) => {
+    const val = (cEdit?.id === id ? cEdit.val : '').trim().slice(0, 32);
+    const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact: val }) }).then((x) => x.json()).catch(() => null);
+    setCEdit(null);
+    if (!r || r.code) { flash(r?.message || '保存失败'); return; }
+    flash('联系方式已保存', true); loadFollows();
+  };
+  const quickNote = async () => {
+    if (!detail || !qn.trim()) return;
+    const d = new Date();
+    const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const next = ((detail.note || '') + (detail.note ? '\n' : '') + `[${stamp}] ${qn.trim()}`).slice(-460);
+    const r = await fetch(`/api/follows/${detail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: next }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '速记失败'); return; }
+    setQn(''); setNoteText(next); flash('已速记一条', true); loadFollows();
+  };
   const [fsort, setFsort] = useState('default');
   const urgeTomorrow = async (id: string) => {
     const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ next_remind_at: '明天 09:00' }) }).then((x) => x.json()).catch(() => null);
@@ -183,7 +202,7 @@ export default function Messages() {
   const exportFollows = () => {
     const flat = batches.flat();
     if (flat.length === 0) { flash('暂无数据可导出'); return; }
-    downloadCsv('跟进台账.csv', ['对方', '状态', '下次提醒', '来源视频', '成交金额'], flat.map((f) => [f.peer_nick, f.status, f.next_remind_at, f.source_video_id, f.amount ?? '']));
+    downloadCsv('跟进台账.csv', ['对方', '联系方式', '状态', '下次提醒', '来源视频', '成交金额'], flat.map((f) => [f.peer_nick, f.contact || '', f.status, f.next_remind_at, f.source_video_id, f.amount ?? '']));
   };
   const addScript = async () => {
     if (!stitle.trim() || !scontent.trim()) { flash('请填写标题与内容'); return; }
@@ -250,6 +269,17 @@ export default function Messages() {
     { title: '', key: 'sel', width: 36, render: (_, f) => <Checkbox checked={fsel.has(f.id)} onChange={() => toggleFsel(f.id)} /> },
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
     { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => (can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>) },
+    { title: '联系方式', key: 'contact', width: 130, render: (_, f) => (
+      <Popconfirm
+        title="联系方式（电话/微信，仅存本机）"
+        open={cEdit?.id === f.id}
+        onOpenChange={(o) => { if (o) setCEdit({ id: f.id, val: f.contact || '' }); else setCEdit(null); }}
+        description={<Input size="small" placeholder="如 138xxxx / wx:abc" value={cEdit?.id === f.id ? cEdit.val : ''} onChange={(e) => setCEdit({ id: f.id, val: e.target.value })} maxLength={32} style={{ width: 180 }} onPressEnter={() => saveContact(f.id)} />}
+        okText="保存" cancelText="取消" onConfirm={() => saveContact(f.id)}
+      >
+        <Button size="small" type="text" style={{ paddingInline: 0, maxWidth: 120 }}><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: 110, verticalAlign: 'bottom' }}>{f.contact || <span style={{ color: '#C8C5BE' }}>+联系</span>}</span></Button>
+      </Popconfirm>
+    ) },
     { title: '状态', key: 'status', width: 120, render: (_, f) => <Select size="small" value={f.status} onChange={(v) => changeStatus(f.id, v)} style={{ width: '100%' }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} /> },
     { title: '成交', key: 'amt', width: 130, render: (_, f) => (
       f.status !== '已转化' ? <span className="num" style={{ color: '#A8A5A0' }}>—</span>
@@ -443,6 +473,7 @@ export default function Messages() {
               <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap', background: '#FCFBF9', border: '1px solid #E8E6E1', borderRadius: 4, padding: '6px 10px' }}>
                 <span style={{ fontSize: 12, fontWeight: 700 }}>已选 {fsel.size}</span>
                 <Select size="small" placeholder="批量改状态" value={null} onChange={(v) => runBatch(() => ({ status: v }), '状态已改')} style={{ width: 110 }} options={assistConfig.followStatuses.map((s) => ({ value: s, label: s }))} />
+                <Select size="small" placeholder="批量排提醒" value={null} onChange={(v) => { const d = new Date(); if (v === 'tmr') d.setDate(d.getDate() + 1); else if (v === 'd3') d.setDate(d.getDate() + 3); else { const wd = (8 - d.getDay()) % 7 || 7; d.setDate(d.getDate() + wd); } runBatch(() => ({ next_remind_at: `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 09:00` }), v === 'tmr' ? '已排明天9点' : v === 'd3' ? '已排3天后9点' : '已拍下周一9点'); }} style={{ width: 112 }} options={[{ value: 'tmr', label: '明天 9:00' }, { value: 'mon', label: '下周一 9:00' }, { value: 'd3', label: '3天后 9:00' }]} />
                 <Input size="small" placeholder="追加标签(≤8字)" value={batchTagInput} onChange={(e) => setBatchTagInput(e.target.value)} maxLength={8} style={{ width: 140 }} onPressEnter={() => runBatch((f) => ({ tags: [...new Set([...(f.tags || []), batchTagInput.trim()])].slice(0, 10) }), '标签已加')} />
                 <Button size="small" disabled={!batchTagInput.trim()} onClick={() => runBatch((f) => ({ tags: [...new Set([...(f.tags || []), batchTagInput.trim()])].slice(0, 10) }), '标签已加')}>批量打标</Button>
                 <Button size="small" type="text" onClick={clearFsel}>取消选择</Button>
@@ -564,10 +595,16 @@ export default function Messages() {
                 <div>登记时间：{detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN', { hour12: false }) : '—'}</div>
                 <div>下次提醒：{detail.next_remind_at}</div>
                 <div>来源视频：{videos.find((v) => v.id === detail.source_video_id)?.title || detail.source_video_id}</div>
+                {detail.contact && <div>联系方式：<span className="num">{detail.contact}</span> <Button size="small" type="text" style={{ paddingInline: 4 }} onClick={async () => { try { await navigator.clipboard.writeText(detail.contact || ''); flash('已复制联系方式', true); } catch { flash('复制失败'); } }}>复制</Button></div>}
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, margin: '16px 0 8px' }}>跟进纪要</div>
               <Input.TextArea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={4} maxLength={500} placeholder="记录客户需求、报价、约跟进时间…" />
               <Button size="small" type="primary" style={{ marginTop: 8 }} onClick={saveNote}>保存纪要</Button>
+              {/* S115 一句话速记：自动带日期追加，免切全文 */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <Input size="small" value={qn} onChange={(e) => setQn(e.target.value)} placeholder={'速记一条（自动加日期追加）如：已报价298约明晚'} maxLength={120} onPressEnter={quickNote} />
+                <Button size="small" onClick={quickNote} disabled={!qn.trim()}>速记</Button>
+              </div>
               <div style={{ fontSize: 13, fontWeight: 600, margin: '18px 0 8px' }}>操作历史（最近{detail.history?.length || 0}条）</div>
               {!detail.history?.length && <div style={{ fontSize: 12, color: '#A8A5A0' }}>暂无记录，改状态/记账/打标会自动留痕</div>}
               {(detail.history || []).slice(0, 20).map((h, i) => (

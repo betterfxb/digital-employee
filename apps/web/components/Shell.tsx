@@ -27,6 +27,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [activeId, setActiveId] = useState('');
   const [unread, setUnread] = useState(0);
   const [drCnt, setDrCnt] = useState(0); // S108 草稿待确认数（任务中心红点）
+  const [odCnt, setOdCnt] = useState(0); // S117 逾期跟进数（私信辅助红点）
   const [ver, setVer] = useState('');
   const [licState, setLicState] = useState<LicenseState | null>(null);
   const [reportHour, setReportHour] = useState(9);
@@ -66,7 +67,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       prevUnread.current = n;
       setUnread(n);
     }).catch(() => { /* 后台轮询自愈：60s后重试，角标沿用旧值，不打扰用户 */ });
-    const tickDr = () => fetch('/api/drafts?status=pending').then((r) => r.json()).then((d) => setDrCnt((d.items || []).length)).catch(() => { /* 角标自愈：失败下轮重试 */ });
+    const tickDr = () => {
+      fetch('/api/drafts?status=pending').then((r) => r.json()).then((d) => setDrCnt((d.items || []).length)).catch(() => { /* 角标自愈：失败下轮重试 */ });
+      fetch('/api/follows').then((r) => r.json()).then((f) => setOdCnt(((f.items || []) as { status: string; next_remind_at: string }[]).filter((x) => ['待回访', '已手动回复'].includes(x.status) && isDue(x.next_remind_at)).length)).catch(() => { /* 同上 */ });
+    };
     tick(); tickDr();
     const id = setInterval(() => { tick(); tickDr(); }, 60000);
     return () => clearInterval(id);
@@ -198,6 +202,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <span>{n.label}</span>
               {mounted && n.href === '/comments' && unread > 0 && <span className="num" style={{ background: '#1A1A18', color: '#fff', fontSize: 11, borderRadius: 10, padding: '0 7px' }}>{unread}</span>}
               {mounted && n.href === '/tasks' && drCnt > 0 && <span className="num" title="待确认草稿" style={{ background: '#B4443C', color: '#fff', fontSize: 11, borderRadius: 10, padding: '0 7px' }}>{drCnt}</span>}
+              {mounted && n.href === '/messages' && odCnt > 0 && <span className="num" title="逾期跟进" style={{ background: '#9A6B2F', color: '#fff', fontSize: 11, borderRadius: 10, padding: '0 7px' }}>{odCnt}</span>}
             </Link>
           ))}
         </nav>

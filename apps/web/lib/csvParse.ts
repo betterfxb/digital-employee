@@ -14,16 +14,21 @@ export const COL_ALIASES: Record<string, string[]> = {
   点赞: ['点赞量', '获赞', '获赞数'],
   评论: ['评论数', '评论量'],
   转发: ['转发数', '分享', '分享数'],
-  昵称: ['用户昵称', '用户', '评论用户'],
+  昵称: ['用户昵称', '用户', '评论用户', '客户昵称'],
   内容: ['评论内容', '正文'],
   视频标题: ['所属视频', '作品标题'],
   时间: ['评论时间'],
+  提醒: ['下次提醒', '下次提醒时间'],
+  金额: ['成交金额'],
+  状态: ['跟进状态'],
+  联系方式: ['电话', '微信', '微信号'],
 };
 
 /** 各导入类型的必需规范列（前端预检与后端校验共用同一张表） */
-export const REQUIRED_COLS: Record<'videos' | 'comments', string[]> = {
+export const REQUIRED_COLS: Record<'videos' | 'comments' | 'leads', string[]> = {
   videos: ['标题'],
   comments: ['昵称', '内容', '视频标题'],
+  leads: ['昵称'], // S118 存量客户名单导入
 };
 
 /** 编码嗅探解码：严格UTF-8失败→GBK（中文Excel ANSI导出）；去BOM。供客户端 file.arrayBuffer() 后调用 */
@@ -87,7 +92,7 @@ export function colMap(header: string[]): Record<string, number> {
 }
 
 /** 缺失的必需规范列（空数组=可导入）；kind决定校验哪套列 */
-export function missingCols(kind: 'videos' | 'comments', headerRow: string[]): string[] {
+export function missingCols(kind: 'videos' | 'comments' | 'leads', headerRow: string[]): string[] {
   const m = colMap(headerRow);
   return REQUIRED_COLS[kind].filter((c) => m[c] === undefined);
 }

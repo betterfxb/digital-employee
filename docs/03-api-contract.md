@@ -93,6 +93,8 @@ POST /api/drafts {comment_id,nick,text,via?} -> Draft | 同comment在途重复�
 PATCH /api/drafts/:id {status:'pending'|'done'|'discarded'} -> Draft（handled_at盖戳；不存在→404）
 PATCH /api/scripts/:id {action:'use'|'pin'|'unpin'} -> Script（S107 效果闭环：复制即计数，仅自定义cs-前缀；内置s1-s3→404防伪造热度；list active按pinned>used降序排自定义段）
 GET  /api/leads/profile?nick= -> {nick,comments[](≤30),replies[](≤30),follows[],stats:{comments_n,high_n,replied_n,follows_n,done_n,amount_sum,first_touch,last_touch}}（S109 360档案跨集合聚合；first/last只用ISO可信字段，评论create_time仅展示不参与计算；缺nick→400）
+POST /api/import {kind:leads, csv} -> {created,skipped}（S118 存量客户名单：昵称必填、状态/下次提醒/金额/联系方式可选；同名活跃线索跳过=可重复导同档幂等；空状态→待回访、空提醒→明天09:00）
+PATCH /api/follows/:id {contact?} -> Follow（S115 联系方式≤32字仅本机存储，空串=清除，计入操作历史）
 能力键新增 marketing（S83）：专业版专属；基础版白名单不含 → /marketing 页与侧栏显示ProLock（API按既有策略开放）；发证脚本无需改（白名单机制自动锁）
 POST /api/data/backups/run -> {created,entry}立即存manual快照（S80；auto每日凌晨3点后由调度器心跳幂等落一份，轮转保留最近14份）
 GET  /api/data/backups/download?name= -> 快照文件附件（S80；命名白名单auto-/manual-正则，穿越400）；恢复走既有/api/data/restore（客户端download→JSON→preview→覆盖确认）

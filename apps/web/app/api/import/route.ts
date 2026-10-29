@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'; // S23: 写内存态+落盘，禁静态预渲染
 import { fail, ok } from '@/lib/response';
 import { douyinConfig } from '@/config/douyin.config';
+import { assistConfig } from '@/config/assist.config';
 import { getRepos } from '@/lib/repo';
 import { pushAuthLog, withBatch } from '@/lib/localData';
 import { upsertVideo, upsertComment } from '@/lib/importData';
@@ -36,6 +37,38 @@ function importVideos(rows: string[][], aid: string): ImportResult {
   }
   if (created + updated === 0) return { error: '没有可导入的有效行（检查「标题」列与数据）', created: 0, updated: 0 };
   return { created, updated };
+}
+
+/** S118 存量客户名单导入：昵称必填，状态/提醒/金额/联系方式可选；同名活跃线索跳过防重复 */
+function importLeads(rows: string[][]): ImportResult {
+  const head = colMap(rows[0]);
+  if (head['昵称'] === undefined) return { error: missingColError('客户名单', ['昵称'], rows[0]), created: 0, updated: 0, skipped: 0 };
+  const repos = getRepos();
+  const activeNicks = new Set(repos.follows.list('').filter((f) => f.status !== '无效').map((f) => f.peer_nick));
+  const firstVid = repos.videos.list(repos.accounts.getActive())[0]?.id || '';
+  let created = 0;
+  let skipped = 0;
+  for (const r of rows.slice(1, douyinConfig.importMaxRows + 1)) {
+    const nick = (r[head['昵称']] || '').trim().slice(0, 30);
+    if (!nick) continue;
+    if (activeNicks.has(nick)) { skipped++; continue; }
+    activeNicks.add(nick);
+    const sv = head['状态'] !== undefined ? (r[head['状态']] || '').trim() : '';
+    const rtRaw = head['提醒'] !== undefined ? (r[head['提醒']] || '').trim() : '';
+    const amt = head['金额'] !== undefined ? num(r[head['金额']]) : 0;
+    const ct = head['联系方式'] !== undefined ? (r[head['联系方式']] || '').trim().slice(0, 32) : '';
+    repos.follows.create({
+      peer_nick: nick,
+      source_video_id: firstVid,
+      next_remind_at: (rtRaw || '明天 09:00').slice(0, 40),
+      status: assistConfig.followStatuses.includes(sv) ? sv : '待回访',
+      amount: amt > 0 ? amt : undefined,
+      contact: ct || undefined,
+    });
+    created++;
+  }
+  if (created === 0) return { error: `没有可导入的新客户（跳过${skipped}个已有客户）`, created: 0, updated: 0, skipped };
+  return { created, updated: 0, skipped };
 }
 
 function importComments(rows: string[][], aid: string): ImportResult {
@@ -76,7 +109,7 @@ export async function POST(req: Request) {
   try { body = await req.json(); } catch { return fail('FATAL', '请求体需为JSON', 400); }
   const kind = body?.kind;
   const csv = body?.csv;
-  if (kind !== 'videos' && kind !== 'comments') return fail('FATAL', 'kind必须是videos或comments', 400);
+  if (kind !== 'videos' && kind !== 'comments' && kind !== 'leads') return fail('FATAL', 'kind必须是videos/comments/leads', 400);
   if (typeof csv !== 'string' || !csv.trim()) return fail('FATAL', 'csv内容为空', 400);
   if (Buffer.byteLength(csv, 'utf8') > douyinConfig.importMaxBytes) return fail('FATAL', `单次上限${douyinConfig.importMaxBytes / 1024}KB，请拆分`, 400);
 
@@ -87,9 +120,9 @@ export async function POST(req: Request) {
   const repos = getRepos();
   const aid = repos.accounts.getActive();
   // S58 批量合并落盘：整批一次flush（修每行写盘的线性劣化）
-  const result = withBatch(() => (kind === 'videos' ? importVideos(rows, aid) : importComments(rows, aid)));
+  const result = withBatch(() => (kind === 'videos' ? importVideos(rows, aid) : kind === 'comments' ? importComments(rows, aid) : importLeads(rows)));
   if (result.error) return fail('FATAL', result.error, 400);
   const n = result.created + result.updated;
-  pushAuthLog(`导入${kind === 'videos' ? '作品' : '评论'}数据`, '店长', `${n}条 · ${aid}`);
+  pushAuthLog(`导入${kind === 'videos' ? '作品' : kind === 'comments' ? '评论' : '客户名单'}数据`, '店长', `${n}条 · ${aid}`);
   return ok({ ...result, account_id: aid, kind });
 }

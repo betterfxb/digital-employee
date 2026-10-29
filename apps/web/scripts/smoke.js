@@ -195,6 +195,21 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     // S79 缺列报错带用户表头回显（可自助修正）
     const miss = await post('/api/import', { kind: 'videos', csv: '名称,数据\nx,1' });
     pass(miss.s === 400 && String(miss.j.message).includes('你文件的表头是：名称,数据'), 'S79 缺列报错回显实际表头');
+    // S118 存量客户导入：唯一昵称幂等（本次新建→同档重导去重跳过）+ 缺列拒 + S115联系方式往返后复原
+    const leadNick = '冒烟客户' + Date.now().toString(36);
+    const leadCsv = `昵称,状态,下次提醒,金额,联系方式\n${leadNick},已转化,明天 09:00,298,wx_smoke123`;
+    const l1 = await post('/api/import', { kind: 'leads', csv: leadCsv });
+    const l2 = await post('/api/import', { kind: 'leads', csv: leadCsv });
+    const lBad = await post('/api/import', { kind: 'leads', csv: '名字,电话\n张三,138' });
+    const fl = (await get('/api/follows')).j.items.find((x) => x.peer_nick === leadNick);
+    pass(l1.s === 200 && l1.j.created === 1 && fl && fl.status === '已转化' && fl.amount === 298 && l2.s === 400 && String(l2.j.message).includes('跳过') && lBad.s === 400, 'S118 leads导入/去重跳过/缺列拒');
+    let contactOk = false;
+    if (fl) {
+      const c1 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact: '13800001111' }) }); return rr.json(); })();
+      const c2 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact: '' }) }); return rr.json(); })();
+      contactOk = c1.contact === '13800001111' && c2.contact === '';
+    }
+    pass(contactOk, 'S115 联系方式PATCH往返（测后清回）');
     // S80 本地自动备份轮转三端点
     const bl = await get('/api/data/backups');
     pass(bl.s === 200 && Array.isArray(bl.j.list) && bl.j.keep === 14, 'S80 backups list 结构');

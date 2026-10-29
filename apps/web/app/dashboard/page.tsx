@@ -150,7 +150,7 @@ export default function Dashboard() {
   const hotIds = topHot(videos); const lowIds = lowWarn(videos);
   const avgE = (() => { const rs = videos.map((v) => engagementPct(v)).filter((x): x is number => x !== null); return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null; })();
   const videoCols: ColumnsType<Video> = [
-    { title: '作品', dataIndex: 'title', key: 'title', render: (v: string, rec) => <span>{hotIds.has(rec.id) && <span title="互动率Top3爆款" style={{ marginRight: 4 }}>🔥</span>}{lowIds.has(rec.id) && <span title="播放显著低于账号均值，选题/发布时段可复盘" style={{ marginRight: 4, opacity: 0.55 }}>▼</span>}{v}</span> },
+    { title: '作品', dataIndex: 'title', key: 'title', render: (v: string, rec) => <span>{hotIds.has(rec.id) && <span title="互动率Top3爆款" style={{ marginRight: 4 }}>🔥</span>}{lowIds.has(rec.id) && <span title="播放显著低于账号均值，选题/发布时段可复盘" style={{ marginRight: 4, opacity: 0.55 }}>▼</span>}<a href={`/comments?video=${encodeURIComponent(rec.id)}`} title="直达该作品评论流">{v}</a></span> },
     { title: '发布时间', dataIndex: 'publish_time', key: 'pt', onCell: () => ({ className: 'num' }) },
     { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), sorter: (a, b) => a.play - b.play, render: (_, v) => v.play.toLocaleString() },
     { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), sorter: (a, b) => a.like - b.like, render: (_, v) => v.like.toLocaleString() },

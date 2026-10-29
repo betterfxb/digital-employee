@@ -27,6 +27,8 @@ export interface Follow {
   tags?: string[];
   /** S49 跟进纪要 */
   note?: string;
+  /** S115 联系方式（电话/微信，≤32字；仅本机存储） */
+  contact?: string;
   /** S49 操作历史（最新在前，环形20条） */
   history?: { at: string; act: string }[];
 }

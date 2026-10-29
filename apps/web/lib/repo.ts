@@ -10,7 +10,7 @@ import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
 import { persistCollections } from './localData'; // S25b: 业务集合变更落盘
 import type { Account, Video, CommentItem, Follow, Competitor, DlqItem } from './types';
 
-export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number }
+export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number; contact?: string }
 export interface CompetitorInput { source: string; url: string; remark: string; kind?: string }
 export interface IntentPatch { intent?: string; ignore?: boolean }
 export interface CommentFilter { video_id: string; intent: string; keyword: string; unreadOnly: boolean }
@@ -23,7 +23,7 @@ export interface CommentRepo {
   setIntent(id: string, patch: IntentPatch): Record<string, unknown> | null;
   exists(id: string): boolean;
 }
-export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string }): Follow | null }
+export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string; contact?: string }): Follow | null }
 export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor; update(id: string, patch: { play?: number; like?: number; remark?: string }): Competitor | null }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
@@ -92,11 +92,13 @@ const memory: Repos = {
       if (patch.tags !== undefined) acts.push(`标签更新为「${patch.tags.join('、') || '无'}」`);
       if (patch.note !== undefined) acts.push('更新跟进纪要');
       if (patch.next_remind_at !== undefined && patch.next_remind_at !== f.next_remind_at) acts.push(`提醒时间改为「${patch.next_remind_at}」`);
+      if (patch.contact !== undefined && patch.contact !== f.contact) acts.push('更新联系方式'); // S115
       if (patch.status !== undefined) f.status = patch.status;
       if (patch.amount !== undefined) f.amount = patch.amount;
       if (patch.tags !== undefined) f.tags = patch.tags;
       if (patch.note !== undefined) f.note = patch.note;
       if (patch.next_remind_at !== undefined) f.next_remind_at = patch.next_remind_at;
+      if (patch.contact !== undefined) f.contact = patch.contact; // S115
       if (acts.length > 0) {
         f.history = [{ at: new Date().toISOString(), act: acts.join('；') }, ...(f.history || [])].slice(0, 20);
       }

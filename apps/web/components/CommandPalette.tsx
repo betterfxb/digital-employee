@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { settingsConfig } from '@/config/settings.config';
 
 /**
  * S90 全局命令面板（Ctrl+K）：导航 / 全局搜索 / 快捷动作
@@ -13,7 +14,7 @@ export function CommandPalette({ enabled = true }: { enabled?: boolean }) {
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
   const [status, setStatus] = useState('');
-  const [cache, setCache] = useState<{ at: number; follows: { id: string; peer_nick: string; status: string }[]; scripts: { id: string; title: string; content: string }[]; autoReply: boolean } | null>(null);
+  const [cache, setCache] = useState<{ at: number; follows: { id: string; peer_nick: string; status: string }[]; scripts: { id: string; title: string; content: string }[]; autoReply: boolean; draftsPending: number; theme: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const inpRef = useRef<HTMLInputElement>(null);
 
@@ -36,8 +37,9 @@ export function CommandPalette({ enabled = true }: { enabled?: boolean }) {
       fetch('/api/follows').then((r) => r.json()).catch(() => ({ items: [] })),
       fetch('/api/scripts').then((r) => r.json()).catch(() => ({ items: [] })),
       fetch('/api/settings').then((r) => r.json()).catch(() => ({})),
-    ]).then(([f, s, st]) => {
-      setCache({ at: Date.now(), follows: f.items || [], scripts: s.items || [], autoReply: !!st.auto_reply_enabled });
+      fetch('/api/drafts?status=pending').then((r) => r.json()).catch(() => ({ items: [] })),
+    ]).then(([f, s, st, dr]) => {
+      setCache({ at: Date.now(), follows: f.items || [], scripts: s.items || [], autoReply: !!st.auto_reply_enabled, draftsPending: (dr.items || []).length, theme: st.theme_color || '' });
       setLoading(false);
     });
   };
@@ -71,6 +73,17 @@ export function CommandPalette({ enabled = true }: { enabled?: boolean }) {
       { group: '动作', label: '导出诊断包', hint: '报障给服务商', run: () => { setOpen(false); window.location.href = '/api/diag/bundle'; } },
       { group: '动作', label: '下载备份', hint: '普通JSON快照', run: () => { setOpen(false); window.location.href = '/api/data/backup'; } },
     ];
+    // S117 动态指令：草稿待确认直达（有数才现身）+ 主题秒切（点即存并刷新观感）
+    if (cache && cache.draftsPending > 0) acts.unshift({ group: '动作', label: `草稿收件箱：${cache.draftsPending} 条待确认`, hint: '复制话术去抖音发送', run: () => go('/tasks') });
+    for (const tp of settingsConfig.themePresets) {
+      if (cache && cache.theme !== tp.value) acts.push({
+        group: '主题', label: `换主题·${tp.name}`, hint: '全局即时生效',
+        run: async () => {
+          const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme_color: tp.value }) }).then((x) => x.json()).catch(() => null);
+          if (r && !r.code) { setOpen(false); window.location.reload(); } else { setStatus(r?.message || '切换失败'); }
+        },
+      });
+    }
     let list = [...nav, ...acts];
     if (kw) {
       const inTitle = list.filter((x) => x.label.toLowerCase().includes(kw) || x.hint.toLowerCase().includes(kw));

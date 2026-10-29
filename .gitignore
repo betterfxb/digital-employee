@@ -37,3 +37,13 @@ starboat-shorts/
 
 # agent临时脚本区（构建/验证循环）
 .cache-tmp/
+
+# user scratch/other-project artifacts in workspace root (never agent-committed)
+/xingzhou-site/
+/xingzhou-site-deploy/
+/xingzhou-site-deploy.zip
+/preview/
+/rehearsal4/
+/easel-prefilter-backup.bundle
+/NOTICE
+/*.png

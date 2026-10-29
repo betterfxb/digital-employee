@@ -8,14 +8,16 @@ import { decodeTextBuffer, parseCsv, missingCols, missingColError } from '@/lib/
  * S32 导入向导：模板下载 → 拖拽上传 → 结果明细（建/更/跳+原因）
  * S79 容错升级：UTF-8/GBK编码嗅探（中文Excel导出ANSI不再乱码）、列头按别名表预检（与后端同口径，抖音后台直接导出也能过）、TSV自动识别（Excel复制粘贴产物）
  */
-const TPL: Record<'videos' | 'comments', { label: string; cols: string[]; sample: string[][] }> = {
+const TPL: Record<'videos' | 'comments' | 'leads', { label: string; cols: string[]; sample: string[][] }> = {
   videos: { label: '作品', cols: ['标题', '发布时间', '播放', '点赞', '评论', '转发'], sample: [['三角洲跑刀实录 · 一局爆仓', '10-08', '48201', '4102', '312', '410']] },
   comments: { label: '评论', cols: ['昵称', '内容', '视频标题', '时间', '点赞'], sample: [['刀友老陈', '跑刀一单多少钱？怎么下单？', '三角洲跑刀实录 · 一局爆仓', '2小时前', '12']] },
+  // S118 存量客户名单：昵称必填；状态/下次提醒/金额/联系方式可空（状态空=待回访，提醒空=明天9点）
+  leads: { label: '客户', cols: ['昵称', '状态', '下次提醒', '金额', '联系方式'], sample: [['跑刀阿伟', '待回访', '明天 09:00', '', 'wx:abc123'], ['老客凯哥', '已转化', '', '298', '']] },
 };
 
 export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const { message } = App.useApp();
-  const [kind, setKind] = useState<'videos' | 'comments'>('videos');
+  const [kind, setKind] = useState<'videos' | 'comments' | 'leads'>('videos');
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -49,7 +51,7 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
     onDone();
   };
 
-  const dl = (k: 'videos' | 'comments') => downloadCsv(`${TPL[k].label}导入模板.csv`, TPL[k].cols, TPL[k].sample);
+  const dl = (k: 'videos' | 'comments' | 'leads') => downloadCsv(`${TPL[k].label}导入模板.csv`, TPL[k].cols, TPL[k].sample);
 
   return (
     <Modal title="导入我的数据" open={open} onCancel={close} footer={null} width={560} destroyOnHidden>
@@ -57,7 +59,7 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
         <div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 14 }}>
             <Radio.Group value={kind} onChange={(e) => { setKind(e.target.value); setErr(''); }} options={[
-              { value: 'videos', label: '作品数据' }, { value: 'comments', label: '评论数据' },
+              { value: 'videos', label: '作品数据' }, { value: 'comments', label: '评论数据' }, { value: 'leads', label: '老客户名单' },
             ]} optionType="button" />
             <Button size="small" type="text" onClick={() => dl(kind)}>下载{TPL[kind].label}模板</Button>
           </div>
@@ -81,13 +83,15 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
           </div>
           {result && result.skipped > 0 && (
             <div style={{ fontSize: 12, color: '#8A6D1F', background: '#FBF3E4', border: '1px solid #EADFBE', borderRadius: 4, padding: '8px 12px', marginTop: 12, textAlign: 'left' }}>
-              跳过 {result.skipped} 条：视频标题未匹配到已导入的作品。请先导入作品 CSV，再导评论。
+              {kind === 'leads'
+                ? `跳过 ${result.skipped} 个已有客户（同名活跃线索自动去重，放心重复导入同一名单）。`
+                : `跳过 ${result.skipped} 条：视频标题未匹配到已导入的作品。请先导入作品 CSV，再导评论。`}
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 18 }}>
             <Button onClick={() => { setStep(0); setResult(null); }}>再导入一批</Button>
-            <Button type="primary" onClick={() => { close(); window.location.href = kind === 'comments' ? '/comments' : '/dashboard'; }}>
-              {kind === 'comments' ? '去评论工作台看意向' : '完成，看数据看板'}
+            <Button type="primary" onClick={() => { close(); window.location.href = kind === 'comments' ? '/comments' : kind === 'leads' ? '/messages' : '/dashboard'; }}>
+              {kind === 'comments' ? '去评论工作台看意向' : kind === 'leads' ? '去台账看新客户' : '完成，看数据看板'}
             </Button>
           </div>
         </div>

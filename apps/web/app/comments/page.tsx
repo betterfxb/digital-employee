@@ -25,6 +25,7 @@ export default function Comments() {
   const [product, setProduct] = useState('跑刀代跑');
   const [drafts, setDrafts] = useState<{ id: string; label: string; content: string }[]>([]);
   const [replyVariant, setReplyVariant] = useState(0); // S86 话术A/B：当前输入框内容来自候选第几位（0=手写）
+  const [sortBy, setSortBy] = useState<'default' | 'score' | 'like' | 'unread'>('default'); // S116 列表排序（时间字段不可信不做时间排序，S29口径）
   /** S97 评论行右键菜单（桌面感快捷操作，全复用既有处理函数） */
   const [ctx, setCtx] = useState<{ x: number; y: number; c: CommentItem } | null>(null);
   /** S93 保存视图：常用筛选组合一键切换（服务端钳制存储） */
@@ -42,7 +43,8 @@ export default function Comments() {
   /** S58 渲染上限：大数据量首屏100条防卡顿，加载更多渐进 */
   const [renderCap, setRenderCap] = useState(100);
   /** 当前可见列表（受渲染上限约束，j/k导航与全选都在可见范围内） */
-  const vis = items.slice(0, renderCap);
+  const sortedItems = (() => { if (sortBy === 'default') return items; const arr = [...items]; if (sortBy === 'score') arr.sort((x, y) => leadScore(y) - leadScore(x)); else if (sortBy === 'like') arr.sort((x, y) => y.like_count - x.like_count); else arr.sort((x, y) => Number(x.is_read_local) - Number(y.is_read_local)); return arr; })(); // S116
+  const vis = sortedItems.slice(0, renderCap);
 
   const flash = (t: string, ok = false) => (ok ? message.success(t) : message.error(t));
 
@@ -76,8 +78,9 @@ export default function Comments() {
     const usp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const urlIntent = usp ? usp.get('intent') : null;
     const urlKw = usp ? usp.get('kw') : null; // S90 命令面板搜索直达
+    const urlVid = usp ? usp.get('video') : null; // S116 看板作品行直达其评论
     if (urlKw) setKw(urlKw);
-    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent, k: urlKw || '' }); } else if (urlKw) load({ k: urlKw }); else load();
+    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent, k: urlKw || '' }); } else if (urlKw) load({ k: urlKw }); else if (urlVid) { setSelVideo(urlVid); load({ v: urlVid }); } else load();
     fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw).slice(0, 8)); }).catch(() => {});
     fetch('/api/scripts/templates?intent=普通').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {
       fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});
@@ -241,6 +244,7 @@ export default function Comments() {
           <Input size="small" value={kw} onChange={(e) => setKw(e.target.value)} onPressEnter={() => load({ k: kw })} placeholder="搜索关键词" style={{ width: 200 }} allowClear />
           <Select size="small" value={intent} onChange={(v) => { setIntent(v); load({ it: v }); }} style={{ width: 120 }} options={intentOpts} />
           <Checkbox checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); load({ uo: e.target.checked }); }} style={{ fontSize: 12, color: '#6B6862' }}>只看未读</Checkbox>
+          <Select size="small" value={sortBy} onChange={(v) => setSortBy(v)} style={{ width: 118 }} options={[{ value: 'default', label: '默认顺序' }, { value: 'score', label: '意向分↓' }, { value: 'like', label: '点赞↓' }, { value: 'unread', label: '未读优先' }]} />
           <span style={{ flex: 1 }} />
           {checked.size > 0 && (
             <>
