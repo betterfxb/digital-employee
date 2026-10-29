@@ -45,7 +45,7 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
   try { const { s, j } = await get('/api/videos'); pass(s === 200 && j.items.length === 3 && j.items.some((v) => v.id === 'v3'), 'GET videos isolated acc_002'); } catch (e) { pass(false, 'GET videos isolated'); }
   try { const { s, j } = await post('/api/accounts/switch', { id: 'nope' }); pass(s === 400 && j.code === 'FATAL', 'POST switch invalid FATAL'); } catch (e) { pass(false, 'POST switch invalid'); }
   try { const { s, j } = await post('/api/accounts/switch', { id: 'acc_001' }); pass(s === 200 && j.active_id === 'acc_001', 'POST switch back acc_001'); } catch (e) { pass(false, 'POST switch back'); }
-  try { const { s, j } = await get('/api/settings'); pass(s === 200 && j.font_size === 14 && j.theme_color === '#1A1A18' && !!j.shop_name, 'GET settings defaults'); } catch (e) { pass(false, 'GET settings defaults'); }
+  try { const { s, j } = await get('/api/settings'); pass(s === 200 && j.font_size >= 14 && j.font_size <= 24 && j.theme_color === '#1A1A18' && !!j.shop_name, 'GET settings defaults'); } catch (e) { pass(false, 'GET settings defaults'); } // S113修：字号断言改范围——原硬编码===14遇默认16/测试写回即非幂等（自恢复纪律再犯自查）
   const patch = async (p, body) => { const r = await fetch(base + p, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return { s: r.status, j: await r.json().catch(() => null) }; };
   try { const { s, j } = await patch('/api/settings', { font_size: 99 }); pass(s === 400 && j.code === 'FATAL', 'PATCH settings font FATAL'); } catch (e) { pass(false, 'PATCH settings font'); }
   try { const { s, j } = await patch('/api/settings', { theme_color: '#FF0000' }); pass(s === 400 && j.code === 'FATAL', 'PATCH settings theme FATAL'); } catch (e) { pass(false, 'PATCH settings theme'); }
@@ -243,10 +243,12 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const au2 = await vpatch({ desktop_autostart: false });
     pass(au1.s === 200 && au1.j.desktop_autostart === true && auG.j.desktop_autostart === true, 'S104 自启开关布尔往返');
     pass(auBad.s === 400 && au2.s === 200 && au2.j.desktop_autostart === false, 'S104 坏类型拒+复位');
-    // S111 界面比例：字号上限校验（25>max24拒）+ 新用户默认16可写回
+    // S111 界面比例：字号上限校验（25>max24拒）+ 新用户默认16可写回；S113：测后恢复原值（自恢复纪律）
+    const fOrig = (await get('/api/settings')).j.font_size;
     const fBad25 = await vpatch({ font_size: 25 });
     const fOk16 = await vpatch({ font_size: 16 });
-    pass(fBad25.s === 400 && fOk16.s === 200 && fOk16.j.font_size === 16, 'S111 字号范围校验+默认16');
+    const fBack = await vpatch({ font_size: fOrig });
+    pass(fBad25.s === 400 && fOk16.s === 200 && fOk16.j.font_size === 16 && fBack.s === 200 && fBack.j.font_size === fOrig, 'S111 字号范围校验+默认16+测后复原');
     // S108 草稿收件箱：暂存→在途去重→标处理出队 + 非法参数
     const cListA = await get('/api/comments?unread_only=0');
     const anyC = (cListA.j.items || [])[0];

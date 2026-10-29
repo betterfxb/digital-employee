@@ -114,10 +114,10 @@ export default function ReportPage() {
   return (
     <div>
       <div style={{ borderBottom: '1px solid #E8E6E1' }}>
-        {/* S112 头与内容同列宽居中（宽屏下标题不再漂在左上角；横向padding与内容同值保证任意宽度对齐） */}
-        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '14px 32px' }}><b style={{ fontSize: 15 }}>经营报告</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>本地真实数据自动汇总 · 可复制给合伙人/老板</div></div>
+        {/* S113 头与内容同列宽居中（1680全宽版式与其余页一致，宽屏不再缩成窄条） */}
+        <div style={{ maxWidth: 1680, margin: '0 auto', padding: '14px 32px' }}><b style={{ fontSize: 15 }}>经营报告</b><div style={{ fontSize: 12, color: '#A8A5A0' }}>本地真实数据自动汇总 · 可复制给合伙人/老板</div></div>
       </div>
-      <div style={{ padding: '24px 32px', maxWidth: 1080, margin: '0 auto' }}>
+      <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <Segmented options={['日报', '周报']} value={kind === 'daily' ? '日报' : '周报'} onChange={switchKind} />
           <span style={{ fontSize: 12, color: '#A8A5A0' }}>{dateLabel}</span>
@@ -133,7 +133,7 @@ export default function ReportPage() {
           <>
             <div className="card" style={{ padding: 18 }}>
               <b>{kind === 'daily' ? '日报' : '周报'}指标</b>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginTop: 12 }}>
                 {report.metrics.map((m) => (
                   <div key={m.label} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '10px 12px' }}>
                     <div style={{ fontSize: 12, color: '#6B6862' }}>{m.label}</div>
@@ -144,7 +144,7 @@ export default function ReportPage() {
             </div>
             <div className="card" style={{ padding: 18, marginTop: 16 }}>
               <b>7天趋势</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>每日首次打开本页自动记录 · 只记真实数据</span>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginTop: 12 }}>
                 {([['comments', '评论数'], ['follows', '线索数'], ['revenue', '成交额']] as [keyof BizSnapshot, string][]).map(([k, label]) => {
                   const series = trendSeries(hist, k);
                   const cur = series.length ? series[series.length - 1].v : 0;
