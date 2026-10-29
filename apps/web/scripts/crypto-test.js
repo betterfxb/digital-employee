@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -199,6 +199,27 @@ check(lowWarn([{ id: 'x', play: 10, like: 0, comment: 0, share: 0 }]).size === 0
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');
 check(replyGate('mock', false, '').gate.includes('live') && replyGate('live', false, 'https://x').gate.includes('能力'), 'areply 通道门先于能力门');
 check(replyGate('live', true, '').gate.includes('能力') && replyGate('live', true, 'https://x').ready === true, 'areply 能力空拒与三门就绪');
+
+// 20) S122 数据自愈纯函数
+const { recoveryOrder, isSaneState } = require('./.tmp-crypto/lib/repair.js');
+check(
+  JSON.stringify(recoveryOrder([
+    { name: 'auto-2026-10-27.json', mtime: '2026-10-27T03:00:00Z' },
+    { name: 'manual-2026-10-28-112233.json', mtime: '2026-10-28T11:22:33Z' },
+    { name: 'auto-2026-10-28.json', mtime: '2026-10-28T03:00:00Z' },
+  ])) === JSON.stringify(['manual-2026-10-28-112233.json', 'auto-2026-10-28.json', 'auto-2026-10-27.json']),
+  'repair 候选按mtime新→旧（manual与auto混排）'
+);
+check(
+  JSON.stringify(recoveryOrder([{ name: 'readme.txt', mtime: '2026-10-29T00:00:00Z' }, { name: 'evil.json', mtime: '2026-10-29T00:00:00Z' }, { name: 'auto-2026-10-26.json', mtime: '2026-10-26T03:00:00Z' }])) === JSON.stringify(['auto-2026-10-26.json']),
+  'repair 白名单过滤目录杂物'
+);
+check(
+  JSON.stringify(recoveryOrder([{ name: 'auto-2026-10-28.json', mtime: '' }, { name: 'auto-2026-10-27.json', mtime: '' }])) === JSON.stringify(['auto-2026-10-28.json', 'auto-2026-10-27.json']),
+  'repair 同mtime按名称降序确定性兜底'
+);
+check(isSaneState({ accounts: [], videos: [], comments: [], tokens: {} }) === true, 'repair 四核心集合齐全=健全（空数组也算）');
+check(isSaneState({ accounts: [], videos: [] }) === false && isSaneState(null) === false && isSaneState('str') === false && isSaneState({ accounts: [], videos: [], comments: [], tokens: 'x' }) === false, 'repair 半套/非对象/tokens类型错均拒');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

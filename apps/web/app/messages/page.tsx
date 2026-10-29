@@ -185,14 +185,35 @@ export default function Messages() {
   };
   /** S67 全选当前筛选结果（与行内复选共用 fsel） */
   const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)));
+  /** S121 查重清理：按昵称分组活跃线索≥2条=疑似重复；推荐保留=已转化>有金额>最新建档；其余标无效（可逆，不引入删除） */
+  const [dupMode, setDupMode] = useState(false);
+  const dupGroups = (() => {
+    if (!dupMode) return [];
+    const by = new Map<string, Follow[]>();
+    (rows || []).filter((f) => f.status !== '无效').forEach((f) => { const k = f.peer_nick.trim(); if (!k) return; const arr = by.get(k) || []; arr.push(f); by.set(k, arr); });
+    return [...by.values()].filter((g) => g.length >= 2).map((g) => {
+      const d = [...g].sort((a, b) => (Number(b.status === '已转化') - Number(a.status === '已转化')) || ((b.amount || 0) - (a.amount || 0)) || ((b.created_at ? Date.parse(b.created_at) || 0 : 0) - (a.created_at ? Date.parse(a.created_at) || 0 : 0)));
+      return { keep: d[0], rest: d.slice(1) };
+    }).sort((a, b) => b.rest.length - a.rest.length);
+  })();
+  const dupRedundantIds = new Set(dupGroups.flatMap((g) => g.rest.map((f) => f.id)));
+  const cleanAllDup = async () => {
+    const targets = [...dupRedundantIds];
+    if (!targets.length) { flash('没有可清理的重复项'); return; }
+    const rs = await Promise.all(targets.map((id) => fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: '无效' }) }).then((x) => x.json()).catch(() => null)));
+    const okn = rs.filter((r) => r && !r.code).length;
+    flash(okn === targets.length ? `已把 ${okn} 条重复项标无效（误标可改回）` : `完成 ${okn}/${targets.length} 条`, okn > 0);
+    loadFollows();
+  };
   // S102 排序视图：紧急=提醒时间升序（逾期自动排最前，解析不出的沉底）；最新=建档时间倒序
   const sortedView = (() => {
-    if (fsort === 'urgent') { const d = fview.map((f) => ({ f, t: parseRemind(f.next_remind_at)?.getTime() ?? Number.MAX_SAFE_INTEGER })); d.sort((a, b) => a.t - b.t); return d.map((x) => x.f); }
-    if (fsort === 'newest') { const d = fview.map((f) => ({ f, t: f.created_at ? Date.parse(f.created_at) || 0 : 0 })); d.sort((a, b) => b.t - a.t); return d.map((x) => x.f); }
-    return fview;
+    let arr = fview;
+    if (dupMode) { const rank = new Map<string, number>(); dupGroups.forEach((g, gi) => { rank.set(g.keep.id, gi * 2); g.rest.forEach((r) => rank.set(r.id, gi * 2 + 1)); }); const d = arr.map((f) => ({ f, r: rank.get(f.id) ?? 9999 })); d.sort((a, b) => a.r - b.r); arr = d.map((x) => x.f); }
+    if (fsort === 'urgent') { const d = arr.map((f) => ({ f, t: parseRemind(f.next_remind_at)?.getTime() ?? Number.MAX_SAFE_INTEGER })); d.sort((a, b) => a.t - b.t); return d.map((x) => x.f); }
+    if (fsort === 'newest') { const d = arr.map((f) => ({ f, t: f.created_at ? Date.parse(f.created_at) || 0 : 0 })); d.sort((a, b) => b.t - a.t); return d.map((x) => x.f); }
+    return arr;
   })();
-  const checkAllF = () => setFsel((prev) => (prev.size === fview.length && fview.length > 0 ? new Set() : new Set(fview.map((x) => x.id))));
-  const batches: Follow[][] = [];
+  const checkAllF = () => setFsel((prev) => (prev.size === fview.length && fview.length > 0 ? new Set() : new Set(fview.map((x) => x.id))));  const batches: Follow[][] = [];
   (rows || []).forEach((f, i) => {
     const g = Math.floor(i / tasksConfig.followBatchSize);
     (batches[g] = batches[g] || []).push(f);
@@ -268,7 +289,7 @@ export default function Messages() {
   const followCols: ColumnsType<Follow> = [
     { title: '', key: 'sel', width: 36, render: (_, f) => <Checkbox checked={fsel.has(f.id)} onChange={() => toggleFsel(f.id)} /> },
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
-    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => (can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>) },
+    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => { const inGroup = dupMode && (dupRedundantIds.has(f.id) || dupGroups.some((g) => g.keep.id === f.id)); return (<span>{inGroup && (dupRedundantIds.has(f.id) ? <span title="疑似重复：同名活跃线索中的次要项" style={{ marginRight: 4, opacity: 0.75 }}>⚠</span> : <span title="推荐保留项" style={{ marginRight: 4 }}>👑</span>)}{can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>}</span>); } },
     { title: '联系方式', key: 'contact', width: 130, render: (_, f) => (
       <Popconfirm
         title="联系方式（电话/微信，仅存本机）"
@@ -447,6 +468,13 @@ export default function Messages() {
               <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
+              <Button size="small" type={dupMode ? 'primary' : 'text'} onClick={() => setDupMode((v) => !v)} title="按昵称分组找重复线索，标无效不删除">查重</Button>
+              {dupMode && (
+                <span style={{ fontSize: 12, color: dupGroups.length ? '#8A6D1F' : '#4C6B57', background: dupGroups.length ? '#FBF3E4' : '#F5FAF6', border: `1px solid ${dupGroups.length ? '#EADFBE' : '#C8D8CC'}`, borderRadius: 4, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {dupGroups.length ? `${dupGroups.length} 组同名活跃线索，共 ${dupGroups.reduce((s, g) => s + g.rest.length, 0)} 条疑似重复（保留项=已转化>有金额>最新建档）` : '未发现同名重复，台账是干净的'}
+                  {dupGroups.length > 0 && <Button size="small" danger type="primary" onClick={cleanAllDup}>一键把其余标无效</Button>}
+                </span>
+              )}
               <span style={{ position: 'relative' }}>
                 <Button size="small" onClick={() => setColsOpen((v) => !v)}>列设置</Button>
                 {colsOpen && (

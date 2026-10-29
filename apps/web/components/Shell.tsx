@@ -21,6 +21,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // 挂载门：服务端与首屏渲染保持一致，动态部分（账号/角标/过期条）只在挂载后渲染，消灭hydration mismatch
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  // S122 数据自愈探针：本进程启动时若发生过损坏恢复，顶栏黄条提示（关一次本日不再扰）
+  useEffect(() => {
+    fetch('/api/data/health').then((r) => r.json()).then((d) => {
+      if (d?.recovery && sessionStorage.getItem('data_recovery_dismissed') !== d.recovery.at) setRecovery(d.recovery);
+    }).catch(() => {});
+  }, []);
   // P0演示：默认有效，?expired=1 预览掉线通栏（挂载后读取，避免SSR/首屏不一致）
   const expired = mounted && new URLSearchParams(window.location.search).get('expired') === '1';
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -28,6 +34,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [drCnt, setDrCnt] = useState(0); // S108 草稿待确认数（任务中心红点）
   const [odCnt, setOdCnt] = useState(0); // S117 逾期跟进数（私信辅助红点）
+  const [recovery, setRecovery] = useState<{ from: string; at: string } | null>(null); // S122 自愈黄条
   const [ver, setVer] = useState('');
   const [licState, setLicState] = useState<LicenseState | null>(null);
   const [reportHour, setReportHour] = useState(9);
@@ -40,6 +47,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [unlocking, setUnlocking] = useState(false);
   const prevUnread = useRef(0);
   const nav = [
+    { href: '/today', label: '今日工作台' },
     { href: '/auth', label: '授权管理' },
     { href: '/dashboard', label: '数据看板' },
     { href: '/comments', label: '评论工作台' },
@@ -214,6 +222,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       <div style={{ flex: 1, minWidth: 0 }}>
         {expired && <div style={{ background: '#FBF3E4', borderBottom: '1px solid #E8E6E1', padding: '10px 24px', fontSize: 12 }}>授权已过期或被取消，请重新扫码授权。 <Link href="/auth">去授权 →</Link></div>}
+        {mounted && recovery && (
+          <div style={{ background: '#FBF3E4', borderBottom: '1px solid #EADFBE', padding: '10px 24px', fontSize: 12, color: '#8A6D1F', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ flex: 1 }}>数据文件曾损坏，系统已自动从备份 <b className="num">{recovery.from}</b> 恢复（恢复于 {new Date(recovery.at).toLocaleString('zh-CN')}）。近期数据可能有少量回退，建议核对关键台账。</span>
+            <Button size="small" onClick={() => { fetch('/api/data/backups/run', { method: 'POST' }).catch(() => {}); sessionStorage.setItem('data_recovery_dismissed', recovery.at); setRecovery(null); }}>已知晓，手动留一份备份</Button>
+            <Button size="small" type="text" onClick={() => { sessionStorage.setItem('data_recovery_dismissed', recovery.at); setRecovery(null); }}>关闭</Button>
+          </div>
+        )}
         {path?.startsWith('/report') && licState && !hasFeature(licState.features, 'report')
           ? <div style={{ padding: 24, maxWidth: 680, margin: '0 auto' }}><ProLock feature="经营报告" desc="日报/周报、文字总结与行动建议" /></div>
           : children}

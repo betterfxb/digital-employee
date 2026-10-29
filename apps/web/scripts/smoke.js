@@ -215,6 +215,8 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     pass(bl.s === 200 && Array.isArray(bl.j.list) && bl.j.keep === 14, 'S80 backups list 结构');
     const br = await post('/api/data/backups/run', {});
     pass(br.s === 200 && br.j.created === true && /^manual-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(br.j.entry?.name || ''), 'S80 手动备份落盘命名规范');
+    const dh = await get('/api/data/health');
+    pass(dh.s === 200 && (dh.j.recovery === null || (typeof dh.j.recovery.from === 'string' && typeof dh.j.recovery.at === 'string')), 'S122 data/health 结构（recovery=null或{from,at}）');
     const dl = await fetch(base + '/api/data/backups/download?name=' + encodeURIComponent(br.j.entry.name));
     const dlText = dl.status === 200 ? await dl.text() : '';
     let dlJson = null; try { dlJson = JSON.parse(dlText); } catch { /* invalid */ }

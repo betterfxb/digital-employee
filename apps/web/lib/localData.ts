@@ -6,6 +6,8 @@ import fs from 'fs';
 import path from 'path';
 import { randomBytes, createHash } from 'crypto';
 import { encryptToken, decryptToken } from './crypto';
+import { recoveryOrder, isSaneState } from './repair'; // S122 自愈选份/健全判定（纯函数可单测）
+import { backupDir } from './autoBackup'; // S122 恢复候选目录
 import { mockAccounts, mockVideos, mockComments, seedSnapshot } from './mock';
 import type { Account, Video, CommentItem, AuthLogItem } from './types';
 
@@ -43,29 +45,54 @@ const state: LocalState = {
   follows: [], replies: [], competitors: [], videoTasks: [], settings: null, customScripts: [], replyRules: [], campaigns: [], drafts: [],
 };
 
+/** S122 本进程启动时是否发生了自愈恢复（供 /api/data/health 与 Shell 黄条） */
+let recoveryInfo: { from: string; at: string } | null = null;
+export function getRecoveryInfo() { return recoveryInfo; }
+
+/** local.json/快照 → state 字段映射（正常水合与自愈恢复共用一条路径，防口径漂移） */
+function applyRaw(raw: Partial<LocalState>) {
+  if (Array.isArray(raw.accounts)) state.accounts = raw.accounts;
+  if (Array.isArray(raw.videos)) state.videos = raw.videos;
+  if (Array.isArray(raw.comments)) state.comments = raw.comments;
+  if (raw.tokens && typeof raw.tokens === 'object') state.tokens = raw.tokens;
+  if (Array.isArray(raw.follows)) state.follows = raw.follows;
+  if (Array.isArray(raw.replies)) state.replies = raw.replies;
+  if (Array.isArray(raw.competitors)) state.competitors = raw.competitors;
+  if (Array.isArray(raw.videoTasks)) state.videoTasks = raw.videoTasks;
+  if (raw.settings && typeof raw.settings === 'object') state.settings = raw.settings;
+  if (Array.isArray(raw.customScripts)) state.customScripts = raw.customScripts;
+  if (Array.isArray(raw.replyRules)) state.replyRules = raw.replyRules;
+  if (Array.isArray(raw.campaigns)) state.campaigns = raw.campaigns; // S87
+  if (Array.isArray(raw.drafts)) state.drafts = raw.drafts; // S108
+  if (typeof raw.cleared_at === 'string') state.cleared_at = raw.cleared_at;
+  if (Array.isArray(raw.read_ids)) state.read_ids = raw.read_ids;
+  if (Array.isArray(raw.all_read_videos)) state.all_read_videos = raw.all_read_videos;
+  if (raw.intent_overrides && typeof raw.intent_overrides === 'object') state.intent_overrides = raw.intent_overrides as Record<string, { intent?: string; ignore?: boolean }>;
+}
+
 function hydrate() {
   try {
-    if (fs.existsSync(FILE)) {
-      const raw = JSON.parse(fs.readFileSync(FILE, 'utf8')) as Partial<LocalState>;
-      if (Array.isArray(raw.accounts)) state.accounts = raw.accounts;
-      if (Array.isArray(raw.videos)) state.videos = raw.videos;
-      if (Array.isArray(raw.comments)) state.comments = raw.comments;
-      if (raw.tokens && typeof raw.tokens === 'object') state.tokens = raw.tokens;
-      if (Array.isArray(raw.follows)) state.follows = raw.follows;
-      if (Array.isArray(raw.replies)) state.replies = raw.replies;
-      if (Array.isArray(raw.competitors)) state.competitors = raw.competitors;
-      if (Array.isArray(raw.videoTasks)) state.videoTasks = raw.videoTasks;
-      if (raw.settings && typeof raw.settings === 'object') state.settings = raw.settings;
-      if (Array.isArray(raw.customScripts)) state.customScripts = raw.customScripts;
-      if (Array.isArray(raw.replyRules)) state.replyRules = raw.replyRules;
-      if (Array.isArray(raw.campaigns)) state.campaigns = raw.campaigns; // S87
-      if (Array.isArray(raw.drafts)) state.drafts = raw.drafts; // S108
-      if (typeof raw.cleared_at === 'string') state.cleared_at = raw.cleared_at;
-      if (Array.isArray(raw.read_ids)) state.read_ids = raw.read_ids;
-      if (Array.isArray(raw.all_read_videos)) state.all_read_videos = raw.all_read_videos;
-      if (raw.intent_overrides && typeof raw.intent_overrides === 'object') state.intent_overrides = raw.intent_overrides as Record<string, { intent?: string; ignore?: boolean }>;
-    }
-  } catch { /* 文件损坏则忽略，保持内存态起跑 */ }
+    if (fs.existsSync(FILE)) applyRaw(JSON.parse(fs.readFileSync(FILE, 'utf8')) as Partial<LocalState>);
+  } catch {
+    // S122 数据自愈：local.json 解析失败→改名留证→按 mtime 新→旧逐份试 backups/→首个健全快照恢复并固化
+    try { fs.renameSync(FILE, `${FILE}.corrupt-${Date.now()}`); } catch { /* 占用就放弃改名，仍试恢复 */ }
+    try {
+      const dir = backupDir();
+      if (fs.existsSync(dir)) {
+        const cands = recoveryOrder(fs.readdirSync(dir).map((n) => { try { return { name: n, mtime: fs.statSync(path.join(dir, n)).mtime.toISOString() }; } catch { return { name: n, mtime: '' }; } }));
+        for (const n of cands) {
+          try {
+            const d = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'));
+            if (!isSaneState(d)) continue; // 半套快照宁跳不误覆盖
+            applyRaw(d as Partial<LocalState>);
+            recoveryInfo = { from: n, at: new Date().toISOString() };
+            flushLocal(); // 立刻固化回 local.json（业务集合此时已含快照全量）
+            break;
+          } catch { /* 单份备份坏了跳下一份 */ }
+        }
+      }
+    } catch { /* backups 目录异常：保持内存态起跑，health 端点会暴露 */ }
+  }
   // S37 清空/恢复后示例种子不复活（先清种子再注文件数据；仅全新安装有示例）
   if (state.cleared_at) { mockVideos.splice(0, mockVideos.length); mockComments.splice(0, mockComments.length); }
   state.accounts.forEach((a) => { if (!mockAccounts.some((x) => x.id === a.id)) mockAccounts.push(a); });

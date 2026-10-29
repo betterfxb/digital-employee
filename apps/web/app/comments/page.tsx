@@ -79,8 +79,10 @@ export default function Comments() {
     const urlIntent = usp ? usp.get('intent') : null;
     const urlKw = usp ? usp.get('kw') : null; // S90 命令面板搜索直达
     const urlVid = usp ? usp.get('video') : null; // S116 看板作品行直达其评论
+    const urlUnread = usp?.get('unread') === '1'; // S120 今日工作台未读直达
+    if (urlUnread) setUnreadOnly(true);
     if (urlKw) setKw(urlKw);
-    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent, k: urlKw || '' }); } else if (urlKw) load({ k: urlKw }); else if (urlVid) { setSelVideo(urlVid); load({ v: urlVid }); } else load();
+    if (urlIntent && commentsConfig.intentOptions.includes(urlIntent)) { setIntent(urlIntent); load({ it: urlIntent, k: urlKw || '', uo: urlUnread || undefined }); } else if (urlKw) load({ k: urlKw, uo: urlUnread || undefined }); else if (urlVid) { setSelVideo(urlVid); load({ v: urlVid }); } else load({ uo: urlUnread || undefined });
     fetch('/api/comments/keywords/hot').then((r) => r.json()).then((d) => { if (d.items?.length) setHot(d.items.map((x: { kw: string }) => x.kw).slice(0, 8)); }).catch(() => {});
     fetch('/api/scripts/templates?intent=普通').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {
       fetch('/api/scripts').then((r) => r.json()).then((d) => { if (d.items?.length) setScripts(d.items); }).catch(() => {});

@@ -50,6 +50,7 @@ export function CommandPalette({ enabled = true }: { enabled?: boolean }) {
   const items = useMemo<Item[]>(() => {
     const kw = q.trim().toLowerCase();
     const nav: Item[] = [
+      { group: '导航', label: '今日工作台', hint: '今天的欠账一页清', run: () => go('/today') },
       { group: '导航', label: '数据看板', hint: '导入·作品·竞品', run: () => go('/dashboard') },
       { group: '导航', label: '评论工作台', hint: 'j/k 快速流转', run: () => go('/comments') },
       { group: '导航', label: '任务中心', hint: '自动化参数·执行日志', run: () => go('/tasks') },

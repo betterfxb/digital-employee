@@ -10,7 +10,8 @@ const KEEP = 14;
 const NAME_RE = /^(auto-\d{4}-\d{2}-\d{2}|manual-\d{4}-\d{2}-\d{2}-\d{6})\.json$/;
 
 const dataDir = () => process.env.DATA_DIR || path.join(process.cwd(), 'data');
-const backupDir = () => path.join(dataDir(), 'backups');
+/** S122 导出给数据自愈（localData恢复候选扫描同目录） */
+export const backupDir = () => path.join(dataDir(), 'backups');
 const localFile = () => path.join(dataDir(), 'local.json');
 
 const dstr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
