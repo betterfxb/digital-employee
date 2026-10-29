@@ -54,6 +54,8 @@ export const settings = {
   password_hash: null as string | null,
   /** S74 评论自动回复总开关（三重门之一，默认关） */
   auto_reply_enabled: false as boolean,
+  /** S104 开机自启（桌面壳主进程跟随此标志管理登录项；浏览器版无效果是正常） */
+  desktop_autostart: false as boolean,
   /** S75 自动化统一配置原始对象（读取一律经mergeAutoCfg规范化） */
   auto_config: null as Record<string, unknown> | null,
   /** S45 价目表（档位→价格，话术{price}填充源） */

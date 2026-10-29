@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Input, Modal, Popconfirm, Slider, Table, Tag } from 'antd';
+import { App, Button, Input, Modal, Popconfirm, Slider, Switch, Table, Tag } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
@@ -20,6 +20,14 @@ export default function Settings() {
   const [feats, setFeats] = useState<string[] | null>(null);
   /** S61 加密备份 */
   const [encDownPass, setEncDownPass] = useState('');
+  /** S104 桌面常驻 */
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [autostart, setAutostart] = useState(false);
+  const switchAutostart = async (v: boolean) => {
+    const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desktop_autostart: v }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { message.error(r?.message || '保存失败'); return; }
+    setAutostart(v); message.success(v ? '已开启，桌面版将在你登录Windows时自动启动（约半分钟内生效）' : '已关闭开机自启');
+  };
   const [encFile, setEncFile] = useState<Record<string, unknown> | null>(null);
   const [encPass, setEncPass] = useState('');
 
@@ -31,7 +39,9 @@ export default function Settings() {
       setPwdAt(s.password_changed_at || null);
       setHasPw(!!s.password_hash);
       if (Array.isArray(s.price_list)) setPrices(s.price_list);
+      setAutostart(!!s.desktop_autostart); // S104
     }).catch(() => message.error('设置加载失败，请刷新重试'));
+    setIsDesktop(/electron/i.test(navigator.userAgent)); // S104 桌面壳UA含electron
     fetch('/api/license/status').then((r) => r.json()).then((d) => setFeats(Array.isArray(d.features) ? d.features : [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -221,6 +231,17 @@ export default function Settings() {
                 </div>
               )}
             </Modal>
+          </div>
+          <div className="card" style={{ padding: 18, marginTop: 16 }}>
+            <b>桌面端常驻</b>{isDesktop ? '' : <span style={{ fontSize: 11, color: '#A8A5A0', marginLeft: 8 }}>（此项在桌面版APP中生效）</span>}
+            <div style={{ fontSize: 12, color: '#6B6862', margin: '8px 0', lineHeight: 1.8 }}>
+              关闭主窗口不会退出程序——会缩进系统托盘继续运行，定时提醒、自动回复起草、每日备份照常工作；点托盘图标重新打开，右键托盘可选「退出」。<br />
+              想让工作台跟着 Windows 一起开机？打开下面的开关（桌面版约半分钟内生效，可随时关）。
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Switch checked={autostart} onChange={switchAutostart} />
+              <span style={{ fontSize: 13 }}>开机自动启动{autostart ? '（已开启）' : '（默认关）'}</span>
+            </div>
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>本地自动备份</b> <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400 }}>每天凌晨3点后系统自动存一份快照（保留最近{backs?.keep ?? 14}份），防文件损坏/误恢复</span>

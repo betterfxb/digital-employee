@@ -234,6 +234,13 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     pass(vbad.s === 400, 'S93 views 非数组拒绝');
     const vclr = await vpatch({ comment_views: [] });
     pass(vclr.s === 200 && vclr.j.comment_views.length === 0, 'S93 views 清空自恢复');
+    // S104 桌面常驻开关：布尔往返+坏类型拒
+    const au1 = await vpatch({ desktop_autostart: true });
+    const auG = await get('/api/settings');
+    const auBad = await vpatch({ desktop_autostart: 'yes' });
+    const au2 = await vpatch({ desktop_autostart: false });
+    pass(au1.s === 200 && au1.j.desktop_autostart === true && auG.j.desktop_autostart === true, 'S104 自启开关布尔往返');
+    pass(auBad.s === 400 && au2.s === 200 && au2.j.desktop_autostart === false, 'S104 坏类型拒+复位');
     await post('/api/accounts/switch', { id: 'acc_001' });
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');

@@ -24,3 +24,10 @@ td{padding:12px 14px;border-bottom:1px solid #F0EEEA}
 tr:hover td{background:#F5F4F1}
 .skel{background:linear-gradient(90deg,#EEE 25%,#F7F7F7 50%,#EEE 75%);background-size:200% 100%;animation:sh 1.2s infinite;border-radius:4px;color:transparent !important}
 @keyframes sh{to{background-position:-200% 0}}
+
+/* S103 打印支持：纸面只留数据（隐藏侧栏/按钮/交互件），报告递纸场景 */
+@media print {
+  aside, nav, button, .ant-tabs-nav, .ant-select, .ant-checkbox-wrapper, input, .no-print { display: none !important; }
+  body { background: #fff !important; }
+  .card { border: 1px solid #DDD !important; box-shadow: none !important; }
+}

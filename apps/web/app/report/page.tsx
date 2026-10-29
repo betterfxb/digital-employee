@@ -121,6 +121,7 @@ export default function ReportPage() {
           <span style={{ flex: 1 }} />
           <Button size="small" onClick={copySummary} disabled={!report}>复制总结</Button>
           <Button size="small" onClick={exportReport} disabled={!report}>导出指标CSV</Button>
+          <Button size="small" className="no-print" onClick={() => window.print()} disabled={!report}>打印/存PDF</Button>
           <Button size="small" type="primary" onClick={genShare} disabled={!report}>生成分享图</Button>
         </div>
         {err && <div className="card" style={{ padding: 20 }}>报告生成失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => build(kind)}>重试</Button></div>}

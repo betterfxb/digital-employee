@@ -50,6 +50,13 @@ export default function Messages() {
     try { const s = JSON.parse(localStorage.getItem('follow_cols_hidden') || '[]'); if (Array.isArray(s)) setHiddenCols(new Set(s.filter((x) => typeof x === 'string'))); } catch { /* 坏配置=全显 */ }
   }, []);
   const toggleCol = (k: string) => setHiddenCols((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); try { localStorage.setItem('follow_cols_hidden', JSON.stringify([...n])); } catch { /* ignore */ } return n; });
+  /** S102 台账行右键菜单 + 排序（催办紧急/最新建档） */
+  const [fctx, setFctx] = useState<{ x: number; y: number; f: Follow } | null>(null);
+  const [fsort, setFsort] = useState('default');
+  const urgeTomorrow = async (id: string) => {
+    const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ next_remind_at: '明天 09:00' }) }).then((x) => x.json()).catch(() => null);
+    if (r && !r.code) { flash('已设明天 9 点提醒', true); loadFollows(); } else flash(r?.message || '操作失败');
+  };
   useEffect(() => {
     const usp = new URLSearchParams(window.location.search);
     const v = usp.get('view');
@@ -154,6 +161,12 @@ export default function Messages() {
   };
   /** S67 全选当前筛选结果（与行内复选共用 fsel） */
   const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)));
+  // S102 排序视图：紧急=提醒时间升序（逾期自动排最前，解析不出的沉底）；最新=建档时间倒序
+  const sortedView = (() => {
+    if (fsort === 'urgent') { const d = fview.map((f) => ({ f, t: parseRemind(f.next_remind_at)?.getTime() ?? Number.MAX_SAFE_INTEGER })); d.sort((a, b) => a.t - b.t); return d.map((x) => x.f); }
+    if (fsort === 'newest') { const d = fview.map((f) => ({ f, t: f.created_at ? Date.parse(f.created_at) || 0 : 0 })); d.sort((a, b) => b.t - a.t); return d.map((x) => x.f); }
+    return fview;
+  })();
   const checkAllF = () => setFsel((prev) => (prev.size === fview.length && fview.length > 0 ? new Set() : new Set(fview.map((x) => x.id))));
   const batches: Follow[][] = [];
   (rows || []).forEach((f, i) => {
@@ -377,6 +390,7 @@ export default function Messages() {
               <b>手动跟进台账</b>
               <span style={{ flex: 1 }} />
               <Radio.Group size="small" value={fmode} onChange={(e) => switchMode(e.target.value)} optionType="button" options={[{ value: 'table', label: '表格' }, { value: 'board', label: '看板' }, { value: 'cal', label: '日历' }]} />
+              <Select size="small" value={fsort} onChange={(v) => setFsort(v)} style={{ width: 106 }} options={[{ value: 'default', label: '默认顺序' }, { value: 'urgent', label: '催办紧急' }, { value: 'newest', label: '最新建档' }]} />
               <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
@@ -412,7 +426,23 @@ export default function Messages() {
               </div>
             )}
             {fmode === 'table' && (
-              <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols.filter((col) => !hiddenCols.has(String(col.key)))} dataSource={fview} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }} />
+              <Table<Follow> size="small" pagination={{ pageSize: 20, showSizeChanger: false, size: 'small', showTotal: (t) => `共${t}条线索` }} style={{ marginTop: 8 }} columns={followCols.filter((col) => !hiddenCols.has(String(col.key)))} dataSource={sortedView} rowKey="id" loading={rows === null} locale={{ emptyText: '暂无跟进' }}
+                onRow={(f) => ({ onContextMenu: (e) => { e.preventDefault(); setFctx({ x: Math.min(e.clientX, window.innerWidth - 190), y: Math.min(e.clientY, window.innerHeight - 260), f }); } })} />
+            )}
+            {/* S102 台账右键菜单：改状态走既有changeStatus，催办走既有PATCH */}
+            {fctx && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 997 }} onClick={() => setFctx(null)} onContextMenu={(e) => { e.preventDefault(); setFctx(null); }} />
+                <div style={{ position: 'fixed', left: fctx.x, top: fctx.y, zIndex: 998, background: '#fff', border: '1px solid #E8E6E1', borderRadius: 6, boxShadow: '0 10px 28px rgba(26,26,24,0.18)', padding: '4px 0', minWidth: 176 }}>
+                  <div style={{ padding: '4px 14px 6px', fontSize: 11, color: '#A8A5A0', borderBottom: '1px solid #F0EEEA', marginBottom: 4 }}>{fctx.f.peer_nick} · {fctx.f.status}</div>
+                  {assistConfig.followStatuses.map((s) => (
+                    <div key={s} onClick={() => { if (s !== fctx.f.status) changeStatus(fctx.f.id, s); setFctx(null); }} style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', color: s === fctx.f.status ? '#A8A5A0' : '#1A1A18' }}>标为{s}{s === fctx.f.status ? '（当前）' : ''}</div>
+                  ))}
+                  <div style={{ borderTop: '1px solid #F0EEEA', margin: '4px 0' }} />
+                  <div onClick={() => { urgeTomorrow(fctx.f.id); setFctx(null); }} style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>催办：明天 9 点提醒</div>
+                  <div onClick={() => { setFctx(null); if (can('lead')) openDetail(fctx.f); else message.info('线索档案属专业版'); }} style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', color: can('lead') ? '#1A1A18' : '#A8A5A0' }}>{can('lead') ? '打开档案' : '打开档案（专业版）'}</div>
+                </div>
+              </>
             )}
             {fmode === 'board' && (
               <div>

@@ -59,7 +59,7 @@ export default function Dashboard() {
     fetch('/api/videos').then((r) => r.json()).then((d) => {
       const vs: Video[] = d.items || [];
       setVideos(vs);
-      const ids = vs.map((v) => v.aweme_id || v.id).join(',');
+      const ids = vs.slice(0, statsConfig.trendBatchMax).map((v) => v.aweme_id || v.id).join(','); // S105修：数据多于批量上限时400噪点，客户端截断
       if (ids) fetch(`/api/stats/trend?ids=${ids}&days=7`).then((r) => r.json()).then(setAllTrend).catch(() => {});
     }).catch(() => setDerr(true));
     fetch('/api/comments?unread_only=0').then((r) => r.json()).then((d) => {
@@ -98,7 +98,7 @@ export default function Dashboard() {
     fetch('/api/videos').then((r) => r.json()).then((d) => {
       const vs: Video[] = d.items || [];
       setVideos(vs);
-      const ids = vs.map((v) => v.aweme_id || v.id).join(',');
+      const ids = vs.slice(0, statsConfig.trendBatchMax).map((v) => v.aweme_id || v.id).join(','); // S105修：数据多于批量上限时400噪点，客户端截断
       if (ids) fetch(`/api/stats/trend?ids=${ids}&days=7`).then((r) => r.json()).then(setAllTrend).catch(() => {});
     }).catch(() => {});
     loadComps();
@@ -206,6 +206,7 @@ export default function Dashboard() {
           <Segmented size="small" options={['当前账号', '全部账号']} value={scope === 'all' ? '全部账号' : '当前账号'} onChange={(v) => switchScope(v === '全部账号' ? 'all' : 'active')} />
           {syncMsg && <span style={{ fontSize: 12, color: '#6B6862' }}>{syncMsg}</span>}
           <Button size="small" onClick={sync} disabled={cool > 0}>{cool > 0 ? `${cool}s后可同步` : '手动同步'}</Button>
+          <Button size="small" className="no-print" onClick={() => window.print()}>打印</Button>
         </div>
       </div>
       <div style={{ padding: '24px 32px', maxWidth: 1680, margin: '0 auto' }}>
@@ -271,6 +272,32 @@ export default function Dashboard() {
           })()}
           </div>
         )}
+        {/* S101 成交概览行：只用台账可信数据（status/amount/history ISO时窗），基础版可看 */}
+        {followRows && followRows.length > 0 && (() => {
+          const doneF = followRows.filter((f) => f.status === '已转化');
+          const revAll = doneF.reduce((a, f) => a + (Number(f.amount) || 0), 0);
+          const wkIso = new Date(Date.now() - 7 * 86400000).toISOString();
+          const done7 = doneF.filter((f) => (f.history || []).some((h) => h.act.indexOf('已转化') > -1 && h.at >= wkIso));
+          const rev7 = done7.reduce((a, f) => a + (Number(f.amount) || 0), 0);
+          const pending = followRows.filter((f) => ['待回访', '已手动回复'].includes(f.status)).length;
+          const cells: [string, string, string][] = [
+            ['成交总单数', String(doneF.length), '台账状态=已转化'],
+            ['成交总金额', `¥${revAll.toLocaleString()}`, '金额为台账记账值'],
+            ['近7天成交', `${done7.length} 单 · ¥${rev7.toLocaleString()}`, '按状态变更时间'],
+            ['跟进进行中', String(pending), '待回访+已手动回复'],
+          ];
+          return (
+            <div className="print-block" style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
+              {cells.map(([k, v, d], i) => (
+                <div key={k} style={{ flex: 1, padding: '14px 20px', borderLeft: i ? '1px solid #E8E6E1' : 'none', minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: '#6B6862' }}>{k}</div>
+                  <div className="num" style={{ fontSize: 24, fontWeight: 700, whiteSpace: 'nowrap' }}>{v}</div>
+                  <div style={{ fontSize: 11, color: '#A8A5A0' }}>{d}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16, marginBottom: 16, marginTop: 16 }}>
           <div className="card" style={{ padding: 18 }}>
             <b>近7天播放总览</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>全账号作品汇总 · T+1</span>

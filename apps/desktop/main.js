@@ -4,7 +4,7 @@
  * 授权闸在web侧激活门（/api/license/status + /api/license/import），本壳不重复验签（单一实现防漂移）
  * 数据目录 %APPDATA%/获客中台/data（Program Files非管理员不可写）；验签公钥随包分发，私钥永不随包
  */
-const { app, BrowserWindow, shell, session } = require('electron');
+const { app, BrowserWindow, shell, session, Tray, nativeImage, Menu } = require('electron');
 // 注意：Electron内置模块net会阴影Node的net（node:前缀也逃不掉），端口选取/探活一律走http模块
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
@@ -46,6 +46,41 @@ let serverProc = null;
 let mainWindow = null;
 let quitting = false;
 let serverRestarts = 0;
+let tray = null;
+
+// ── S104 托盘常驻 + 开机自启（自启开关真源=web设置 desktop_autostart，主进程只跟随，不动用户未碰过的登录项）──
+function createTray() {
+  try {
+    const img = nativeImage.createFromPath(ICON_SRC);
+    tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
+    tray.setToolTip(`获客中台 v${APP_VERSION}（关闭窗口后在托盘继续运行）`);
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: '打开工作台', click: () => showFromTray() },
+      { type: 'separator' },
+      { label: '退出获客中台', click: () => app.quit() },
+    ]));
+    tray.on('double-click', () => showFromTray());
+    console.log('[desktop] tray ready');
+  } catch (e) { crashLog(`[tray] 创建失败 ${e.message}`); }
+}
+function showFromTray() {
+  if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); }
+}
+let lastAutostart = null;
+function readAutostartFlag() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(userData(), 'data', 'local.json'), 'utf8'));
+    const s = j && j.settings;
+    return s && typeof s.desktop_autostart === 'boolean' ? s.desktop_autostart : null; // 未动过开关=不碰登录项
+  } catch { return null; }
+}
+function applyAutostart() {
+  if (!app.isPackaged) return; // 仅发布版管理登录项，dev/win-unpacked不写注册表
+  const want = readAutostartFlag();
+  if (want === null || want === lastAutostart) return;
+  lastAutostart = want;
+  try { app.setLoginItemSettings({ openAtLogin: want, args: [] }); console.log(`[desktop] 开机自启=${want}`); } catch (e) { crashLog(`[autostart] ${e.message}`); }
+}
 
 function pickPort() {
   return new Promise((resolve, reject) => {
@@ -131,8 +166,16 @@ function createWindow(port) {
     backgroundColor: '#F7F6F3',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
-  // S39 窗口尺寸位置记忆
-  mainWindow.on('close', saveBounds);
+  // S39 窗口尺寸位置记忆；S104 关窗即隐藏到托盘（常驻不断提醒），仅托盘/退出菜单真正关
+  mainWindow.on('close', (e) => {
+    if (!quitting) {
+      e.preventDefault();
+      mainWindow.hide();
+      if (tray) { try { tray.displayBalloon({ title: '获客中台在托盘继续运行', content: '定时提醒、自动回复起草不会中断；点托盘图标可重新打开。' }); } catch { /* 气泡失败不影响隐藏 */ } }
+      return;
+    }
+    saveBounds();
+  });
   app.on('render-process-gone', (_e, _w, details) => crashLog(`[render] 进程消失 reason=${details.reason}`));
   app.on('child-process-gone', (_e, details) => crashLog(`[child] 进程消失 reason=${details.reason} exit=${details.exitCode}`));
   mainWindow.loadURL(`http://127.0.0.1:${port}/`);
@@ -169,6 +212,8 @@ app.whenReady().then(async () => {
     startServer(port);
     await waitPort(port);
     createWindow(port);
+    createTray(); // S104
+    applyAutostart(); setInterval(applyAutostart, 30000); // S104 跟随web设置开关
   } catch (e) {
     console.error('[desktop] 启动失败', e);
     app.exit(1);

@@ -99,6 +99,7 @@ GET  /api/scripts?trash=1 / DELETE /api/scripts/:id[?restore=1] -> 软删进回�
 PATCH /api/competitors/:id {play?,like?,remark?} -> 变化自动留history（S53）
 PATCH /api/settings {auto_config:{sync_enabled,sync_interval_min,sync_daily_cap,quiet_enabled,quiet_start,quiet_end,reply_gap_min_sec,reply_gap_max_sec,reply_daily_cap,reply_tone,report_hour,dashboard_refresh_sec}} -> GET自动回显（S75读侧经mergeAutoCfg钳制，越界/倒挂/坏枚举/坏布尔回退默认；调度器+自动回复+日报+看板刷新共12旋钮）
 PATCH /api/settings {comment_views:[{name,kw,intent,unreadOnly}]} -> 评论保存视图持久化（S93；非数组400；经sanitizeViews钳制：≤8个/名1-12字去重/kw≤20/intent≤8/坏布尔false；GET与PATCH回声同口径）。另S90纯前端操作层：Ctrl+K命令面板（导航/搜台账话术/快捷动作复用既有端点）、台账看板拖拽=PATCH /api/follows/:id、日历视图=parseRemind客户端推导——无新端点
+PATCH /api/settings {desktop_autostart:bool} -> 桌面壳开机自启标志（S104；非布尔400；GET与PATCH回声）。真源在此文件：桌面主进程每30s轮读该标志执行setLoginItemSettings（仅app.isPackaged；字段缺失=null不碰用户登录项）。关窗=hide进托盘常驻（quitting标志区分真退出），提醒/起草/每日备份后台不断；托盘菜单「退出」才app.quit→before-quit杀内嵌服务。打印=S103客户端window.print+globals.css @media print（纸面隐藏侧栏/按钮/交互件）
 ```
 
 ## 红线（永续有效）
