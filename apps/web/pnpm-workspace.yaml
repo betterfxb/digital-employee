@@ -1,0 +1,3 @@
+# S30 pitfall (re-armed by pnpm 12): Windows standalone packaging needs real-dir copies;
+# pnpm 12+ ignores node-linker in .npmrc — this file is the authoritative setting location.
+nodeLinker: hoisted

@@ -5,7 +5,7 @@
 
 ## 一、发货 Checklist
 
-- [ ] 安装包是**最新版**（当前应发 **v1.4.0**：含智能营销套件+命令面板/看板/日历等效率操作层；核对：装好后侧栏底部 vX.Y.Z 与 `apps/desktop/package.json` 的 version 一致）
+- [ ] 安装包是**最新版**（当前应发 **v1.5.0**：含效率操作层第二批（评论右键菜单/无限滚动/列设置/快捷键帮助）；核对：装好后侧栏底部 vX.Y.Z 与 `apps/desktop/package.json` 的 version 一致）
 - [ ] 客户激活门复制机器码发你 → 用**当前密钥**签发：`node scripts\license-gen.js issue --customer 客户名 --days 0 --bind "机器码"`
 - [ ] `license.license` 文件发回客户（微信传完即撤回，别发群/网盘）
 - [ ] 私钥 `data/license_key.pem` 永远只在你电脑上，谁来要都不发
