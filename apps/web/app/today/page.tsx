@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { isDue, daysUntilExpiry, todayKey } from '@/lib/remind';
+import { visitDue } from '@/lib/visitDue'; // S129
+import { assistConfig } from '@/config/assist.config';
 
 /**
  * S120 今日工作台：每天打开系统的第一眼——把「今天该干的活」聚合成一张清单。
@@ -9,7 +11,7 @@ import { isDue, daysUntilExpiry, todayKey } from '@/lib/remind';
  * 基础版全可用——这是操作清单，不是洞察分析（区别于专业版机会雷达）。
  */
 type CommentLite = { id: string; user_nick: string; intent: string; is_read_local: boolean };
-type FollowLite = { id: string; peer_nick: string; status: string; next_remind_at: string; amount?: number; created_at?: string };
+type FollowLite = { id: string; peer_nick: string; status: string; next_remind_at: string; amount?: number; created_at?: string; history?: { at: string }[] };
 type LicLite = { mode?: string; valid?: boolean; expires_at?: string | null; features?: string[] };
 
 const DAY = 86_400_000;
@@ -48,6 +50,7 @@ export default function Today() {
   // 今天内排了提醒但还没到点：只认「今天 HH:mm」写法（绝对日期口径不可信，S29）
   const dueToday = follows.filter((x) => isActive(x) && x.status !== '已转化' && !isDue(x.next_remind_at) && /^今天\s*\d{1,2}:\d{2}/.test(x.next_remind_at || ''));
   const unregistered = comments.filter((c) => ['高意向', '留电话'].includes(c.intent) && c.is_read_local && !follows.some((f) => f.peer_nick === c.user_nick && isActive(f)));
+  const revisitDue = follows.filter((x) => visitDue(x, assistConfig.revisitDays)); // S129 已转化超期无接触
   const dealToday = follows.filter((x) => x.status === '已转化' && x.created_at && x.created_at.slice(0, 10) === today);
   const amountToday = dealToday.reduce((s, x) => s + (x.amount || 0), 0);
   const licDays = lic && lic.valid && lic.mode === 'licensed' ? daysUntilExpiry(lic.expires_at) : null;
@@ -60,6 +63,7 @@ export default function Today() {
     { key: 'today', title: '今天内排了提醒的', n: dueToday.length, sub: '还没到点，但今天别忘', href: '/messages', urgent: false, cta: '查看台账' },
     { key: 'drafts', title: '草稿待你确认', n: drafts, sub: '复制话术去抖音发送', href: '/tasks', urgent: drafts > 0, cta: '去任务中心' },
     { key: 'unreg', title: '看过但没登记的高意向', n: unregistered.length, sub: '读过了没建档，容易漏', href: '/comments?intent=' + encodeURIComponent('高意向'), urgent: unregistered.length > 0, cta: '去补登记' },
+    { key: 'revisit', title: '老客户该回访了', n: revisitDue.length, sub: `成交后超${assistConfig.revisitDays}天没接触，复购是零成本收入`, href: '/messages?revisit=1', urgent: false, cta: '去回访' },
   ];
 
   return (

@@ -203,6 +203,7 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const lBad = await post('/api/import', { kind: 'leads', csv: '名字,电话\n张三,138' });
     const fl = (await get('/api/follows')).j.items.find((x) => x.peer_nick === leadNick);
     pass(l1.s === 200 && l1.j.created === 1 && fl && fl.status === '已转化' && fl.amount === 298 && l2.s === 400 && String(l2.j.message).includes('跳过') && lBad.s === 400, 'S118 leads导入/去重跳过/缺列拒');
+    pass(!!fl && fl.source === 'import', 'S128 导入线索带source=import归因排除标记');
     let contactOk = false;
     if (fl) {
       const c1 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact: '13800001111' }) }); return rr.json(); })();

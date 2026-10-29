@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -237,6 +237,44 @@ check(funnelDrop(ft).join(',') === '0,2,1,0,1', 'funnel 相邻级流失数');
 const ftMono = buildFunnel([{ user_nick: 'Y', intent: '高意向', is_read_local: false }], [{ peer_nick: 'Y', status: '已转化' }]);
 check(ftMono[2].n === 0 && ftMono[4].n === 0, 'funnel 未读即不入后级（严格子集收窄，昵称再活跃也不倒挂）');
 check(buildFunnel([], []).map((x) => x.n).join(',') === '0,0,0,0,0', 'funnel 空数据全零不NaN');
+
+// 22) S128 作品带货榜归因纯函数
+const { attribution } = require('./.tmp-crypto/lib/attribution.js');
+const va = [{ id: 'v1', title: '跑刀实录' }, { id: 'v2', title: '契约陪玩' }];
+const vf = [
+  { source_video_id: 'v1', status: '已转化', amount: 298 },
+  { source_video_id: 'v1', status: '待回访' },
+  { source_video_id: 'v1', status: '无效' },
+  { source_video_id: 'v2', status: '已转化', amount: 100 },
+  { source_video_id: 'v2', status: '已转化', amount: 50 },
+  { source_video_id: 'v1', status: '已转化', amount: 9999, source: 'import' }, // 导入污染项必须被排除
+];
+const vrows = attribution(vf, va);
+check(vrows.length === 2, 'attr 两作品产两行');
+const attr1 = vrows.find((r) => r.videoId === 'v1');
+check(attr1.amount === 298 && attr1.done === 1 && attr1.leads === 2, 'attr 排除import线索与无效项（v1真实=2有效线索1成交298元）');
+check(vrows[0].videoId === 'v1' && vrows[0].amount === 298, 'attr 金额倒序v1居首');
+check(attribution([], va).length === 0 && attribution([{ source_video_id: '', status: '已转化', amount: 1 }], va).length === 0, 'attr 空/无来源不产行');
+
+// 23) S129 老客复购回访纯函数
+const { lastTouchAt, visitDue, daysSinceTouch } = require('./.tmp-crypto/lib/visitDue.js');
+const NOW = Date.UTC(2026, 10, 1);
+const vf2 = { status: '已转化', created_at: new Date(NOW - 40 * 86400000).toISOString(), history: [{ at: new Date(NOW - 35 * 86400000).toISOString(), act: 'x' }] };
+check(lastTouchAt(vf2) === NOW - 35 * 86400000, 'visit 最近接触取max(建档,history)最新条');
+check(visitDue(vf2, 30, NOW) === true && visitDue(vf2, 40, NOW) === false, 'visit 30天阈值到期/40天未到期（恰在边界外）');
+check(visitDue({ status: '待回访', created_at: vf2.created_at }, 30, NOW) === false, 'visit 非已转化永不回访');
+check(lastTouchAt({ status: '已转化' }) === null && visitDue({ status: '已转化', history: [{ at: 'garbage' }] }, 30, NOW) === false, 'visit 无史/史全乱码宁可不提醒');
+check(daysSinceTouch({ status: '已转化', created_at: new Date(NOW - 2.5 * 86400000).toISOString() }, NOW) === 2, 'visit floor天数');
+
+// 24) S130 话术合规体检纯函数
+const { scanText } = require('./.tmp-crypto/lib/compliance.js');
+const { complianceConfig } = require('./.tmp-crypto/config/compliance.config.js');
+const h1 = scanText('加微信 13800001111 报价更优惠');
+check(h1.some((x) => x.name === '站外导流') && h1.every((x) => x.why && x.fix), 'compliance 导流词命中且每条带理由与建议');
+check(scanText('你好，跑刀服务按约定交付，拍小窗口下单即可').length === 0, 'compliance 正常话术零误报');
+check(scanText('包赢绝无封号，加我微信详聊').length >= 2, 'compliance 承诺词族+导流词族双命中（同族去重为一条）');
+check(scanText('').length === 0 && scanText(null).length === 0, 'compliance 空输入安全');
+check(complianceConfig.rules.every((r) => { try { new RegExp(r.pat); return true; } catch { return false; } }), 'compliance 全部规则正则可编译');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

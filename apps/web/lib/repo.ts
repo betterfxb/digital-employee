@@ -10,7 +10,7 @@ import { mockComments, mockAccounts, mockVideos, mockScripts } from './mock';
 import { persistCollections } from './localData'; // S25b: 业务集合变更落盘
 import type { Account, Video, CommentItem, Follow, Competitor, DlqItem } from './types';
 
-export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number; contact?: string }
+export interface FollowInput { peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number; contact?: string; source?: 'import' }
 export interface CompetitorInput { source: string; url: string; remark: string; kind?: string }
 export interface IntentPatch { intent?: string; ignore?: boolean }
 export interface CommentFilter { video_id: string; intent: string; keyword: string; unreadOnly: boolean }

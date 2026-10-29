@@ -6,6 +6,7 @@ import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
 import { engagementPct, topHot, lowWarn } from '@/lib/videoStats';
 import { buildFunnel, funnelDrop } from '@/lib/funnel'; // S124
+import { attribution } from '@/lib/attribution'; // S128
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
@@ -435,6 +436,33 @@ export default function Dashboard() {
           </div>
         </div>
         )}
+        {/* S128 作品带货榜：内容↔钱的连线，选题抄自己的爆款（导入线索已排除，归因只信评论区走进台账的） */}
+        {(() => {
+          const rows = attribution(followRows, videos).filter((r) => r.leads > 0).slice(0, 8);
+          const totalAmt = attribution(followRows, videos).reduce((s, r) => s + r.amount, 0);
+          if (followRows.length === 0) return null;
+          return (
+            <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+              <b>作品带货榜</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>哪条视频把看客变成了客户 · 按成交额倒序</span>
+              {rows.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 10 }}>台账里还没有「从评论区登记进来」的线索——在评论工作台处理高意向评论时点「登记跟进」，这里就会长出来。</div>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  {rows.map((r, i) => (
+                    <div key={r.videoId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid #F0EEEA', fontSize: 13 }}>
+                      <span className="num" style={{ width: 22, color: i < 3 ? '#9A6B2F' : '#C8C5BE', fontWeight: 700 }}>{i + 1}</span>
+                      <a href={`/comments?video=${encodeURIComponent(r.videoId)}`} title="直达该作品评论流" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</a>
+                      <span className="num" style={{ width: 70, textAlign: 'right', color: '#6B6862' }}>{r.leads} 线索</span>
+                      <span className="num" style={{ width: 58, textAlign: 'right', color: r.done > 0 ? '#1F4D3A' : '#C8C5BE' }}>{r.done} 成交</span>
+                      <span className="num" style={{ width: 92, textAlign: 'right', fontWeight: 700, color: r.amount > 0 ? '#1A1A18' : '#C8C5BE' }}>{r.amount > 0 ? `¥${r.amount.toLocaleString()}` : '—'}</span>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>口径：仅计评论区登记进台账的线索（老客户名单导入无真实来源作品，已排除防虚胖）；金额=已转化记账值{totalAmt > 0 ? `，可归因成交合计 ¥${totalAmt.toLocaleString()}` : ''}</div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <div className="card">
           {videos.length > 0 && (
             <div style={{ padding: '10px 14px 0', fontSize: 11, color: '#A8A5A0' }}>

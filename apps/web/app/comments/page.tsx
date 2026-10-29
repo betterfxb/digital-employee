@@ -6,6 +6,7 @@ import { commentsConfig } from '@/config/comments.config';
 import { downloadCsv } from '@/lib/csv';
 import { leadScore, scoreLevel } from '@/lib/leadScore';
 import type { Video, CommentItem, ScriptItem, TemplateItem } from '@/lib/types';
+import { scanText } from '@/lib/compliance'; // S130
 
 /** S8 评论工作台三栏：左作品（含未读）/中评论流/右详情（意图PATCH+跟进），快捷键j/k/e/1/2/3/c */
 export default function Comments() {
@@ -343,6 +344,12 @@ export default function Comments() {
                     }}>暂存草稿箱</Button>
                   )}
                 </div>
+                {/* S130 合规体检：发出前警示（不拦截，决定权在人） */}
+                {(() => { const hits = scanText(replyText); return hits.length > 0 && (
+                  <div style={{ fontSize: 11, color: '#8A6D1F', background: '#FBF3E4', border: '1px solid #EADFBE', borderRadius: 4, padding: '6px 10px', marginTop: 6 }}>
+                    {hits.map((h) => <div key={h.name}>⚠ <b>{h.name}</b>：{h.why} → {h.fix}</div>)}
+                  </div>
+                ); })()}
                 {replies.map((r) => <div key={r.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{r.content}<div className="num" style={{ fontSize: 11, color: '#A8A5A0', marginTop: 4 }}>{r.at}</div></div>)}
               </div>
             )}

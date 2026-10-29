@@ -64,6 +64,7 @@ function importLeads(rows: string[][]): ImportResult {
       status: assistConfig.followStatuses.includes(sv) ? sv : '待回访',
       amount: amt > 0 ? amt : undefined,
       contact: ct || undefined,
+      source: 'import', // S128 归因排除标记
     });
     created++;
   }

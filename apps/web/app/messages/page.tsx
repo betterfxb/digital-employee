@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { App, Button, Checkbox, Drawer, Input, Popconfirm, Radio, Select, Table, Tag } from 'antd';
 import { parseRemind } from '@/lib/remind';
+import { visitDue, daysSinceTouch } from '@/lib/visitDue'; // S129
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
@@ -9,6 +10,7 @@ import { mockScripts } from '@/lib/mock';
 import { downloadCsv } from '@/lib/csv';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import type { ScriptItem, Follow, Video, CommentItem } from '@/lib/types';
+import { scanText } from '@/lib/compliance'; // S130
 
 /** S4 私信辅助占位：话术+台账走API（失败回退静态），无假会话，imEnabled=false */
 export default function Messages() {
@@ -22,6 +24,7 @@ export default function Messages() {
   const [fsearch, setFsearch] = useState('');
   const [amtEdit, setAmtEdit] = useState<{ id: string; val: string } | null>(null);
   const [ftag, setFtag] = useState('');
+  const [revisitMode, setRevisitMode] = useState(false); // S129 复购到期筛选
   const [tagLib, setTagLib] = useState<string[]>([]);
   const [tagEdit, setTagEdit] = useState<{ id: string; tags: string[] } | null>(null);
   const [newTag, setNewTag] = useState('');
@@ -83,6 +86,7 @@ export default function Messages() {
     const v = usp.get('view');
     const p = usp.get('peer');
     if (p) setFsearch(p);
+    if (usp.get('revisit') === '1') setRevisitMode(true); // S129 今日工作台回访直达
     if (v === 'board' || v === 'cal') { setFmode(v); try { localStorage.setItem('follow_view', v); } catch { /* 隐私模式忽略 */ } }
     else { try { const s = localStorage.getItem('follow_view'); if (s === 'board' || s === 'cal') setFmode(s); } catch { /* ignore */ } }
   }, []);
@@ -184,7 +188,7 @@ export default function Messages() {
     setRemindEdit(null); flash('提醒时间已更新', true); loadFollows();
   };
   /** S67 全选当前筛选结果（与行内复选共用 fsel） */
-  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)));
+  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)) && (!revisitMode || visitDue(f, assistConfig.revisitDays))); // S129 复购到期chip参与筛选
   /** S121 查重清理：按昵称分组活跃线索≥2条=疑似重复；推荐保留=已转化>有金额>最新建档；其余标无效（可逆，不引入删除） */
   const [dupMode, setDupMode] = useState(false);
   const dupGroups = (() => {
@@ -411,6 +415,12 @@ export default function Messages() {
               <Input size="small" value={scontent} onChange={(e) => setScontent(e.target.value)} placeholder="话术内容" onPressEnter={addScript} />
               <Button size="small" type="primary" onClick={addScript}>添加</Button>
             </div>
+            {/* S130 编辑时实时体检：命中即黄字提示改写方向 */}
+            {(() => { const hits = scanText(scontent); return hits.length > 0 && (
+              <div style={{ fontSize: 11, color: '#8A6D1F', background: '#FBF3E4', border: '1px solid #EADFBE', borderRadius: 4, padding: '5px 10px', marginTop: 6 }}>
+                {hits.map((h) => <div key={h.name}>⚠ <b>{h.name}</b>：{h.why} → {h.fix}</div>)}
+              </div>
+            ); })()}
             {(() => {
               const filtered = scripts.filter((s) => (sCat === '全部' || s.category === sCat) && (!sQw.trim() || s.title.includes(sQw.trim()) || s.content.includes(sQw.trim())));
               if (filtered.length === 0) return <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12 }}>无匹配话术，换个分类或搜索词试试</div>;
@@ -418,6 +428,7 @@ export default function Messages() {
                 <div key={s.id} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '10px 12px', marginTop: 10 }}>
                   <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}>
                     <Tag style={{ marginInlineEnd: 6 }}>{s.category}</Tag>{s.pinned ? '📌 ' : ''}{s.title}
+                  {(() => { const hits = scanText(s.content); return hits.length > 0 && <span title={hits.map((h) => `${h.name}：${h.why}`).join('\n')} style={{ marginLeft: 6, color: '#9A6B2F', cursor: 'help' }}>⚠合规{hits.length}项</span>; })()}
                     {(s.used || 0) > 0 && <span className="num" style={{ marginLeft: 6, color: s.used! >= 5 ? '#B4443C' : '#A8A5A0' }}>用过 {s.used} 次</span>}
                   </div>
                   {s.content}
@@ -469,6 +480,7 @@ export default function Messages() {
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
               <Button size="small" type={dupMode ? 'primary' : 'text'} onClick={() => setDupMode((v) => !v)} title="按昵称分组找重复线索，标无效不删除">查重</Button>
+              <Button size="small" type={revisitMode ? 'primary' : 'text'} onClick={() => setRevisitMode((v) => !v)} title={`已转化且超${assistConfig.revisitDays}天没有接触记录的老客户`}>复购到期{(rows || []).filter((f) => visitDue(f, assistConfig.revisitDays)).length > 0 ? `(${(rows || []).filter((f) => visitDue(f, assistConfig.revisitDays)).length})` : ''}</Button>
               {dupMode && (
                 <span style={{ fontSize: 12, color: dupGroups.length ? '#8A6D1F' : '#4C6B57', background: dupGroups.length ? '#FBF3E4' : '#F5FAF6', border: `1px solid ${dupGroups.length ? '#EADFBE' : '#C8D8CC'}`, borderRadius: 4, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   {dupGroups.length ? `${dupGroups.length} 组同名活跃线索，共 ${dupGroups.reduce((s, g) => s + g.rest.length, 0)} 条疑似重复（保留项=已转化>有金额>最新建档）` : '未发现同名重复，台账是干净的'}
@@ -623,6 +635,8 @@ export default function Messages() {
                 <div>登记时间：{detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN', { hour12: false }) : '—'}</div>
                 <div>下次提醒：{detail.next_remind_at}</div>
                 <div>来源视频：{videos.find((v) => v.id === detail.source_video_id)?.title || detail.source_video_id}</div>
+                {/* S129 最近接触：本机可信ISO事件（建档/任一操作），无任何记录不瞎猜 */}
+                <div>最近联系：{(() => { const d = daysSinceTouch(detail); return d === null ? <span style={{ color: '#A8A5A0' }}>本机无接触记录</span> : d === 0 ? <span>今天</span> : <span className="num">{d} 天前</span>; })()}{detail.status === '已转化' && visitDue(detail, assistConfig.revisitDays) && <span style={{ color: '#9A6B2F', marginLeft: 8 }}>· 超{assistConfig.revisitDays}天，该回访了</span>}</div>
                 {detail.contact && <div>联系方式：<span className="num">{detail.contact}</span> <Button size="small" type="text" style={{ paddingInline: 4 }} onClick={async () => { try { await navigator.clipboard.writeText(detail.contact || ''); flash('已复制联系方式', true); } catch { flash('复制失败'); } }}>复制</Button></div>}
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, margin: '16px 0 8px' }}>跟进纪要</div>

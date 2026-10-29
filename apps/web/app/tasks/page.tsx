@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { tasksConfig } from '@/config/tasks.config';
 import type { TaskItem, VideoTask, Video } from '@/lib/types';
 import { REPLY_TONES, type AutoConfig } from '@/lib/autoCfg';
+import { scanText } from '@/lib/compliance'; // S130
 
 interface SchedStatus {
   enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: string | null;
@@ -275,6 +276,9 @@ export default function Tasks() {
                 {d.status !== 'pending' && <Tag style={{ marginLeft: 6 }}>{d.status === 'done' ? '已处理' : '已废弃'}</Tag>}
               </div>
               <div style={{ fontSize: 13, marginTop: 4, wordBreak: 'break-all' }}>{d.text}</div>
+              {d.status === 'pending' && (() => { const hits = scanText(d.text); return hits.length > 0 && (
+                <div style={{ fontSize: 11, color: '#B4443C', marginTop: 4 }}>⚠ 合规体检命中 {hits.length} 项（{hits.map((h) => h.name).join('、')}）——复制发送前先看一眼改写建议：{hits[0].fix}</div>
+              ); })()}
               {d.status === 'pending' && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                   <Button size="small" type="primary" onClick={() => drCopy(d)}>复制并标已处理</Button>
