@@ -84,6 +84,8 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
   try { const { s, j } = await post('/api/competitors', { url: '冒烟', source: 'manual', kind: 'nope' }); pass(s === 400 && j.code === 'FATAL', 'POST competitor kind FATAL'); } catch (e) { pass(false, 'POST competitor kind'); }
   try { const { s, j } = await post('/api/settings/password', { new_password: '123' }); pass(s === 400 && j.code === 'FATAL', 'POST password short FATAL'); } catch (e) { pass(false, 'POST password short'); }
   try { const { s, j } = await post('/api/settings/password', { new_password: 'smoke-123456' }); pass(s === 200 && j.changed === true && !!j.changed_at, 'POST password ok'); } catch (e) { pass(false, 'POST password ok'); }
+  // S110修缺：测试写真实用户状态必须自恢复——设完立即清除并读验，防把开发机/演示机锁在门外（曾致用户无法访问的事故）
+  try { const { s, j } = await post('/api/settings/password', { new_password: '' }); const v = await get('/api/settings'); pass(s === 200 && j.cleared === true && !v.j.password_hash, 'POST password clear-restore（测试自恢复纪律）'); } catch (e) { pass(false, 'POST password clear-restore'); }
   try { const { s, j } = await post('/api/auth/refresh', {}); pass(s === 200 && !!j.expires_at, 'POST refresh'); } catch (e) { pass(false, 'POST refresh'); }
   try { const { s, j } = await post('/api/stats/sync', {}); pass(s === 200 && !!j.task_id, 'POST sync'); } catch (e) { pass(false, 'POST sync'); }
   try { const { s, j } = await post('/api/competitors', { url: '冒烟店', source: 'nope' }); pass(s === 400 && j.code === 'FATAL', 'POST competitor invalid FATAL'); } catch (e) { pass(false, 'POST competitor invalid'); }
