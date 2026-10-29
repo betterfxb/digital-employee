@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
 import { engagementPct, topHot, lowWarn } from '@/lib/videoStats';
+import { buildFunnel, funnelDrop } from '@/lib/funnel'; // S124
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
@@ -35,6 +36,8 @@ export default function Dashboard() {
   const [reloadTick, setReloadTick] = useState(0);
   /** S54 分版本能力（null=未加载按可用渲染防闪） */
   const [feats, setFeats] = useState<string[] | null>(null);
+  const [fsHide, setFsHide] = useState(false); // S126 首跑引导条本地关闭态（挂载后读localStorage）
+  useEffect(() => { try { if (localStorage.getItem('first_run_guide_dismissed') === '1') setFsHide(true); } catch { /* ignore */ } }, []);
   const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
   /** S63 指标口径：当前账号/全部账号汇总 */
   const [scope, setScope] = useState<'active' | 'all'>('active');
@@ -259,6 +262,38 @@ export default function Dashboard() {
             </div>
           );
         })()}
+        {/* S126 首跑三步引导：从未导入过数据(示例种子不算)时的一次性清单——让新店长不等服务商自己转起来 */}
+        {ov && !ov.last_import_at && !fsHide && (
+          <div className="card" style={{ padding: '16px 18px', marginBottom: 16, border: '1px solid #E3C9A6', background: '#FDF8F0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <b>先花三分钟把你自己的数据放进来</b>
+              <span style={{ fontSize: 12, color: '#8A8781' }}>现在看到的是示例演示数据，导入后全部替换为你的真实经营</span>
+              <span style={{ flex: 1 }} />
+              <Button size="small" type="text" onClick={() => { setFsHide(true); try { localStorage.setItem('first_run_guide_dismissed', '1'); } catch { /* 私密模式无所谓 */ } }}>先逛逛</Button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 12 }}>
+              {[
+                { n: '1', t: '导作品数据', d: '抖音创作者中心 → 数据 → 作品数据 → 导出CSV', k: 'videos' },
+                { n: '2', t: '导评论数据', d: '作品评论导出，系统自动分意向找潜在客户', k: 'comments' },
+                { n: '3', t: '导老客户名单（可选）', d: '微信里已有客户导成CSV，直接进跟进台账', k: 'leads' },
+              ].map((s) => (
+                <div key={s.n} style={{ background: '#fff', border: '1px solid #EADFBE', borderRadius: 6, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span className="num" style={{ fontWeight: 700, color: '#9A6B2F', fontSize: 16 }}>{s.n}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{s.t}</div>
+                    <div style={{ fontSize: 12, color: '#8A8781', marginTop: 2 }}>{s.d}</div>
+                    <Button size="small" style={{ marginTop: 8 }} onClick={() => setWiz(true)}>去导入</Button>
+                  </div>
+                </div>
+              ))}
+              <div style={{ background: '#fff', border: '1px dashed #C8D8CC', borderRadius: 6, padding: '10px 12px' }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>4. 每天看「今日工作台」</div>
+                <div style={{ fontSize: 12, color: '#8A8781', marginTop: 2 }}>该回谁的评论、该跟谁的单，打开就有清单</div>
+                <Button size="small" style={{ marginTop: 8 }} href="/today">打开工作台</Button>
+              </div>
+            </div>
+          </div>
+        )}
         {!ov ? (derr ? <div className="card" style={{ padding: 24, marginBottom: 16 }}>数据加载失败 <Button size="small" style={{ marginLeft: 8 }} onClick={() => { setDerr(false); reloadStats(); }}>重试</Button></div> : <div className="skel" style={{ height: 96 }}>loading</div>) : (
           <div style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
           {(() => {
@@ -343,27 +378,21 @@ export default function Dashboard() {
         ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16, marginBottom: 16 }}>
           <div className="card" style={{ padding: 18 }}>
-            <b>转化漏斗</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>曝光→成交全链路 · 本地真实数据</span>
+            <b>转化漏斗</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>评论→成交五级收窄 · 昵称匹配口径 · 已读为本机操作</span>
             {(() => {
-              const playSum = videos.reduce((a, v) => a + v.play, 0);
-              const engage = videos.reduce((a, v) => a + v.like + v.comment, 0);
-              const stages: { k: string; v: number }[] = [
-                { k: '曝光(播放)', v: playSum },
-                { k: '互动(赞+评)', v: engage },
-                { k: '高意向评论', v: allComments.filter((c) => c.intent === '高意向').length },
-                { k: '进入跟进', v: followRows.length },
-                { k: '成交', v: followRows.filter((f) => f.status === '已转化').length },
-              ];
-              const first = Math.max(stages[0].v, 1);
-              const w = (v: number) => (v <= 0 ? 0 : Math.max(6, Math.sqrt(v / first) * 100));
-              return stages.map((s, i) => (
-                <div key={s.k} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: i ? 8 : 14 }}>
-                  <span style={{ width: 84, fontSize: 12, color: '#6B6862', flexShrink: 0 }}>{s.k}</span>
+              const tiers = buildFunnel(allComments, followRows);
+              const drops = funnelDrop(tiers);
+              const first = Math.max(tiers[0].n, 1);
+              const w = (v: number) => (v <= 0 ? 0 : Math.max(6, (v / first) * 100));
+              return tiers.map((s, i) => (
+                <div key={s.key} title={s.hint} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: i ? 8 : 14 }}>
+                  <span style={{ width: 84, fontSize: 12, color: '#6B6862', flexShrink: 0 }}>{s.label}</span>
                   <div style={{ flex: 1, height: 22, background: '#F0EEEA', borderRadius: 3, minWidth: 0 }}>
-                    <div style={{ width: `${w(s.v)}%`, height: 22, background: i >= 3 ? '#1A1A18' : '#B5B0A8', borderRadius: 3, transition: 'width .3s' }} />
+                    <div style={{ width: `${w(s.n)}%`, height: 22, background: i >= 3 ? '#1A1A18' : '#B5B0A8', borderRadius: 3, transition: 'width .3s' }} />
                   </div>
-                  <span className="num" style={{ width: 76, fontSize: 13, fontWeight: 700, textAlign: 'right', flexShrink: 0 }}>{s.v.toLocaleString()}</span>
-                  <span className="num" style={{ width: 58, fontSize: 12, color: '#6B6862', textAlign: 'right', flexShrink: 0 }}>{i > 0 ? (stages[i - 1].v > 0 ? `${Math.round((s.v / stages[i - 1].v) * 100)}%` : '—') : ''}</span>
+                  <span className="num" style={{ width: 76, fontSize: 13, fontWeight: 700, textAlign: 'right', flexShrink: 0 }}>{s.n.toLocaleString()}</span>
+                  <span className="num" style={{ width: 58, fontSize: 12, color: '#6B6862', textAlign: 'right', flexShrink: 0 }}>{i > 0 ? (tiers[i - 1].n > 0 ? `${Math.round((s.n / tiers[i - 1].n) * 100)}%` : '—') : ''}</span>
+                  <span className="num" style={{ width: 52, fontSize: 12, color: drops[i] > 0 && i >= 1 ? '#B4443C' : '#C8C5BE', textAlign: 'right', flexShrink: 0 }}>{i > 0 && drops[i] > 0 ? `-${drops[i]}` : ''}</span>
                 </div>
               ));
             })()}

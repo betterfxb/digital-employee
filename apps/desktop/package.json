@@ -1,7 +1,7 @@
 {
   "name": "douyin-huoke-desktop",
   "productName": "获客中台",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
   "description": "抖音获客中台 桌面版（单机授权）",
   "main": "main.js",

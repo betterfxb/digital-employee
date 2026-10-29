@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -220,6 +220,23 @@ check(
 );
 check(isSaneState({ accounts: [], videos: [], comments: [], tokens: {} }) === true, 'repair 四核心集合齐全=健全（空数组也算）');
 check(isSaneState({ accounts: [], videos: [] }) === false && isSaneState(null) === false && isSaneState('str') === false && isSaneState({ accounts: [], videos: [], comments: [], tokens: 'x' }) === false, 'repair 半套/非对象/tokens类型错均拒');
+
+// 21) S124 转化漏斗纯函数
+const { buildFunnel, funnelDrop } = require('./.tmp-crypto/lib/funnel.js');
+const fc = [
+  { user_nick: 'A', intent: '高意向', is_read_local: true },
+  { user_nick: 'A2', intent: '高意向', is_read_local: false },
+  { user_nick: 'B', intent: '留电话', is_read_local: true },
+  { user_nick: 'C', intent: '咨询', is_read_local: true },
+  { user_nick: 'D', intent: '普通', is_read_local: false },
+];
+const ff = [{ peer_nick: 'A', status: '已转化' }, { peer_nick: 'B', status: '待回访' }, { peer_nick: 'X', status: '无效' }];
+const ft = buildFunnel(fc, ff);
+check(ft.map((x) => x.n).join(',') === '5,3,2,2,1', 'funnel 五级收窄：全5→意向3→已读2→登记2→成交1');
+check(funnelDrop(ft).join(',') === '0,2,1,0,1', 'funnel 相邻级流失数');
+const ftMono = buildFunnel([{ user_nick: 'Y', intent: '高意向', is_read_local: false }], [{ peer_nick: 'Y', status: '已转化' }]);
+check(ftMono[2].n === 0 && ftMono[4].n === 0, 'funnel 未读即不入后级（严格子集收窄，昵称再活跃也不倒挂）');
+check(buildFunnel([], []).map((x) => x.n).join(',') === '0,0,0,0,0', 'funnel 空数据全零不NaN');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

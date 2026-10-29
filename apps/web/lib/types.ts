@@ -58,4 +58,4 @@ export interface DlqItem { id: string; reason: string; at: string; body: string 
 
 export interface AuthLogItem { at: string; op: string; by: string; result: string }
 
-export interface Overview { play: number; like: number; comment: number; note?: string }
+export interface Overview { play: number; like: number; comment: number; note?: string; share?: number; accounts?: { id: string; nick: string; videos: number; play: number; like: number; comment: number; share: number }[]; last_import_at?: string | null }

@@ -20,6 +20,7 @@ export default function Today() {
   const [follows, setFollows] = useState<FollowLite[]>([]);
   const [drafts, setDrafts] = useState(0);
   const [lic, setLic] = useState<LicLite | null>(null);
+  const [lastImport, setLastImport] = useState<string | null>(null); // S125
 
   const load = () => {
     setLoading(true);
@@ -28,11 +29,13 @@ export default function Today() {
       fetch('/api/follows').then((r) => r.json()).catch(() => ({ items: [] })),
       fetch('/api/drafts?status=pending').then((r) => r.json()).catch(() => ({ items: [] })),
       fetch('/api/license/status').then((r) => r.json()).catch(() => null),
-    ]).then(([c, f, d, l]) => {
+      fetch('/api/stats/overview').then((r) => r.json()).catch(() => null),
+    ]).then(([c, f, d, l, ov]) => {
       setComments(c.items || []);
       setFollows(f.items || []);
       setDrafts((d.items || []).length);
       setLic(l);
+      setLastImport(typeof ov?.last_import_at === 'string' ? ov.last_import_at : null);
       setLoading(false);
     });
   };
@@ -91,6 +94,27 @@ export default function Today() {
             </div>
             <a href="/messages" style={{ fontSize: 12, color: '#A8A5A0', border: '1px solid #D8D5CF', borderRadius: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}>台账</a>
           </div>
+          {/* S125 数据新鲜度：本机导入事件（非平台字段，S29合规）；久不喂数据=系统吃灰的前兆 */}
+          {(() => {
+            const days = lastImport ? Math.floor((Date.now() - Date.parse(lastImport)) / DAY) : null;
+            const level = days === null ? 'none' : days >= 7 ? 'bad' : days >= 3 ? 'warn' : 'ok';
+            const ui = {
+              none: { bd: '#E3C9A6', bg: '#FDF8F0', num: '—', nc: '#9A6B2F', t: '还没导入过数据', s: '示例数据不算——导入你的第一批才开始真实经营', urgent: true },
+              bad: { bd: '#E3B9B4', bg: '#FBF1F0', num: `${days}天`, nc: '#B42318', t: '数据停留太久', s: '超过7天没导入，评论台里看到的都是旧世界', urgent: true },
+              warn: { bd: '#E3C9A6', bg: '#FDF8F0', num: `${days}天`, nc: '#9A6B2F', t: '数据可以更新了', s: '去创作者中心导出最新作品/评论，拖进来只要一分钟', urgent: false },
+              ok: { bd: '#E5E2DC', bg: '#fff', num: `${days === 0 ? '今天' : days + '天'}`, nc: '#1F4D3A', t: '数据新鲜', s: '最近一次导入很及时，保持节奏', urgent: false },
+            }[level];
+            return (
+              <div style={{ border: `1px solid ${ui.bd}`, background: ui.bg, borderRadius: 8, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div className="num" style={{ fontSize: 22, fontWeight: 700, color: ui.nc, minWidth: 46, textAlign: 'center' }}>{ui.num}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{ui.t}</div>
+                  <div style={{ fontSize: 12, color: '#8A8781', marginTop: 2 }}>{ui.s}</div>
+                </div>
+                <a href="/dashboard?import=1" style={{ fontSize: 12, color: ui.urgent ? '#1A1A18' : '#A8A5A0', border: '1px solid #D8D5CF', borderRadius: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}>去导入</a>
+              </div>
+            );
+          })()}
           <div style={{ border: `1px solid ${lic && !lic.valid ? '#E3B9B4' : licDays !== null && licDays <= 7 ? '#E3B9B4' : '#E5E2DC'}`, background: (lic && !lic.valid) || (licDays !== null && licDays <= 7) ? '#FBF1F0' : '#fff', borderRadius: 8, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <div className="num" style={{ fontSize: 26, fontWeight: 700, color: !lic || !lic.valid ? '#B42318' : licDays === null ? '#1F4D3A' : licDays <= 7 ? '#B42318' : '#1F4D3A', minWidth: 46, textAlign: 'center' }}>{!lic ? '?' : !lic.valid ? '!' : licDays === null ? '∞' : `${licDays}天`}</div>
             <div style={{ flex: 1, minWidth: 0 }}>

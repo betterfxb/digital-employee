@@ -3,7 +3,7 @@ import { fail, ok } from '@/lib/response';
 import { douyinConfig } from '@/config/douyin.config';
 import { assistConfig } from '@/config/assist.config';
 import { getRepos } from '@/lib/repo';
-import { pushAuthLog, withBatch } from '@/lib/localData';
+import { pushAuthLog, withBatch, markImportAt } from '@/lib/localData'; // S125 markImportAt
 import { upsertVideo, upsertComment } from '@/lib/importData';
 import { parseCsv, colMap, missingColError, normalizeDateTime } from '@/lib/csvParse';
 
@@ -122,6 +122,7 @@ export async function POST(req: Request) {
   // S58 批量合并落盘：整批一次flush（修每行写盘的线性劣化）
   const result = withBatch(() => (kind === 'videos' ? importVideos(rows, aid) : kind === 'comments' ? importComments(rows, aid) : importLeads(rows)));
   if (result.error) return fail('FATAL', result.error, 400);
+  markImportAt(); // S125 导入成功=数据新鲜度起点
   const n = result.created + result.updated;
   pushAuthLog(`导入${kind === 'videos' ? '作品' : kind === 'comments' ? '评论' : '客户名单'}数据`, '店长', `${n}条 · ${aid}`);
   return ok({ ...result, account_id: aid, kind });

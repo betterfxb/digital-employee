@@ -32,6 +32,8 @@ interface LocalState {
   drafts: unknown[];
   /** S37 清空标记：清空/恢复后示例种子永不复活（仅全新安装有示例） */
   cleared_at?: string;
+  /** S125 最近一次数据导入成功的时刻（本机真实事件，新鲜度提醒用） */
+  last_import_at?: string;
   /** S68 协作态持久化：已读/整视频已读/意图忽略覆盖——此前只在内存，重启即丢（真bug修复） */
   read_ids?: string[];
   all_read_videos?: string[];
@@ -49,6 +51,10 @@ const state: LocalState = {
 let recoveryInfo: { from: string; at: string } | null = null;
 export function getRecoveryInfo() { return recoveryInfo; }
 
+/** S125 导入成功后盖时间戳并落盘（overview 端点透出，供新鲜度提醒） */
+export function markImportAt() { state.last_import_at = new Date().toISOString(); flushLocal(); }
+export function getLastImportAt() { return state.last_import_at; }
+
 /** local.json/快照 → state 字段映射（正常水合与自愈恢复共用一条路径，防口径漂移） */
 function applyRaw(raw: Partial<LocalState>) {
   if (Array.isArray(raw.accounts)) state.accounts = raw.accounts;
@@ -65,6 +71,7 @@ function applyRaw(raw: Partial<LocalState>) {
   if (Array.isArray(raw.campaigns)) state.campaigns = raw.campaigns; // S87
   if (Array.isArray(raw.drafts)) state.drafts = raw.drafts; // S108
   if (typeof raw.cleared_at === 'string') state.cleared_at = raw.cleared_at;
+  if (typeof raw.last_import_at === 'string') state.last_import_at = raw.last_import_at; // S125
   if (Array.isArray(raw.read_ids)) state.read_ids = raw.read_ids;
   if (Array.isArray(raw.all_read_videos)) state.all_read_videos = raw.all_read_videos;
   if (raw.intent_overrides && typeof raw.intent_overrides === 'object') state.intent_overrides = raw.intent_overrides as Record<string, { intent?: string; ignore?: boolean }>;

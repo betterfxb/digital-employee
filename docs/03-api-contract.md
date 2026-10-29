@@ -96,6 +96,7 @@ GET  /api/leads/profile?nick= -> {nick,comments[](≤30),replies[](≤30),follow
 POST /api/import {kind:leads, csv} -> {created,skipped}（S118 存量客户名单：昵称必填、状态/下次提醒/金额/联系方式可选；同名活跃线索跳过=可重复导同档幂等；空状态→待回访、空提醒→明天09:00）
 PATCH /api/follows/:id {contact?} -> Follow（S115 联系方式≤32字仅本机存储，空串=清除，计入操作历史）
 GET  /api/data/health -> {recovery:{from,at}|null}（S122 数据自愈探针：local.json损坏时启动自动从backups/最新健全快照恢复并留corrupt取证文件；recovery非空时Shell顶栏黄条提示）
+GET  /api/stats/overview -> 增 last_import_at（S125 本机最近导入成功时刻，POST /api/import 成功时盖戳；新鲜度提醒与首跑引导的判定源，非平台字段）
 能力键新增 marketing（S83）：专业版专属；基础版白名单不含 → /marketing 页与侧栏显示ProLock（API按既有策略开放）；发证脚本无需改（白名单机制自动锁）
 POST /api/data/backups/run -> {created,entry}立即存manual快照（S80；auto每日凌晨3点后由调度器心跳幂等落一份，轮转保留最近14份）
 GET  /api/data/backups/download?name= -> 快照文件附件（S80；命名白名单auto-/manual-正则，穿越400）；恢复走既有/api/data/restore（客户端download→JSON→preview→覆盖确认）
