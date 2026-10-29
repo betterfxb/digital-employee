@@ -88,6 +88,11 @@ GET  /api/marketing/segments -> {segments:[{key,label,desc,action,count,members[
 GET  /api/marketing/insights -> {items:[{label,value,sub,link}]}（S85 机会雷达：待处理高意向/逾期/可唤醒/7日成交/昨日新增/热词；无数据=少一条不造假）
 GET  /api/marketing/experiments -> {buckets:[{variant,used,leads,done}],total,sufficient}（S86 话术A/B：POST /api/comments/:id/replies 可选variant=1-4候选位次，手改内容自动归零位次；样本<20如实不足）
 GET  /api/campaigns -> {items:[Campaign+{status,match_count,follow_new,done_in_period,revenue_in_period,progress}]}（S87 期间复盘只用ISO可信字段） | POST /api/campaigns {name,start_at,end_at,keyword?,note?,checklist?} -> Campaign | PATCH /api/campaigns/:id | DELETE /api/campaigns/:id
+GET  /api/drafts[?status=pending|done|discarded] -> {items,pending}（S108 草稿收件箱，pendingCount=全量在途数不受status过滤影响；items新在前，环形上限200）
+POST /api/drafts {comment_id,nick,text,via?} -> Draft | 同comment在途重复→400、缺参→400、评论不存在→404（S108；自动起草经repo.drafts.create同队列入箱，autoReplyTick对已在箱评论跳过防重复起草）
+PATCH /api/drafts/:id {status:'pending'|'done'|'discarded'} -> Draft（handled_at盖戳；不存在→404）
+PATCH /api/scripts/:id {action:'use'|'pin'|'unpin'} -> Script（S107 效果闭环：复制即计数，仅自定义cs-前缀；内置s1-s3→404防伪造热度；list active按pinned>used降序排自定义段）
+GET  /api/leads/profile?nick= -> {nick,comments[](≤30),replies[](≤30),follows[],stats:{comments_n,high_n,replied_n,follows_n,done_n,amount_sum,first_touch,last_touch}}（S109 360档案跨集合聚合；first/last只用ISO可信字段，评论create_time仅展示不参与计算；缺nick→400）
 能力键新增 marketing（S83）：专业版专属；基础版白名单不含 → /marketing 页与侧栏显示ProLock（API按既有策略开放）；发证脚本无需改（白名单机制自动锁）
 POST /api/data/backups/run -> {created,entry}立即存manual快照（S80；auto每日凌晨3点后由调度器心跳幂等落一份，轮转保留最近14份）
 GET  /api/data/backups/download?name= -> 快照文件附件（S80；命名白名单auto-/manual-正则，穿越400）；恢复走既有/api/data/restore（客户端download→JSON→preview→覆盖确认）

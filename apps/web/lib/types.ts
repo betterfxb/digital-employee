@@ -37,7 +37,7 @@ export interface Competitor {
   history?: { at: string; play: number; like: number }[];
 }
 
-export interface ScriptItem { id: string; category: string; title: string; content: string; deleted?: boolean }
+export interface ScriptItem { id: string; category: string; title: string; content: string; deleted?: boolean; /** S107 使用计数与置顶（仅自定义话术） */ used?: number; pinned?: boolean }
 
 export interface TemplateItem { id: string; intent: string; scene: string; content: string }
 

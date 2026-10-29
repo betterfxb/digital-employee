@@ -330,6 +330,12 @@ export default function Comments() {
                   <Input size="small" value={replyText} onChange={(e) => { setReplyText(e.target.value); setReplyVariant(0); }} placeholder="写下你的回评…" onPressEnter={sendReply} />
                   {replyVariant > 0 && <span style={{ alignSelf: 'center', fontSize: 11, color: '#1677FF', whiteSpace: 'nowrap' }}>候选{replyVariant}</span>}
                   <Button size="small" type="primary" onClick={sendReply}>发送</Button>
+                  {sel && replyText.trim() !== '' && (
+                    <Button size="small" onClick={async () => {
+                      const r = await fetch('/api/drafts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment_id: sel.id, nick: sel.user_nick, text: replyText.trim(), via: '暂存' }) }).then((x) => x.json()).catch(() => null);
+                      if (r && !r.code) flash('已入草稿收件箱（任务中心可取用）', true); else flash(r?.message || '暂存失败');
+                    }}>暂存草稿箱</Button>
+                  )}
                 </div>
                 {replies.map((r) => <div key={r.id} style={{ border: '1px solid #E8E6E1', background: '#fff', borderRadius: 4, padding: '8px 10px', marginTop: 8, fontSize: 13 }}>{r.content}<div className="num" style={{ fontSize: 11, color: '#A8A5A0', marginTop: 4 }}>{r.at}</div></div>)}
               </div>

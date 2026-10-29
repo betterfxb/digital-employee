@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -19,6 +19,7 @@ const { parseCommentTime, buildReport } = require('./.tmp-crypto/lib/report.js')
 const { hasFeature, TIERS } = require('./.tmp-crypto/lib/tiers.js');
 const { computeSegments, computeInsights, computeExperiments, campaignStats, hotKeys } = require('./.tmp-crypto/lib/marketing.js');
 const { sanitizeViews } = require('./.tmp-crypto/lib/commentViews.js');
+const { engagementPct, topHot, lowWarn } = require('./.tmp-crypto/lib/videoStats.js');
 const { trendSeries } = require('./.tmp-crypto/lib/bizTrend.js');
 const { encryptBackup, decryptBackup } = require('./.tmp-crypto/lib/backupCrypto.js');
 const { hashPassword, verifyPassword } = require('./.tmp-crypto/lib/accessPw.js');
@@ -186,6 +187,13 @@ const vs = sanitizeViews([{ name: '这个名字特别特别长的视图超十二
 check(vs.length === 1 && vs[0].name.length === 12 && vs[0].kw.length === 20 && vs[0].intent.length === 8 && vs[0].unreadOnly === false, 'views 越界钳制与坏布尔回退false');
 check(sanitizeViews([{ name: '重复', kw: 'a' }, { name: '重复', kw: 'b' }, {}]).length === 1, 'views 同名去重与无名丢弃');
 check(sanitizeViews(Array.from({ length: 12 }, (_, i) => ({ name: 'v' + i }))).length === 8, 'views 总量封顶8');
+
+// 19) S106 作品分析纯函数
+check(Math.abs((engagementPct({ play: 1000, like: 50, comment: 10, share: 10 }) ?? 0) - 7) < 0.001 && engagementPct({ play: 0, like: 5, comment: 0, share: 0 }) === null, 'vstats 互动率与零分母null');
+const vsA = [{ id: 'a', play: 100, like: 50, comment: 0, share: 0 }, { id: 'b', play: 100000, like: 100, comment: 0, share: 0 }, { id: 'c', play: 50, like: 40, comment: 0, share: 0 }];
+const hotA = topHot(vsA); // b率1.0% > a率50%? a=50/100=50% b=0.1% c=80%但play<minPlay剔除 → top={a,b}
+check(hotA.has('a') && hotA.has('b') && !hotA.has('c'), 'vstats 爆款门槛：小分母高互动不刷榜');
+check(lowWarn([{ id: 'x', play: 10, like: 0, comment: 0, share: 0 }]).size === 0 && lowWarn([{ id: 'x', play: 5, like: 0, comment: 0, share: 0 }, { id: 'y', play: 1000, like: 1, comment: 0, share: 0 }, { id: 'z', play: 1000, like: 1, comment: 0, share: 0 }]).has('x'), 'vstats 低效预警样本门槛与阈值');
 
 // 14) S74 自动回复节奏与三重门（纯函数）
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');

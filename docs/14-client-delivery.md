@@ -5,7 +5,7 @@
 
 ## 一、发货 Checklist
 
-- [ ] 安装包是**最新版**（当前应发 **v1.6.0**：含成交概览卡/台账右键菜单+催办排序/打印成纸/托盘常驻+开机自启；核对：装好后侧栏底部 vX.Y.Z 与 `apps/desktop/package.json` 的 version 一致）
+- [ ] 安装包是**最新版**（当前应发 **v1.7.0**：含成交统计条/作品互动率与爆款标记/话术使用计数与置顶/草稿收件箱/线索360档案；核对：装好后侧栏底部 vX.Y.Z 与 `apps/desktop/package.json` 的 version 一致）
 - [ ] 客户激活门复制机器码发你 → 用**当前密钥**签发：`node scripts\license-gen.js issue --customer 客户名 --days 0 --bind "机器码"`
 - [ ] `license.license` 文件发回客户（微信传完即撤回，别发群/网盘）
 - [ ] 私钥 `data/license_key.pem` 永远只在你电脑上，谁来要都不发

@@ -2,7 +2,7 @@
  * S9 持久化抽象层：Repository接口 + 内存实现
  * 路由只依赖本文件，不直连store/Prisma。切换：DATA_BACKEND=memory（默认）/prisma（目标态，需DB落地，见prisma/schema.prisma）。
  */
-import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, campaigns, viewOf } from './store';
+import { readIds, allReadVideos, intentOverrides, follows, competitors, seenEvents, dlq, syncJobs, activeAccountId, setActiveAccountId, pausedTasks, settings, videoTasks, customScripts, replyRules, replies, campaigns, drafts, viewOf } from './store';
 import { hashPassword } from './accessPw';
 import { autoCfgOf, mergeAutoCfg } from './autoCfg';
 import { sanitizeViews } from './commentViews';
@@ -47,8 +47,8 @@ export interface VideoTaskRepo {
   update(id: string, patch: Partial<Pick<VideoTask, 'follow' | 'like_done' | 'fav_done' | 'paused' | 'interval_min'>>): VideoTask | null;
   remove(id: string): boolean;
 }
-export interface Script { id: string; category: string; title: string; content: string; deleted?: boolean }
-export interface ScriptRepo { list(mode?: 'active' | 'trash'): Script[]; create(category: string, title: string, content: string): Script | null; remove(id: string): boolean; restore(id: string): boolean }
+export interface Script { id: string; category: string; title: string; content: string; deleted?: boolean; used?: number; pinned?: boolean }
+export interface ScriptRepo { list(mode?: 'active' | 'trash'): Script[]; create(category: string, title: string, content: string): Script | null; remove(id: string): boolean; restore(id: string): boolean; /** S107 使用计数与置顶（仅自定义话术，内置不计数防伪造热度） */ use(id: string): Script | null; pin(id: string, v: boolean): Script | null }
 export interface ReplyRule { id: string; keyword: string; reply: string; enabled: boolean; deleted?: boolean }
 export interface ReplyRuleRepo {
   list(mode?: 'active' | 'trash'): ReplyRule[];
@@ -62,7 +62,10 @@ export interface ReplyRepo { list(comment_id: string): Reply[]; all(): Reply[]; 
 /** S87 营销活动：人工执行checklist+期间复盘（数据层只管存储，统计在lib/marketing纯函数） */
 export interface Campaign { id: string; name: string; note?: string; keyword?: string; start_at: string; end_at: string; checklist: { text: string; done: boolean }[]; created_at: string }
 export interface CampaignRepo { list(): Campaign[]; create(input: { name: string; note?: string; keyword?: string; start_at: string; end_at: string; checklist?: { text: string; done: boolean }[] }): Campaign | null; update(id: string, patch: { name?: string; note?: string; keyword?: string; start_at?: string; end_at?: string; checklist?: { text: string; done: boolean }[] }): Campaign | null; remove(id: string): boolean }
-export interface Repos { comments: CommentRepo; videos: VideoRepo; follows: FollowRepo; competitors: CompetitorRepo; events: EventRepo; sync: SyncRepo; accounts: AccountRepo; tasks: TaskRepo; settings: SettingsRepo; videoTasks: VideoTaskRepo; scripts: ScriptRepo; replyRules: ReplyRuleRepo; replies: ReplyRepo; campaigns: CampaignRepo }
+/** S108 草稿收件箱：自动起草/手动暂存的话术待确认队列——系统只管队列，复制与发送在人 */
+export interface Draft { id: string; comment_id: string; nick: string; text: string; via: string; at: string; status: 'pending' | 'done' | 'discarded'; handled_at?: string }
+export interface DraftRepo { list(status?: string): Draft[]; create(input: { comment_id: string; nick: string; text: string; via: string }): Draft | null; setStatus(id: string, status: 'pending' | 'done' | 'discarded'): Draft | null; hasComment(comment_id: string): boolean; pendingCount(): number }
+export interface Repos { comments: CommentRepo; videos: VideoRepo; follows: FollowRepo; competitors: CompetitorRepo; events: EventRepo; sync: SyncRepo; accounts: AccountRepo; tasks: TaskRepo; settings: SettingsRepo; videoTasks: VideoTaskRepo; scripts: ScriptRepo; replyRules: ReplyRuleRepo; replies: ReplyRepo; campaigns: CampaignRepo; drafts: DraftRepo }
 
 const memory: Repos = {
   videos: {
@@ -195,10 +198,26 @@ const memory: Repos = {
     remove: (id) => { const i = videoTasks.findIndex((x) => x.id === id); if (i < 0) return false; videoTasks.splice(i, 1); persistCollections(); return true; },
   },
   scripts: {
-    // S57 软删除：active=未删（默认），trash=回收站
+    // S57 软删除：active=未删（默认），trash=回收站；S107 active按置顶>使用次数排（自定义段内置段保持原序）
     list: (mode) => {
-      const all = [...mockScripts.map((s) => ({ ...s })), ...customScripts];
+      const builtins = mockScripts.map((s) => ({ ...s }));
+      const customs = [...customScripts].sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || ((b.used || 0) - (a.used || 0)));
+      const all = [...builtins, ...customs];
       return mode === 'trash' ? all.filter((s) => s.deleted) : all.filter((s) => !s.deleted);
+    },
+    use: (id) => {
+      const x = customScripts.find((s) => s.id === id);
+      if (!x) return null; // 内置话术不进统计（防伪造热度）
+      x.used = (x.used || 0) + 1;
+      persistCollections();
+      return x;
+    },
+    pin: (id, v) => {
+      const x = customScripts.find((s) => s.id === id);
+      if (!x) return null;
+      x.pinned = !!v;
+      persistCollections();
+      return x;
     },
     create: (category, title, content) => {
       if (!title.trim() || !content.trim()) return null;
@@ -276,6 +295,29 @@ const memory: Repos = {
       persistCollections();
       return true;
     },
+  },
+  drafts: {
+    list: (status) => (status ? drafts.filter((d) => d.status === status) : [...drafts]),
+    create: (input) => {
+      const text = String(input?.text || '').trim().slice(0, 500);
+      if (!text || !input.comment_id?.trim() || !input.nick?.trim()) return null;
+      if (drafts.some((d) => d.comment_id === input.comment_id && d.status === 'pending')) return null; // 同评论在途不重复入箱
+      const item: Draft = { id: `dr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, comment_id: String(input.comment_id).trim(), nick: String(input.nick).trim().slice(0, 30), text, via: String(input.via || '手动').slice(0, 8), at: new Date().toISOString(), status: 'pending' };
+      drafts.unshift(item);
+      while (drafts.length > 200) drafts.pop(); // 环形上限：老处理项自然淘汰
+      persistCollections();
+      return item;
+    },
+    setStatus: (id, status) => {
+      const d = drafts.find((x) => x.id === id);
+      if (!d) return null;
+      d.status = status;
+      d.handled_at = new Date().toISOString();
+      persistCollections();
+      return d;
+    },
+    hasComment: (comment_id) => drafts.some((d) => d.comment_id === comment_id),
+    pendingCount: () => drafts.filter((d) => d.status === 'pending').length,
   },
 };
 

@@ -35,7 +35,7 @@ export const videoTasks: { id: string; video_id: string; title: string; follow: 
   { id: 'vt1', video_id: 'v1', title: '三角洲跑刀实录 · 一局爆仓', follow: true, like_done: false, fav_done: false, paused: false, interval_min: 5, last_check: null, created_at: '10-09' },
 ];
 /** 自定义话术（S20：用户自建，对齐ScriptItem） */
-export const customScripts: { id: string; category: string; title: string; content: string; deleted?: boolean }[] = [];
+export const customScripts: { id: string; category: string; title: string; content: string; deleted?: boolean; used?: number; pinned?: boolean }[] = [];
 /** 私信接待规则（S20：休眠配置，无企业号授权不执行，见docs/10-B7） */
 export const replyRules: { id: string; keyword: string; reply: string; enabled: boolean; deleted?: boolean }[] = [
   { id: 'rr1', keyword: '价格', reply: '报价已私信发送，详询请留联系方式。', enabled: true },
@@ -44,6 +44,8 @@ export const replyRules: { id: string; keyword: string; reply: string; enabled: 
 export const replies: { id: string; comment_id: string; content: string; at: string; variant?: number }[] = [];
 /** S87 营销活动计划（人工执行checklist+期间复盘；执行永远人工，系统只跟踪） */
 export const campaigns: import('./marketing').Campaign[] = [];
+/** S108 草稿收件箱：自动起草/手动暂存的话术待人工确认队列（复制即发在人，此处只管队列） */
+export const drafts: { id: string; comment_id: string; nick: string; text: string; via: string; at: string; status: 'pending' | 'done' | 'discarded'; handled_at?: string }[] = [];
 /** 系统设置（内存持久化：同进程有效，重启回默认；生产进DB。初值对齐settings.config） */
 export const settings = {
   service_name: '跑刀代跑',
@@ -74,4 +76,4 @@ export function viewOf(c: (typeof mockComments)[number]) {
 }
 
 // S25b：业务集合水合（模块尾部，数组已定义）；repo变更点调persistCollections落盘；S68协作态一并注入
-hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules, campaigns, readIds, allReadVideos, intentOverrides });
+hydrateCollections({ follows, replies, competitors, videoTasks, settings, customScripts, replyRules, campaigns, drafts, readIds, allReadVideos, intentOverrides });

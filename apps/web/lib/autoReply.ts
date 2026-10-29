@@ -72,7 +72,7 @@ export function autoReplyTick(): void {
   if (Date.now() < a.nextAt) return;
 
   const comments = getRepos().comments.list({ video_id: '', intent: '', keyword: '', unreadOnly: true });
-  const target = comments.find((c) => c.intent !== '垃圾' && !a.log.some((j) => j.comment_id === c.id));
+  const target = comments.find((c) => c.intent !== '垃圾' && !a.log.some((j) => j.comment_id === c.id) && !getRepos().drafts.hasComment(c.id)); // S108：草稿箱在途的也不再起草
   if (!target) return;
 
   // 规则优先（接待规则S20），未命中用话术生成（S33三变体+面板口吻）
@@ -96,8 +96,10 @@ export function autoReplyTick(): void {
   if (sent) {
     a.sentToday += 1;
     getRepos().comments.markRead([target.id], new Set([target.id])); // 已外发→标已读（S68持久化，重启不重发）
+  } else {
+    // S108 manual：起草即入收件箱（持久化，重启不丢），人工复制去发；不标已读
+    getRepos().drafts.create({ comment_id: target.id, nick: target.user_nick, text, via });
   }
-  // manual 状态：只登记草稿，不标已读——人工走正常回复流程，回完自然已读
 }
 
 /** 状态快照（供任务中心自动化卡片） */

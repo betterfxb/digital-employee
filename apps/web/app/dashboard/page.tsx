@@ -4,6 +4,7 @@ import { App, Button, Drawer, Input, Popconfirm, Segmented, Select, Table } from
 import type { ColumnsType } from 'antd/es/table';
 import { statsConfig } from '@/config/stats.config';
 import { downloadCsv } from '@/lib/csv';
+import { engagementPct, topHot, lowWarn } from '@/lib/videoStats';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
@@ -145,12 +146,16 @@ export default function Dashboard() {
     return rows.map((r, i: number) => `${(i / Math.max(rows.length - 1, 1)) * 100},${34 - (r.play / max) * 32}`).join(' ');
   };
 
+  // S106 爆款Top3（互动率）与低效预警（播放<账号均值30%，样本≥3才判）——按id集合预计算，排序/翻页不串位
+  const hotIds = topHot(videos); const lowIds = lowWarn(videos);
+  const avgE = (() => { const rs = videos.map((v) => engagementPct(v)).filter((x): x is number => x !== null); return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null; })();
   const videoCols: ColumnsType<Video> = [
-    { title: '作品', dataIndex: 'title', key: 'title' },
+    { title: '作品', dataIndex: 'title', key: 'title', render: (v: string, rec) => <span>{hotIds.has(rec.id) && <span title="互动率Top3爆款" style={{ marginRight: 4 }}>🔥</span>}{lowIds.has(rec.id) && <span title="播放显著低于账号均值，选题/发布时段可复盘" style={{ marginRight: 4, opacity: 0.55 }}>▼</span>}{v}</span> },
     { title: '发布时间', dataIndex: 'publish_time', key: 'pt', onCell: () => ({ className: 'num' }) },
-    { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), render: (_, v) => v.play.toLocaleString() },
-    { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), render: (_, v) => v.like.toLocaleString() },
+    { title: '播放', key: 'play', onCell: () => ({ className: 'num' }), sorter: (a, b) => a.play - b.play, render: (_, v) => v.play.toLocaleString() },
+    { title: '点赞', key: 'like', onCell: () => ({ className: 'num' }), sorter: (a, b) => a.like - b.like, render: (_, v) => v.like.toLocaleString() },
     { title: '点赞率', key: 'lr', onCell: () => ({ className: 'num' }), render: (_, v) => (v.play ? `${(v.like / v.play * 100).toFixed(1)}%` : '—') },
+    { title: '互动率', key: 'er', onCell: () => ({ className: 'num' }), sorter: (a, b) => (engagementPct(a) ?? -1) - (engagementPct(b) ?? -1), render: (_, v) => { const e = engagementPct(v); return e === null ? '—' : `${e.toFixed(1)}%`; } }, // S106 (赞+评+转)/播
     { title: '评论', dataIndex: 'comment', key: 'cm', onCell: () => ({ className: 'num' }) },
     { title: '转发', dataIndex: 'share', key: 'sh', onCell: () => ({ className: 'num' }) },
     { title: '近7天', key: 'spark', render: (_, v) => { const rows = allTrend[v.aweme_id || v.id] || []; return rows.length ? <svg viewBox="0 0 90 28" style={{ width: 90, height: 28 }} aria-hidden="true"><polyline points={spark(rows)} fill="none" stroke="#1A1A18" strokeWidth="1.6" /></svg> : '—'; } },
@@ -402,6 +407,11 @@ export default function Dashboard() {
         </div>
         )}
         <div className="card">
+          {videos.length > 0 && (
+            <div style={{ padding: '10px 14px 0', fontSize: 11, color: '#A8A5A0' }}>
+              🔥=互动率Top3爆款 · ▼=播放显著低于均值（≥3条作品才判定）{avgE !== null ? ` · 账号平均互动率 ${avgE.toFixed(1)}%` : ''}
+            </div>
+          )}
           <Table<Video> size="small" pagination={false} columns={videoCols} dataSource={videos} rowKey="id" locale={{ emptyText: '暂无作品' }} />
           <div style={{ padding: '12px 14px', fontSize: 12, color: '#A8A5A0', display: 'flex', alignItems: 'center' }}>
             <span>服务端分页 · 20/页 · 趋势批量上限{statsConfig.trendBatchMax}</span>

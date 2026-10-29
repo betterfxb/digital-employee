@@ -241,6 +241,32 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     const au2 = await vpatch({ desktop_autostart: false });
     pass(au1.s === 200 && au1.j.desktop_autostart === true && auG.j.desktop_autostart === true, 'S104 自启开关布尔往返');
     pass(auBad.s === 400 && au2.s === 200 && au2.j.desktop_autostart === false, 'S104 坏类型拒+复位');
+    // S108 草稿收件箱：暂存→在途去重→标处理出队 + 非法参数
+    const cListA = await get('/api/comments?unread_only=0');
+    const anyC = (cListA.j.items || [])[0];
+    const dp = async (path, body, m) => { const rr = await fetch(base + path, { method: m || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) }); return { s: rr.status, j: await rr.json().catch(() => null) }; };
+    const dCreate = await dp('/api/drafts', { comment_id: anyC.id, nick: anyC.user_nick, text: '冒烟草稿话术' });
+    const dDup = await dp('/api/drafts', { comment_id: anyC.id, nick: anyC.user_nick, text: 'dup' });
+    const dPend1 = await get('/api/drafts?status=pending');
+    const dDone = await dp('/api/drafts/' + dCreate.j.id, { status: 'done' }, 'PATCH');
+    const dPend2 = await get('/api/drafts?status=pending');
+    pass(dCreate.s === 200 && dCreate.j.status === 'pending' && dDup.s === 400 && dPend1.j.items.some((x) => x.id === dCreate.j.id) && !dPend2.j.items.some((x) => x.id === dCreate.j.id) && dDone.j.status === 'done', 'S108 草稿暂存/去重/标处理出队');
+    pass((await dp('/api/drafts/nope-x', { status: 'done' }, 'PATCH')).s === 404 && (await dp('/api/drafts', { comment_id: anyC.id, nick: '', text: 'x' })).s === 400, 'S108 草稿坏id/坏参数拒');
+    // S107 话术效果：使用计数+置顶参与排序；内置不可统计
+    const sNew = await post('/api/scripts', { title: '冒烟效果' + Date.now().toString(36), content: '测试话术内容' });
+    const sId = sNew.j?.id;
+    await dp('/api/scripts/' + sId, { action: 'use' }, 'PATCH');
+    const sUse2 = await dp('/api/scripts/' + sId, { action: 'use' }, 'PATCH');
+    const sPin = await dp('/api/scripts/' + sId, { action: 'pin' }, 'PATCH');
+    const sBuiltin = await dp('/api/scripts/s1', { action: 'use' }, 'PATCH');
+    const sList2 = await get('/api/scripts');
+    const customs = (sList2.j.items || []).filter((s) => s.id.startsWith('cs-'));
+    pass(sUse2.j.used === 2 && sPin.j.pinned === true && customs[0]?.id === sId && sBuiltin.s === 404, 'S107 话术使用计数+置顶排前+内置拒统计');
+    await dp('/api/scripts/' + sId, {}, 'DELETE'); // 软删进回收站自清理
+    // S109 线索360：按昵称聚合 + 缺参拒
+    const lp = await get('/api/leads/profile?nick=' + encodeURIComponent(anyC.user_nick));
+    const lpBad = await get('/api/leads/profile');
+    pass(lp.s === 200 && lp.j.comments.some((x) => x.id === anyC.id) && typeof lp.j.stats.comments_n === 'number' && Array.isArray(lp.j.follows) && lpBad.s === 400, 'S109 360档案聚合与缺参拒');
     await post('/api/accounts/switch', { id: 'acc_001' });
     const back = await get('/api/accounts/me');
     pass(back.j.id === 'acc_001', 'S23 switch back acc_001');

@@ -34,6 +34,20 @@ export default function Tasks() {
   /** S75 自动化参数面板 */
   const [acfg, setAcfg] = useState<AutoConfig | null>(null);
   const [cfgDirty, setCfgDirty] = useState(false);
+  /** S108 草稿收件箱 */
+  interface DraftRow { id: string; comment_id: string; nick: string; text: string; via: string; at: string; status: string }
+  const [dr, setDr] = useState<DraftRow[]>([]);
+  const [drFilter, setDrFilter] = useState<'pending' | 'done' | 'discarded' | 'all'>('pending');
+  const [drPending, setDrPending] = useState(0);
+  const loadDr = () => { fetch(`/api/drafts${drFilter !== 'all' ? '?status=' + drFilter : ''}`).then((r) => r.json()).then((d) => { setDr(d.items || []); setDrPending(d.pending || 0); }).catch(() => {}); };
+  useEffect(() => { loadDr(); const t = setInterval(loadDr, 30000); return () => clearInterval(t); }, [drFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const drCopy = async (d: DraftRow) => {
+    try { await navigator.clipboard.writeText(d.text); } catch { message.error('复制失败，请手动选中'); return; }
+    fetch(`/api/drafts/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done' }) }).then(() => loadDr()).catch(() => {});
+    message.success('已复制，去抖音粘贴发送；已标处理');
+  };
+  const drSet = (id: string, status: string) => { fetch(`/api/drafts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then((r) => r.json()).then((j) => { if (j?.code) message.error(j.message); loadDr(); }).catch(() => message.error('操作失败')); };
+  const DR_LABELS: Record<string, string> = { pending: '待确认', done: '已处理', discarded: '已废弃', all: '全部' };
 
   useEffect(() => {
     if (sched?.auto_config && !cfgDirty) setAcfg(sched.auto_config);
@@ -239,6 +253,35 @@ export default function Tasks() {
             </div>
           )}
           <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>私信自动回复：等蓝V与IM能力审核（同架构预留，开通后并入本卡）</div>
+        </div>
+        {/* S108 草稿收件箱 */}
+        <div className="card" style={{ padding: 16, marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <b>草稿收件箱</b>
+            {drPending > 0 && <Tag color="error" style={{ marginLeft: 0 }}>{drPending} 条待确认</Tag>}
+            <span style={{ flex: 1 }} />
+            {(['pending', 'done', 'discarded', 'all'] as const).map((f) => (
+              <Button key={f} size="small" type={drFilter === f ? 'primary' : 'text'} onClick={() => setDrFilter(f)}>{DR_LABELS[f]}</Button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#A8A5A0', margin: '4px 0 6px' }}>自动起草与评论页「暂存」的话术都进这里。复制后你去抖音粘贴发送——发送永远在人，这是红线。</div>
+          {dr.length === 0 && <div style={{ padding: '12px 0', fontSize: 13, color: '#A8A5A0' }}>{drFilter === 'pending' ? '没有待确认的草稿' : '这个状态还没有记录'}</div>}
+          {dr.map((d) => (
+            <div key={d.id} style={{ borderTop: '1px solid #F0EEEA', padding: '9px 0' }}>
+              <div style={{ fontSize: 11, color: '#A8A5A0' }}>
+                {new Date(d.at).toLocaleString('zh-CN', { hour12: false }).slice(5, 16)} · {d.via} · <b style={{ color: '#1A1A18' }}>{d.nick}</b>
+                {d.status !== 'pending' && <Tag style={{ marginLeft: 6 }}>{d.status === 'done' ? '已处理' : '已废弃'}</Tag>}
+              </div>
+              <div style={{ fontSize: 13, marginTop: 4, wordBreak: 'break-all' }}>{d.text}</div>
+              {d.status === 'pending' && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <Button size="small" type="primary" onClick={() => drCopy(d)}>复制并标已处理</Button>
+                  <Button size="small" type="text" onClick={() => drSet(d.id, 'done')}>仅标已处理</Button>
+                  <Button size="small" type="text" danger onClick={() => drSet(d.id, 'discarded')}>废弃</Button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
         <div className="card" style={{ padding: 16, marginTop: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

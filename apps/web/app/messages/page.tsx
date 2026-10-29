@@ -8,7 +8,7 @@ import { tasksConfig } from '@/config/tasks.config';
 import { mockScripts } from '@/lib/mock';
 import { downloadCsv } from '@/lib/csv';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
-import type { ScriptItem, Follow, Video } from '@/lib/types';
+import type { ScriptItem, Follow, Video, CommentItem } from '@/lib/types';
 
 /** S4 私信辅助占位：话术+台账走API（失败回退静态），无假会话，imEnabled=false */
 export default function Messages() {
@@ -28,6 +28,8 @@ export default function Messages() {
   /** S49 线索档案抽屉 */
   const [detail, setDetail] = useState<Follow | null>(null);
   const [noteText, setNoteText] = useState('');
+  /** S109 360聚合档案（评论史/回评史/成交汇总） */
+  const [profile, setProfile] = useState<{ nick: string; comments: CommentItem[]; replies: { content: string; at: string }[]; follows: Follow[]; stats: { comments_n: number; high_n: number; replied_n: number; follows_n: number; done_n: number; amount_sum: number; first_touch: string | null; last_touch: string | null } } | null>(null);
   /** S54 分版本能力（null=按可用渲染防闪） */
   const [feats, setFeats] = useState<string[] | null>(null);
   const can = (k: ProFeature) => feats === null || hasFeature(feats, k);
@@ -134,7 +136,10 @@ export default function Messages() {
     setTagEdit(null); flash('标签已保存', true); loadFollows(); loadTagLib();
   };
   /** S49 打开线索档案 */
-  const openDetail = (f: Follow) => { setDetail(f); setNoteText(f.note || ''); };
+  const openDetail = (f: Follow) => {
+    setDetail(f); setNoteText(f.note || ''); setProfile(null);
+    fetch('/api/leads/profile?nick=' + encodeURIComponent(f.peer_nick)).then((r) => r.json()).then((d) => { if (d && !d.code) setProfile(d); }).catch(() => {}); // S109 360聚合
+  };
   const saveNote = async () => {
     if (!detail) return;
     const r = await fetch(`/api/follows/${detail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: noteText }) }).then((x) => x.json()).catch(() => null);
@@ -191,6 +196,18 @@ export default function Messages() {
   /** S52 复制话术 */
   const copyText = async (t: string) => {
     try { await navigator.clipboard.writeText(t); flash('已复制', true); } catch { flash('复制失败，请手动复制'); }
+  };
+  /** S107 复制自定义话术即计一次使用（内置不统计防伪造）；置顶切换 */
+  const copyScript = async (s: ScriptItem) => {
+    await copyText(s.content);
+    if (!s.id.startsWith('cs-')) return;
+    fetch(`/api/scripts/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'use' }) })
+      .then((r) => r.json()).then((d) => setScripts((prev) => prev.map((x) => (x.id === d.id ? { ...x, used: d.used } : x)))).catch(() => {});
+  };
+  const pinScript = async (s: ScriptItem, v: boolean) => {
+    const r = await fetch(`/api/scripts/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: v ? 'pin' : 'unpin' }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '操作失败'); return; }
+    fetch('/api/scripts').then((x) => x.json()).then((d) => setScripts(d.items || [])).catch(() => {});
   };
   const delScript = async (id: string) => {
     const r = await fetch(`/api/scripts/${id}`, { method: 'DELETE' }).then((x) => x.json()).catch(() => null);
@@ -334,7 +351,7 @@ export default function Messages() {
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {['全部', ...new Set(scripts.map((s) => s.category))].map((c) => (
-                <Button key={c} size="small" type={sCat === c ? 'primary' : 'default'} onClick={() => setSCat(c)}>{c}</Button>
+                <Button key={c} size="small" type={sCat === c ? 'primary' : 'default'} onClick={() => setSCat(c)}>{c}{c !== '全部' ? ` ${scripts.filter((s) => s.category === c).length}` : ` ${scripts.length}`}</Button> // S107 分类计数
               ))}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
@@ -348,10 +365,16 @@ export default function Messages() {
               if (filtered.length === 0) return <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 12 }}>无匹配话术，换个分类或搜索词试试</div>;
               return filtered.map((s) => (
                 <div key={s.id} style={{ border: '1px solid #E8E6E1', borderRadius: 4, padding: '10px 12px', marginTop: 10 }}>
-                  <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}><Tag style={{ marginInlineEnd: 6 }}>{s.category}</Tag>{s.title}</div>
+                  <div style={{ fontSize: 11, color: '#A8A5A0', marginBottom: 4 }}>
+                    <Tag style={{ marginInlineEnd: 6 }}>{s.category}</Tag>{s.pinned ? '📌 ' : ''}{s.title}
+                    {(s.used || 0) > 0 && <span className="num" style={{ marginLeft: 6, color: s.used! >= 5 ? '#B4443C' : '#A8A5A0' }}>用过 {s.used} 次</span>}
+                  </div>
                   {s.content}
                   <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                    <Button size="small" type="text" style={{ paddingInline: 0 }} onClick={() => copyText(s.content)}>复制</Button>
+                    <Button size="small" type="text" style={{ paddingInline: 0 }} onClick={() => copyScript(s)}>复制</Button>
+                    {s.id.startsWith('cs-') && (
+                      <Button size="small" type="text" onClick={() => pinScript(s, !s.pinned)}>{s.pinned ? '取消置顶' : '置顶'}</Button>
+                    )}
                     {!['s1', 's2', 's3'].includes(s.id) && <Button size="small" type="text" danger onClick={() => delScript(s.id)}>删除</Button>}
                   </div>
                 </div>
@@ -553,6 +576,30 @@ export default function Messages() {
                   {h.act}
                 </div>
               ))}
+              {/* S109 360聚合：跨集合时间线（只用可信字段计数，评论时间原样展示） */}
+              {profile && (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>360 接触全景 {!profile.stats.last_touch ? '' : `· 首触 ${profile.stats.first_touch ? profile.stats.first_touch.slice(5, 10) : '—'} · 最近 ${profile.stats.last_touch.slice(5, 10)}`}</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                    <Tag style={{ marginInlineEnd: 0 }}>评论 {profile.stats.comments_n}</Tag>
+                    {profile.stats.high_n > 0 && <Tag color="error" style={{ marginInlineEnd: 0 }}>高意向 {profile.stats.high_n}</Tag>}
+                    {profile.stats.replied_n > 0 && <Tag color="blue" style={{ marginInlineEnd: 0 }}>我回过 {profile.stats.replied_n}</Tag>}
+                    <Tag style={{ marginInlineEnd: 0 }}>建档 {profile.stats.follows_n}</Tag>
+                    {profile.stats.done_n > 0 && <Tag color="success" style={{ marginInlineEnd: 0 }}>成交 {profile.stats.done_n} 单{profile.stats.amount_sum ? ` ¥${profile.stats.amount_sum.toLocaleString()}` : ''}</Tag>}
+                  </div>
+                  {profile.comments.length > 0 && <div style={{ fontSize: 12, color: '#6B6862', marginBottom: 4 }}>最近评论：</div>}
+                  {profile.comments.slice(0, 5).map((c) => (
+                    <div key={c.id} style={{ fontSize: 12, padding: '5px 0', borderBottom: '1px solid #F0EEEA', wordBreak: 'break-all' }}>
+                      <span style={{ color: '#A8A5A0' }}>{c.create_time} · {c.intent} · </span>{c.content.slice(0, 46)}{c.content.length > 46 ? '…' : ''}
+                    </div>
+                  ))}
+                  {profile.replies.length > 0 && <div style={{ fontSize: 12, color: '#6B6862', margin: '10px 0 4px' }}>我的回评：</div>}
+                  {profile.replies.slice(0, 4).map((r, i) => (
+                    <div key={i} style={{ fontSize: 12, padding: '4px 0', color: '#1677FF', wordBreak: 'break-all' }}>{r.content.slice(0, 46)}{r.content.length > 46 ? '…' : ''} <span className="num" style={{ color: '#A8A5A0' }}>{r.at}</span></div>
+                  ))}
+                </div>
+              )}
+              {profile === null && detail && <div style={{ fontSize: 11, color: '#C8C5BE', marginTop: 14 }}>360 聚合加载中…</div>}
             </div>
           )}
         </Drawer>

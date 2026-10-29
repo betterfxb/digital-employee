@@ -27,6 +27,7 @@ interface LocalState {
   settings: Record<string, unknown> | null; customScripts: unknown[]; replyRules: unknown[];
   /** S87 营销活动计划（人工执行checklist+期间复盘） */
   campaigns: unknown[];
+  drafts: unknown[];
   /** S37 清空标记：清空/恢复后示例种子永不复活（仅全新安装有示例） */
   cleared_at?: string;
   /** S68 协作态持久化：已读/整视频已读/意图忽略覆盖——此前只在内存，重启即丢（真bug修复） */
@@ -39,7 +40,7 @@ interface LocalState {
 const FILE = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'local.json');
 const state: LocalState = {
   accounts: [], videos: [], comments: [], tokens: {},
-  follows: [], replies: [], competitors: [], videoTasks: [], settings: null, customScripts: [], replyRules: [], campaigns: [],
+  follows: [], replies: [], competitors: [], videoTasks: [], settings: null, customScripts: [], replyRules: [], campaigns: [], drafts: [],
 };
 
 function hydrate() {
@@ -58,6 +59,7 @@ function hydrate() {
       if (Array.isArray(raw.customScripts)) state.customScripts = raw.customScripts;
       if (Array.isArray(raw.replyRules)) state.replyRules = raw.replyRules;
       if (Array.isArray(raw.campaigns)) state.campaigns = raw.campaigns; // S87
+      if (Array.isArray(raw.drafts)) state.drafts = raw.drafts; // S108
       if (typeof raw.cleared_at === 'string') state.cleared_at = raw.cleared_at;
       if (Array.isArray(raw.read_ids)) state.read_ids = raw.read_ids;
       if (Array.isArray(raw.all_read_videos)) state.all_read_videos = raw.all_read_videos;
@@ -78,6 +80,7 @@ export interface CollectionRefs {
   settings: object; customScripts: { id: string }[]; replyRules: { id: string }[];
   /** S87 营销活动集合 */
   campaigns: { id: string }[];
+  drafts: { id: string }[];
   /** S68 协作态（可选注入） */
   readIds?: Set<string>;
   allReadVideos?: Set<string>;
@@ -99,6 +102,7 @@ export function hydrateCollections(refs: CollectionRefs) {
   merge(refs.customScripts, state.customScripts);
   merge(refs.replyRules, state.replyRules);
   merge(refs.campaigns, state.campaigns); // S87
+  merge(refs.drafts, state.drafts); // S108
   // S68 协作态水合（本地const承接避免闭包内null收窄丢失——S47同款坑）
   const rids = refs.readIds;
   if (rids && Array.isArray(state.read_ids)) state.read_ids.forEach((id) => rids.add(id));
@@ -121,6 +125,7 @@ export function persistCollections() {
   state.customScripts = collRefs.customScripts;
   state.replyRules = collRefs.replyRules;
   state.campaigns = collRefs.campaigns; // S87
+  state.drafts = collRefs.drafts; // S108
   // S68 协作态回写
   if (collRefs.readIds) state.read_ids = [...collRefs.readIds];
   if (collRefs.allReadVideos) state.all_read_videos = [...collRefs.allReadVideos];
@@ -141,6 +146,7 @@ export function clearBusinessData() {
   state.follows = []; state.replies = []; state.competitors = []; state.videoTasks = [];
   state.customScripts = []; state.replyRules = [];
   state.campaigns = []; // S87
+  state.drafts = []; // S108
   // S68 协作态随业务数据一并清（已读/意图属于评论）
   state.read_ids = []; state.all_read_videos = []; state.intent_overrides = {};
   state.cleared_at = new Date().toISOString();
@@ -151,6 +157,7 @@ export function clearBusinessData() {
     refs.follows.length = 0; refs.replies.length = 0; refs.competitors.length = 0;
     refs.videoTasks.length = 0; refs.customScripts.length = 0; refs.replyRules.length = 0;
     refs.campaigns.length = 0; // S87
+    refs.drafts.length = 0; // S108
     refs.readIds?.clear(); refs.allReadVideos?.clear(); refs.intentOverrides?.clear();
   }
   flushLocal();
@@ -165,7 +172,7 @@ export function backupAll(): Record<string, unknown> {
 export function restoreBackup(data: Record<string, unknown>): { ok: boolean; error: string | null } {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, error: '备份格式不对' };
   if (!['accounts', 'videos', 'comments'].every((k) => k in data)) return { ok: false, error: '缺少必要字段（不是本系统的备份文件）' };
-  const arrKeys = ['accounts', 'videos', 'comments', 'follows', 'replies', 'competitors', 'videoTasks', 'customScripts', 'replyRules', 'campaigns'];
+  const arrKeys = ['accounts', 'videos', 'comments', 'follows', 'replies', 'competitors', 'videoTasks', 'customScripts', 'replyRules', 'campaigns', 'drafts'];
   for (const k of arrKeys) if (k in data && !Array.isArray(data[k])) return { ok: false, error: `字段${k}格式不对` };
   const arr = <T>(k: string): T[] => (Array.isArray(data[k]) ? (data[k] as T[]) : []);
   // S47 修复：备份只含文件态（种子从不入文件）→ 恢复以「种子 ∪ 备份」重建（id去重，备份优先）；
@@ -188,6 +195,7 @@ export function restoreBackup(data: Record<string, unknown>): { ok: boolean; err
   state.customScripts = arr<unknown>('customScripts');
   state.replyRules = arr<unknown>('replyRules');
   state.campaigns = arr<unknown>('campaigns'); // S87（旧备份无此键=恢复后为空，以备份时点为准）
+  state.drafts = arr<unknown>('drafts'); // S108
   state.settings = (data.settings && typeof data.settings === 'object' ? data.settings : null) as Record<string, unknown> | null;
   // S47修：cleared_at 严格跟随备份——备份没有即回到「从未清空」态（S37原设计无脑设now会永久污染环境致种子永灭）
   state.cleared_at = typeof data.cleared_at === 'string' ? data.cleared_at : undefined;
@@ -204,6 +212,7 @@ export function restoreBackup(data: Record<string, unknown>): { ok: boolean; err
     refs.customScripts.length = 0; refs.customScripts.push(...(state.customScripts as { id: string }[]));
     refs.replyRules.length = 0; refs.replyRules.push(...(state.replyRules as { id: string }[]));
     refs.campaigns.length = 0; refs.campaigns.push(...(state.campaigns as { id: string }[])); // S87
+    refs.drafts.length = 0; refs.drafts.push(...(state.drafts as { id: string }[])); // S108
     // S68 协作态按备份回放（缺失字段=清空，以备份时点为准）
     const rids = refs.readIds;
     if (rids) { rids.clear(); (state.read_ids || []).forEach((id) => rids.add(id)); }

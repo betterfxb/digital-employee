@@ -8,6 +8,17 @@ export async function POST(req: Request) {
   return ok(getRepos().scripts.create(body.category || '自定义', body.title, body.content));
 }
 
+/** PATCH /api/scripts/:id {action:'use'|'pin'|'unpin'}（S107 效果闭环：复制计一次/置顶开关；仅自定义话术） */
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const body = await req.json().catch(() => null);
+  const action = body?.action;
+  if (action !== 'use' && action !== 'pin' && action !== 'unpin') return fail('FATAL', 'action需为use/pin/unpin');
+  const repos = getRepos();
+  const s = action === 'use' ? repos.scripts.use(params.id) : repos.scripts.pin(params.id, action === 'pin');
+  if (!s) return fail('FATAL', '不存在或为内置话术', 404);
+  return ok(s);
+}
+
 /** DELETE /api/scripts/:id（S57 仅自定义软删进回收站，内置404；?restore=1 恢复） */
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const restore = new URL(req.url).searchParams.get('restore') === '1';
