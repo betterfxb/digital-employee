@@ -48,6 +48,7 @@ check(num(files.settings, 'shopNameMinLen') < num(files.settings, 'shopNameMaxLe
 check(num(files.settings, 'passwordMinLen') >= 6, 'settings密码长≥6');
 check(files.settings.includes('#1A1A18'), 'settings默认主题在候选内');
 check(num(files.assist, 'revisitDays') >= 7 && num(files.assist, 'revisitDays') <= 180, 'assist.revisitDays 7-180（S129）');
+check(num(files.settings, 'weeklyGoalMax') >= 100000, 'settings.weeklyGoalMax ≥10万（S133 周目标上限）');
 check((files.compliance.match(/name:/g) || []).length >= 5, 'compliance规则≥5条（S130）');
 check(files.compliance.includes('why:') && files.compliance.includes('fix:') && !files.compliance.includes("why: ''") && !files.compliance.includes("fix: ''"), 'compliance每条带理由与建议（S130）');
 // 路由审计：无参GET + 无force-dynamic = 构建期静态快照，内存态读接口必挂（S12教训）

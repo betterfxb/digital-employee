@@ -7,6 +7,7 @@ import { downloadCsv } from '@/lib/csv';
 import { engagementPct, topHot, lowWarn } from '@/lib/videoStats';
 import { buildFunnel, funnelDrop } from '@/lib/funnel'; // S124
 import { attribution } from '@/lib/attribution'; // S128
+import { parseDealHistory } from '@/lib/dealMath'; // S134
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
@@ -321,16 +322,21 @@ export default function Dashboard() {
           const done7 = doneF.filter((f) => (f.history || []).some((h) => h.act.indexOf('已转化') > -1 && h.at >= wkIso));
           const rev7 = done7.reduce((a, f) => a + (Number(f.amount) || 0), 0);
           const pending = followRows.filter((f) => ['待回访', '已手动回复'].includes(f.status)).length;
+          const costAll = doneF.reduce((a, f) => a + (Number(f.cost) || 0), 0);
+          const netAll = revAll - costAll; // S132 净利=收入-已记成本（没记成本的不扣）
+          const repN = doneF.filter((f) => parseDealHistory(f).n >= 2).length; // S134 按记账动作计
           const cells: [string, string, string][] = [
             ['成交总单数', String(doneF.length), '台账状态=已转化'],
             ['成交总金额', `¥${revAll.toLocaleString()}`, '金额为台账记账值'],
+            ['成交总净利', `¥${netAll.toLocaleString()}`, '收入−已记成本'],
+            ['复购客户', `${repN} 人`, doneF.length > 0 ? `占已转化 ${Math.round((repN / doneF.length) * 100)}%` : '按记账动作计'],
             ['近7天成交', `${done7.length} 单 · ¥${rev7.toLocaleString()}`, '按状态变更时间'],
             ['跟进进行中', String(pending), '待回访+已手动回复'],
           ];
           return (
-            <div className="print-block" style={{ display: 'flex', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
+            <div className="print-block" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', background: '#fff', border: '1px solid #E8E6E1', borderRadius: 4, marginBottom: 16 }}>
               {cells.map(([k, v, d], i) => (
-                <div key={k} style={{ flex: 1, padding: '14px 20px', borderLeft: i ? '1px solid #E8E6E1' : 'none', minWidth: 0 }}>
+                <div key={k} style={{ padding: '14px 20px', borderLeft: i ? '1px solid #E8E6E1' : 'none', minWidth: 0 }}>
                   <div style={{ fontSize: 12, color: '#6B6862' }}>{k}</div>
                   <div className="num" style={{ fontSize: 24, fontWeight: 700, whiteSpace: 'nowrap' }}>{v}</div>
                   <div style={{ fontSize: 11, color: '#A8A5A0' }}>{d}</div>
@@ -460,6 +466,29 @@ export default function Dashboard() {
                   <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>口径：仅计评论区登记进台账的线索（老客户名单导入无真实来源作品，已排除防虚胖）；金额=已转化记账值{totalAmt > 0 ? `，可归因成交合计 ¥${totalAmt.toLocaleString()}` : ''}</div>
                 </div>
               )}
+              {/* S134 高价值客户榜：按本机记账动作累计金额排——精力该砸在谁身上，一榜说清 */}
+              {(() => {
+                const clv = followRows
+                  .filter((f) => f.status !== '无效')
+                  .map((f) => ({ nick: f.peer_nick, ...parseDealHistory(f) }))
+                  .filter((x) => x.total > 0)
+                  .sort((a, b) => b.total - a.total)
+                  .slice(0, 8);
+                if (clv.length === 0) return null;
+                return (
+                  <div style={{ marginTop: 14, borderTop: '1px dashed #E8E6E1', paddingTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>高价值客户 <span style={{ fontSize: 11, color: '#A8A5A0', fontWeight: 400 }}>按记账动作累计 · 🔁=复购2次以上</span></div>
+                    {clv.map((c, i) => (
+                      <div key={c.nick} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', borderBottom: '1px solid #F0EEEA', fontSize: 13 }}>
+                        <span className="num" style={{ width: 22, color: i < 3 ? '#9A6B2F' : '#C8C5BE', fontWeight: 700 }}>{i + 1}</span>
+                        <a href={`/messages?peer=${encodeURIComponent(c.nick)}`} title="打开该客户档案">{c.nick}</a>
+                        {c.n >= 2 && <span title={`累计记账成交 ${c.n} 次`}>🔁</span>}
+                        <span className="num" style={{ marginLeft: 'auto', fontWeight: 700 }}>¥{c.total.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}

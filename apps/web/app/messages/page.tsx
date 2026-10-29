@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Checkbox, Drawer, Input, Popconfirm, Radio, Select, Table, Tag } from 'antd';
 import { parseRemind } from '@/lib/remind';
 import { visitDue, daysSinceTouch } from '@/lib/visitDue'; // S129
+import { parseDealHistory } from '@/lib/dealMath'; // S134
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
@@ -23,6 +24,14 @@ export default function Messages() {
   const [fsource, setFsource] = useState('v1');
   const [fsearch, setFsearch] = useState('');
   const [amtEdit, setAmtEdit] = useState<{ id: string; val: string } | null>(null);
+  const [costEdit, setCostEdit] = useState(''); // S132 抽屉内成本编辑
+  const saveCost = async (id: string) => {
+    const n = Number(costEdit);
+    if (!Number.isFinite(n) || n < 0 || costEdit.trim() === '') { flash('请输入有效成本'); return; }
+    const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cost: Math.round(n * 100) / 100 }) }).then((x) => x.json()).catch(() => null);
+    if (!r || r.code) { flash(r?.message || '记成本失败'); return; }
+    setDetail(r); flash('成本已记', true); loadFollows();
+  };
   const [ftag, setFtag] = useState('');
   const [revisitMode, setRevisitMode] = useState(false); // S129 复购到期筛选
   const [tagLib, setTagLib] = useState<string[]>([]);
@@ -160,7 +169,7 @@ export default function Messages() {
   };
   /** S49 打开线索档案 */
   const openDetail = (f: Follow) => {
-    setDetail(f); setNoteText(f.note || ''); setProfile(null);
+    setDetail(f); setNoteText(f.note || ''); setProfile(null); setCostEdit(f.cost != null ? String(f.cost) : '');
     fetch('/api/leads/profile?nick=' + encodeURIComponent(f.peer_nick)).then((r) => r.json()).then((d) => { if (d && !d.code) setProfile(d); }).catch(() => {}); // S109 360聚合
   };
   const saveNote = async () => {
@@ -227,7 +236,7 @@ export default function Messages() {
   const exportFollows = () => {
     const flat = batches.flat();
     if (flat.length === 0) { flash('暂无数据可导出'); return; }
-    downloadCsv('跟进台账.csv', ['对方', '联系方式', '状态', '下次提醒', '来源视频', '成交金额'], flat.map((f) => [f.peer_nick, f.contact || '', f.status, f.next_remind_at, f.source_video_id, f.amount ?? '']));
+    downloadCsv('跟进台账.csv', ['对方', '联系方式', '状态', '下次提醒', '来源视频', '成交金额', '成本'], flat.map((f) => [f.peer_nick, f.contact || '', f.status, f.next_remind_at, f.source_video_id, f.amount ?? '', f.cost ?? '']));
   };
   const addScript = async () => {
     if (!stitle.trim() || !scontent.trim()) { flash('请填写标题与内容'); return; }
@@ -637,6 +646,22 @@ export default function Messages() {
                 <div>来源视频：{videos.find((v) => v.id === detail.source_video_id)?.title || detail.source_video_id}</div>
                 {/* S129 最近接触：本机可信ISO事件（建档/任一操作），无任何记录不瞎猜 */}
                 <div>最近联系：{(() => { const d = daysSinceTouch(detail); return d === null ? <span style={{ color: '#A8A5A0' }}>本机无接触记录</span> : d === 0 ? <span>今天</span> : <span className="num">{d} 天前</span>; })()}{detail.status === '已转化' && visitDue(detail, assistConfig.revisitDays) && <span style={{ color: '#9A6B2F', marginLeft: 8 }}>· 超{assistConfig.revisitDays}天，该回访了</span>}</div>
+                {/* S132 成本记账：成交单记交付成本后看板出净利；S134 累计成交按本机记账动作计 */}
+                {detail.status === '已转化' && (() => {
+                  const clv = parseDealHistory(detail);
+                  const net = (detail.amount || 0) - (detail.cost || 0);
+                  return (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span>成本：</span>
+                        <Input size="small" value={costEdit} onChange={(e) => setCostEdit(e.target.value)} placeholder="给刀手的交付费等" style={{ width: 120 }} onPressEnter={() => saveCost(detail.id)} />
+                        <Button size="small" onClick={() => saveCost(detail.id)}>记成本</Button>
+                        {detail.cost != null && <span className="num" style={{ color: '#6B6862' }}>已记 ¥{detail.cost.toLocaleString()} · 净利 <b style={{ color: net < 0 ? '#B42318' : '#1F4D3A' }}>¥{net.toLocaleString()}</b></span>}
+                      </div>
+                      {clv.n > 0 && <div>累计成交：<span className="num">{clv.n} 次 · ¥{clv.total.toLocaleString()}</span>{clv.n >= 2 && <span title="同一客户多次记账成交" style={{ marginLeft: 6 }}>🔁 复购客户</span>}<span style={{ color: '#A8A5A0', fontSize: 11, marginLeft: 6 }}>按记账动作计</span></div>}
+                    </>
+                  );
+                })()}
                 {detail.contact && <div>联系方式：<span className="num">{detail.contact}</span> <Button size="small" type="text" style={{ paddingInline: 4 }} onClick={async () => { try { await navigator.clipboard.writeText(detail.contact || ''); flash('已复制联系方式', true); } catch { flash('复制失败'); } }}>复制</Button></div>}
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, margin: '16px 0 8px' }}>跟进纪要</div>

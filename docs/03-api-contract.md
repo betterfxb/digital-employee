@@ -95,6 +95,8 @@ PATCH /api/scripts/:id {action:'use'|'pin'|'unpin'} -> Script（S107 效果闭�
 GET  /api/leads/profile?nick= -> {nick,comments[](≤30),replies[](≤30),follows[],stats:{comments_n,high_n,replied_n,follows_n,done_n,amount_sum,first_touch,last_touch}}（S109 360档案跨集合聚合；first/last只用ISO可信字段，评论create_time仅展示不参与计算；缺nick→400）
 POST /api/import {kind:leads, csv} -> {created,skipped}（S118 存量客户名单：昵称必填、状态/下次提醒/金额/联系方式可选；同名活跃线索跳过=可重复导同档幂等；空状态→待回访、空提醒→明天09:00）
 POST /api/import {kind:leads} 新建行带 source:'import'（S128 归因排除标记：导入线索无真实来源作品，作品带货榜整行不计；GET /api/follows 透出该字段）
+PATCH /api/follows/:id {cost?} -> Follow（S132 成交成本 0-10亿两位舍入，净利=amount-cost 允许负；计入操作历史「记成本」）
+PATCH /api/settings {weekly_goal?} -> Settings（S133 周成交目标 0-weeklyGoalMax 整数，0=不启用今日目标卡；GET settings 透出）
 PATCH /api/follows/:id {contact?} -> Follow（S115 联系方式≤32字仅本机存储，空串=清除，计入操作历史）
 GET  /api/data/health -> {recovery:{from,at}|null}（S122 数据自愈探针：local.json损坏时启动自动从backups/最新健全快照恢复并留corrupt取证文件；recovery非空时Shell顶栏黄条提示）
 GET  /api/stats/overview -> 增 last_import_at（S125 本机最近导入成功时刻，POST /api/import 成功时盖戳；新鲜度提醒与首跑引导的判定源，非平台字段）

@@ -211,6 +211,23 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
       contactOk = c1.contact === '13800001111' && c2.contact === '';
     }
     pass(contactOk, 'S115 联系方式PATCH往返（测后清回）');
+    // S132 成本往返：记成本→校验（含小数舍入）→清零（此行为冒烟产物行，清零即净）
+    let costOk = false;
+    if (fl) {
+      const k1 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cost: 100.456 }) }); return rr.json(); })();
+      const k2 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cost: 0 }) }); return rr.json(); })();
+      const kBad = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cost: -5 }) }); return { s: rr.status }; })();
+      costOk = k1.cost === 100.46 && k2.cost === 0 && kBad.s === 400;
+    }
+    pass(costOk, 'S132 成本PATCH往返（两位舍入/清零/负值拒）');
+    // S133 周目标往返：记原值→设888888→验证→复原（自恢复纪律，双轮幂等）
+    {
+      const g0 = (await get('/api/settings')).j.weekly_goal;
+      const g1 = await patch('/api/settings', { weekly_goal: 888888 });
+      const g2 = await patch('/api/settings', { weekly_goal: -1 });
+      const g3 = await patch('/api/settings', { weekly_goal: g0 === undefined ? 0 : g0 });
+      pass(g1.s === 200 && g1.j.weekly_goal === 888888 && g2.s === 400 && g3.s === 200 && (await get('/api/settings')).j.weekly_goal === (g0 || 0), 'S133 weekly_goal往返+负值拒（测后复原）');
+    }
     // S80 本地自动备份轮转三端点
     const bl = await get('/api/data/backups');
     pass(bl.s === 200 && Array.isArray(bl.j.list) && bl.j.keep === 14, 'S80 backups list 结构');

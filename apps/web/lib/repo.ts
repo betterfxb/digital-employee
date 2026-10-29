@@ -23,7 +23,7 @@ export interface CommentRepo {
   setIntent(id: string, patch: IntentPatch): Record<string, unknown> | null;
   exists(id: string): boolean;
 }
-export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string; contact?: string }): Follow | null }
+export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string; contact?: string; cost?: number }): Follow | null }
 export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor; update(id: string, patch: { play?: number; like?: number; remark?: string }): Competitor | null }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
@@ -36,7 +36,7 @@ export interface AccountRepo { list(): Account[]; getActive(): string; getActive
 export interface TaskRepo { isPaused(type: string): boolean; setPaused(type: string, paused: boolean): void; lastRun(type: string): string | null }
 export interface SettingsRepo {
   get(): Record<string, unknown>;
-  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; desktop_autostart?: boolean; auto_config?: unknown; comment_views?: unknown }): Record<string, unknown>;
+  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; desktop_autostart?: boolean; weekly_goal?: number; auto_config?: unknown; comment_views?: unknown }): Record<string, unknown>;
   /** S69 设置/取消访问密码（pw='' → 清除），返回 changed_at 或 null */
   setAccessPassword(pw: string): string | null;
 }
@@ -89,12 +89,14 @@ const memory: Repos = {
       const acts: string[] = [];
       if (patch.status !== undefined && patch.status !== f.status) acts.push(`状态改为「${patch.status}」`);
       if (patch.amount !== undefined) acts.push(`记成交 ¥${patch.amount}`);
+      if (patch.cost !== undefined) acts.push(`记成本 ¥${patch.cost}`); // S132
       if (patch.tags !== undefined) acts.push(`标签更新为「${patch.tags.join('、') || '无'}」`);
       if (patch.note !== undefined) acts.push('更新跟进纪要');
       if (patch.next_remind_at !== undefined && patch.next_remind_at !== f.next_remind_at) acts.push(`提醒时间改为「${patch.next_remind_at}」`);
       if (patch.contact !== undefined && patch.contact !== f.contact) acts.push('更新联系方式'); // S115
       if (patch.status !== undefined) f.status = patch.status;
       if (patch.amount !== undefined) f.amount = patch.amount;
+      if (patch.cost !== undefined) f.cost = patch.cost; // S132
       if (patch.tags !== undefined) f.tags = patch.tags;
       if (patch.note !== undefined) f.note = patch.note;
       if (patch.next_remind_at !== undefined) f.next_remind_at = patch.next_remind_at;
@@ -148,11 +150,12 @@ const memory: Repos = {
   settings: {
     get: () => {
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, weekly_goal: settings.weekly_goal, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
     },
     update: (patch) => {
       if (typeof patch.service_name === 'string') settings.service_name = patch.service_name;
       if (typeof patch.font_size === 'number') settings.font_size = patch.font_size;
+      if (typeof patch.weekly_goal === 'number') settings.weekly_goal = patch.weekly_goal; // S133
       if (typeof patch.theme_color === 'string') settings.theme_color = patch.theme_color;
       if (Array.isArray(patch.price_list)) settings.price_list = patch.price_list as { tier: string; price: string }[];
       if (typeof patch.auto_reply_enabled === 'boolean') settings.auto_reply_enabled = patch.auto_reply_enabled;
@@ -161,7 +164,7 @@ const memory: Repos = {
       if (patch.comment_views !== undefined) settings.comment_views = sanitizeViews(patch.comment_views); // S93
       persistCollections();
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, weekly_goal: settings.weekly_goal, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
     },
     // S69 设置/取消访问密码（scrypt哈希，原文永不落盘）
     setAccessPassword: (pw) => {

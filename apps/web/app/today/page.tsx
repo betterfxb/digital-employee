@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { isDue, daysUntilExpiry, todayKey } from '@/lib/remind';
 import { visitDue } from '@/lib/visitDue'; // S129
+import { sumWeekDone } from '@/lib/dealMath'; // S133
 import { assistConfig } from '@/config/assist.config';
 
 /**
@@ -11,7 +12,7 @@ import { assistConfig } from '@/config/assist.config';
  * 基础版全可用——这是操作清单，不是洞察分析（区别于专业版机会雷达）。
  */
 type CommentLite = { id: string; user_nick: string; intent: string; is_read_local: boolean };
-type FollowLite = { id: string; peer_nick: string; status: string; next_remind_at: string; amount?: number; created_at?: string; history?: { at: string }[] };
+type FollowLite = { id: string; peer_nick: string; status: string; next_remind_at: string; amount?: number; created_at?: string; cost?: number; history?: { at: string; act: string }[] };
 type LicLite = { mode?: string; valid?: boolean; expires_at?: string | null; features?: string[] };
 
 const DAY = 86_400_000;
@@ -23,6 +24,7 @@ export default function Today() {
   const [drafts, setDrafts] = useState(0);
   const [lic, setLic] = useState<LicLite | null>(null);
   const [lastImport, setLastImport] = useState<string | null>(null); // S125
+  const [goal, setGoal] = useState(0); // S133 周成交目标（0=不显卡）
 
   const load = () => {
     setLoading(true);
@@ -32,12 +34,14 @@ export default function Today() {
       fetch('/api/drafts?status=pending').then((r) => r.json()).catch(() => ({ items: [] })),
       fetch('/api/license/status').then((r) => r.json()).catch(() => null),
       fetch('/api/stats/overview').then((r) => r.json()).catch(() => null),
-    ]).then(([c, f, d, l, ov]) => {
+      fetch('/api/settings').then((r) => r.json()).catch(() => null),
+    ]).then(([c, f, d, l, ov, st]) => {
       setComments(c.items || []);
       setFollows(f.items || []);
       setDrafts((d.items || []).length);
       setLic(l);
       setLastImport(typeof ov?.last_import_at === 'string' ? ov.last_import_at : null);
+      setGoal(Number(st?.weekly_goal) || 0);
       setLoading(false);
     });
   };
@@ -116,6 +120,23 @@ export default function Today() {
                   <div style={{ fontSize: 12, color: '#8A8781', marginTop: 2 }}>{ui.s}</div>
                 </div>
                 <a href="/dashboard?import=1" style={{ fontSize: 12, color: ui.urgent ? '#1A1A18' : '#A8A5A0', border: '1px solid #D8D5CF', borderRadius: 4, padding: '4px 10px', whiteSpace: 'nowrap' }}>去导入</a>
+              </div>
+            );
+          })()}
+          {/* S133 周目标进度（settings.weekly_goal>0 才显）；口径=本周状态改已转化的台账现值求和 */}
+          {goal > 0 && (() => {
+            const wk = sumWeekDone(follows);
+            const pct = Math.min(100, Math.round((wk.amount / goal) * 100));
+            return (
+              <div style={{ border: '1px solid #E5E2DC', background: '#fff', borderRadius: 8, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div className="num" style={{ fontSize: 22, fontWeight: 700, color: pct >= 100 ? '#1F4D3A' : '#1A1A18', minWidth: 60, textAlign: 'center' }}>{pct}%</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>本周目标</div>
+                  <div style={{ height: 8, background: '#F0EEEA', borderRadius: 4, margin: '6px 0 4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: pct >= 100 ? '#1F4D3A' : '#9A6B2F', transition: 'width .3s' }} />
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8A8781' }}>已成交 ¥{wk.amount.toLocaleString()}（{wk.n} 单）/ 目标 ¥{goal.toLocaleString()}{pct >= 100 ? ' · 达标🎉' : ''}</div>
+                </div>
               </div>
             );
           })()}

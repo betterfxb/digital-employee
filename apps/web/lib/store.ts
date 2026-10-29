@@ -10,7 +10,7 @@ export const allReadVideos = new Set<string>();
 /** 意图/忽略覆盖 {commentId: {intent?, ignore?}} */
 export const intentOverrides = new Map<string, { intent?: string; ignore?: boolean }>();
 /** 跟进台账 */
-export const follows: { id: string; peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number; created_at?: string; tags?: string[]; note?: string; contact?: string; source?: 'import'; history?: { at: string; act: string }[] }[] = [
+export const follows: { id: string; peer_nick: string; source_video_id: string; next_remind_at: string; status: string; amount?: number; created_at?: string; tags?: string[]; note?: string; contact?: string; cost?: number; source?: 'import'; history?: { at: string; act: string }[] }[] = [
   { id: 'f1', peer_nick: '刀友老陈', source_video_id: 'v1', next_remind_at: '今天 18:00', status: '待回访' },
   { id: 'f2', peer_nick: '熬夜选手Lin', source_video_id: 'v1', next_remind_at: '明天', status: '已手动回复' },
 ];
@@ -56,6 +56,8 @@ export const settings = {
   password_hash: null as string | null,
   /** S74 评论自动回复总开关（三重门之一，默认关） */
   auto_reply_enabled: false as boolean,
+  /** S133 周成交目标（元，0=不启用今日目标进度卡） */
+  weekly_goal: 0 as number,
   /** S104 开机自启（桌面壳主进程跟随此标志管理登录项；浏览器版无效果是正常） */
   desktop_autostart: false as boolean,
   /** S75 自动化统一配置原始对象（读取一律经mergeAutoCfg规范化） */

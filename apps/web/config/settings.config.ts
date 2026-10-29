@@ -29,6 +29,8 @@ export const settingsConfig = {
   serviceNameMaxLen: 30,
   /** 新密码最小长度 | 默认：6 */
   passwordMinLen: 6,
+  /** S133 周成交目标上限（元）| 默认：1000万 | 联动：0=不启用今日目标卡 */
+  weeklyGoalMax: 10000000,
 } as const;
 
 export type SettingsConfig = typeof settingsConfig;

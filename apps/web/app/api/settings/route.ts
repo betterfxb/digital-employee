@@ -36,6 +36,10 @@ export async function PATCH(req: Request) {
     if (!settingsConfig.themePresets.some((t) => t.value === body.theme_color)) return fail('FATAL', '主题色不在候选内');
   }
   if (body.auto_reply_enabled !== undefined && typeof body.auto_reply_enabled !== 'boolean') return fail('FATAL', 'auto_reply_enabled需为布尔');
+  if (body.weekly_goal !== undefined) {
+    const g = Number(body.weekly_goal);
+    if (!Number.isInteger(g) || g < 0 || g > settingsConfig.weeklyGoalMax) return fail('FATAL', `周目标需为0-${settingsConfig.weeklyGoalMax}的整数（0=不启用）`);
+  }
   if (body.desktop_autostart !== undefined && typeof body.desktop_autostart !== 'boolean') return fail('FATAL', 'desktop_autostart需为布尔'); // S104
   if (body.auto_config !== undefined && (!body.auto_config || typeof body.auto_config !== 'object')) return fail('FATAL', 'auto_config需为对象');
   if (body.comment_views !== undefined && !Array.isArray(body.comment_views)) return fail('FATAL', 'comment_views需为数组'); // S93
@@ -48,12 +52,13 @@ export async function PATCH(req: Request) {
       }
     }
   }
-  const patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; desktop_autostart?: boolean; auto_config?: unknown; comment_views?: unknown } = {};
+  const patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; desktop_autostart?: boolean; weekly_goal?: number; auto_config?: unknown; comment_views?: unknown } = {};
   if (body.service_name !== undefined) patch.service_name = String(body.service_name).trim();
   if (body.font_size !== undefined) patch.font_size = Number(body.font_size);
   if (body.theme_color !== undefined) patch.theme_color = body.theme_color;
   if (body.price_list !== undefined) patch.price_list = (body.price_list as { tier: string; price: string }[]).map((r) => ({ tier: r.tier.trim(), price: r.price.trim() }));
   if (body.auto_reply_enabled !== undefined) patch.auto_reply_enabled = body.auto_reply_enabled;
+  if (body.weekly_goal !== undefined) patch.weekly_goal = Number(body.weekly_goal); // S133
   if (body.desktop_autostart !== undefined) patch.desktop_autostart = body.desktop_autostart; // S104
   if (body.auto_config !== undefined) patch.auto_config = body.auto_config;
   if (body.comment_views !== undefined) patch.comment_views = body.comment_views; // S93

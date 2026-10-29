@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -275,6 +275,32 @@ check(scanText('你好，跑刀服务按约定交付，拍小窗口下单即可'
 check(scanText('包赢绝无封号，加我微信详聊').length >= 2, 'compliance 承诺词族+导流词族双命中（同族去重为一条）');
 check(scanText('').length === 0 && scanText(null).length === 0, 'compliance 空输入安全');
 check(complianceConfig.rules.every((r) => { try { new RegExp(r.pat); return true; } catch { return false; } }), 'compliance 全部规则正则可编译');
+
+// 25) S133/S134 经营账纯函数
+const { weekRange, sumWeekDone, parseDealHistory } = require('./.tmp-crypto/lib/dealMath.js');
+const wr = weekRange(new Date(2026, 9, 29, 15, 30).getTime()); // 周四下午
+const wrD = new Date(wr.start);
+check(wrD.getDay() === 1 && wrD.getHours() === 0 && wr.end - wr.start === 7 * 86400000, 'week 周界=本地周一00:00起7天');
+const wj = weekRange(new Date(2027, 0, 1, 9, 0).getTime()); // 跨年后周五
+check(new Date(wj.start).getDay() === 1 && wj.start <= new Date(2027, 0, 1).getTime() && wj.start >= new Date(2026, 11, 21).getTime(), 'week 跨年元旦归上周（12-28周一起）');
+const NOW2 = new Date(2026, 9, 29).getTime();
+const inWk = new Date(weekRange(NOW2).start + 3600000).toISOString();
+const outWk = new Date(weekRange(NOW2).start - 3600000).toISOString();
+const wm = [
+  { status: '已转化', amount: 298, history: [{ at: inWk, act: '状态改为「已转化」' }] },
+  { status: '已转化', amount: 100, history: [{ at: outWk, act: '状态改为「已转化」' }] },
+  { status: '已转化', amount: 50, history: [{ at: inWk, act: '更新跟进纪要' }] },
+  { status: '待回访', amount: 1, history: [{ at: inWk, act: '状态改为「已转化」' }] },
+];
+const sw = sumWeekDone(wm, NOW2);
+check(sw.n === 1 && sw.amount === 298, 'weekSum 只计本周状态转已转化（旧周/非状态act/非已转化状态均排除）');
+check(parseDealHistory({ status: '已转化', history: [{ at: inWk, act: '记成交 ¥298' }, { at: inWk, act: '状态改为「已转化」；记成交 ¥100' }] }).n === 2, 'clv 合并动作按「；」拆段计数');
+const clv2 = parseDealHistory({ status: '已转化', amount: 398, history: [{ at: inWk, act: '记成交 ¥298' }, { at: inWk, act: '记成交 ¥100' }] });
+check(clv2.total === 398, 'clv 累计金额求和');
+check(parseDealHistory({ status: '已转化', history: [{ at: inWk, act: '记成交¥abc' }] }).n === 0, 'clv 脏动作跳过不炸');
+const clv3 = parseDealHistory({ status: '已转化', amount: 50 });
+check(clv3.n === 1 && clv3.total === 50, 'clv 无动作史但已转化有金额=按现值记1次（create即成交兜底）');
+check(parseDealHistory({ status: '待回访', amount: 50 }).n === 0, 'clv 非已转化不算成交');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

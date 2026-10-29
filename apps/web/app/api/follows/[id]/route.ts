@@ -5,12 +5,18 @@ import { assistConfig } from '@/config/assist.config';
 /** PATCH /api/follows/:id {status?, amount?, tags?, note?, next_remind_at?}（S43记账+S48标签+S49纪要+S65提醒时间；至少一项） */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const body = await req.json().catch(() => null);
-  if (!body?.status && body?.amount === undefined && !body?.tags && body?.note === undefined && !body?.next_remind_at && body?.contact === undefined) return fail('FATAL', '缺少 status/amount/tags/note/next_remind_at/contact');
+  if (!body?.status && body?.amount === undefined && body?.cost === undefined && !body?.tags && body?.note === undefined && !body?.next_remind_at && body?.contact === undefined) return fail('FATAL', '缺少 status/amount/cost/tags/note/next_remind_at/contact');
   if (body.status && !assistConfig.followStatuses.includes(body.status)) return fail('FATAL', `状态非法，仅支持 ${assistConfig.followStatuses.join('/')}`);
   if (body.amount !== undefined) {
     const n = Number(body.amount);
     if (!Number.isFinite(n) || n < 0 || n > 1_000_000_000) return fail('FATAL', '成交金额需为0-10亿的数字');
     body.amount = Math.round(n * 100) / 100;
+  }
+  // S132 成本：同金额口径；净利=amount-cost允许为负（亏损如实显示）
+  if (body.cost !== undefined) {
+    const n = Number(body.cost);
+    if (!Number.isFinite(n) || n < 0 || n > 1_000_000_000) return fail('FATAL', '成本需为0-10亿的数字');
+    body.cost = Math.round(n * 100) / 100;
   }
   // S48 标签校验：≤10个、每个1-8字、去空白去重
   if (body.tags !== undefined) {
@@ -37,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (c.length > 32) return fail('FATAL', '联系方式最多32字');
     body.contact = c;
   }
-  const item = getRepos().follows.update(params.id, { status: body.status, amount: body.amount, tags: body.tags, note: body.note, next_remind_at: body.next_remind_at, contact: body.contact });
+  const item = getRepos().follows.update(params.id, { status: body.status, amount: body.amount, cost: body.cost, tags: body.tags, note: body.note, next_remind_at: body.next_remind_at, contact: body.contact });
   if (!item) return fail('FATAL', '跟进不存在', 404);
   return ok(item);
 }
