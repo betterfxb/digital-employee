@@ -85,6 +85,15 @@ export default function Settings() {
     if (!r || r.code) { message.error(r?.message || '备份失败'); return; }
     message.success('已备份一份到本机 data/backups/'); loadBacks();
   };
+  /** S141 备份演练：验证最近/指定备份的可恢复性（健全+逐集合比数，备份比当前多=流失嫌疑） */
+  const [vrfy, setVrfy] = useState<{ name: string; sane: boolean; parseable: boolean; lostTotal: number; diff: { key: string; label: string; now: number; snap: number; lost: number }[] } | null>(null);
+  const [vOpen, setVOpen] = useState(false);
+  const verifyBackup = (name?: string) => {
+    fetch('/api/data/backups/verify' + (name ? '?name=' + encodeURIComponent(name) : '')).then((x) => x.json()).then((j) => {
+      if (j.code) { message.error(j.message); return; }
+      setVrfy(j); setVOpen(true);
+    }).catch(() => message.error('验证请求失败'));
+  };
   /** S80 从本地备份恢复：下载→preview校验→走S64既有覆盖确认 */
   const restoreFromLocal = async (b: BEntry) => {
     const text = await fetch(`/api/data/backups/download?name=${encodeURIComponent(b.name)}`).then((x) => x.ok ? x.text() : Promise.reject(new Error('读取失败'))).catch(() => null);
@@ -247,6 +256,7 @@ export default function Settings() {
             <b>本地自动备份</b> <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400 }}>每天凌晨3点后系统自动存一份快照（保留最近{backs?.keep ?? 14}份），防文件损坏/误恢复</span>
             <div style={{ display: 'flex', gap: 8, margin: '10px 0' }}>
               <Button size="small" onClick={runBackupNow}>立即备份一份</Button>
+              <Button size="small" onClick={() => verifyBackup()}>验证最近备份</Button>
               <Button size="small" type="text" onClick={loadBacks}>刷新</Button>
               {backs?.last_auto && <span style={{ fontSize: 12, color: '#6B6862', alignSelf: 'center' }}>最近自动：{backs.last_auto}</span>}
             </div>
@@ -258,8 +268,9 @@ export default function Settings() {
                 { title: '文件', dataIndex: 'name', key: 'n', render: (v: string, b: BEntry) => <span><Tag color={b.kind === 'auto' ? 'blue' : 'green'}>{b.kind === 'auto' ? '自动' : '手动'}</Tag>{v}</span> },
                 { title: '大小', dataIndex: 'size', key: 's', width: 80, render: (v: number) => `${Math.max(1, Math.round(v / 1024))} KB` },
                 { title: '时间', dataIndex: 'mtime', key: 'm', width: 150, render: (v: string) => v.slice(0, 16).replace('T', ' ') },
-                { title: '操作', key: 'a', width: 150, render: (_: unknown, b: BEntry) => (
+                { title: '操作', key: 'a', width: 190, render: (_: unknown, b: BEntry) => (
                   <span style={{ display: 'inline-flex', gap: 6 }}>
+                    <Button size="small" type="link" onClick={() => verifyBackup(b.name)}>验证</Button>
                     <Button size="small" type="link" href={`/api/data/backups/download?name=${encodeURIComponent(b.name)}`}>下载</Button>
                     <Popconfirm title="用这份备份恢复？" description="当前业务数据将被整体替换，恢复前也会先弹窗让你核对数量。" okText="下一步（校验）" cancelText="取消" onConfirm={() => restoreFromLocal(b)}>
                       <Button size="small" type="link" danger>恢复</Button>
@@ -270,6 +281,32 @@ export default function Settings() {
             />
             <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>备份文件只存在你这台电脑的数据目录里；若软件已打不开，把 local.json 损坏情况告诉服务商，可用这些快照手工救回</div>
           </div>
+          {/* S141 备份演练结果 */}
+          <Modal title={`备份验证 · ${vrfy?.name ?? ''}`} open={vOpen} onCancel={() => setVOpen(false)} footer={<Button type="primary" onClick={() => setVOpen(false)}>知道了</Button>} width={460}>
+            {vrfy && (
+              <div style={{ fontSize: 13 }}>
+                {!vrfy.parseable ? (
+                  <div style={{ color: '#B42318', fontWeight: 600, marginBottom: 10 }}>⛔ 这份备份文件已损坏（不是合法JSON）——不可用于恢复，建议立即新备份一份</div>
+                ) : (
+                  <div style={{ color: vrfy.sane ? '#1F4D3A' : '#B42318', fontWeight: 600, marginBottom: 10 }}>{vrfy.sane ? '✅ 结构健全，可用于恢复' : '⚠ 缺核心集合，不建议用于恢复'}</div>
+                )}
+                {vrfy.lostTotal > 0 && (
+                  <div style={{ color: '#B42318', background: '#FBF1F0', border: '1px solid #E3B9B4', borderRadius: 4, padding: '8px 12px', marginBottom: 10 }}>
+                    数据可能在流失：备份里比当前共多出 {vrfy.lostTotal} 条。业务数据正常只会增不会删——请先别用这份覆盖恢复，把两侧数量截图发服务商排查。
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {vrfy.diff.map((d) => (
+                    <div key={d.key} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F0EEEA', padding: '4px 2px' }}>
+                      <span>{d.label}</span>
+                      <span className="num" style={{ color: d.lost > 0 ? '#B42318' : '#6B6862' }}>当前 {d.now} · 备份 {d.snap}{d.lost > 0 ? ` · 少 ${d.lost}` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 10 }}>备份比当前少=备份后又新增了数据，属正常；备份比当前多=异常，重点排查</div>
+              </div>
+            )}
+          </Modal>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>价目表{feats !== null && !hasFeature(feats, 'quote') && <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400, marginLeft: 8 }}>🔒专业版</span>}</b>
             {feats !== null && !hasFeature(feats, 'quote') ? (

@@ -43,3 +43,11 @@ export function parseDealHistory(f: MathFollow): { n: number; total: number } {
   if (n === 0 && f.status === '已转化' && (Number(f.amount) || 0) > 0) return { n: 1, total: Number(f.amount) };
   return { n, total };
 }
+
+/** S142 客户分层：A=累计≥high元或成交≥2次 💎 / B=有成交未达档 ✅ / C=其余 🌱（纯按台账可信动作计） */
+export function tierOf(f: MathFollow, high: number): 'A' | 'B' | 'C' {
+  const clv = parseDealHistory(f);
+  if (clv.n >= 2 || clv.total >= high) return 'A';
+  if (clv.n >= 1) return 'B';
+  return 'C';
+}

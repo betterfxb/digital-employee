@@ -25,3 +25,20 @@ export function isSaneState(d: unknown): boolean {
   const r = d as Record<string, unknown>;
   return Array.isArray(r.accounts) && Array.isArray(r.videos) && Array.isArray(r.comments) && !!r.tokens && typeof r.tokens === 'object';
 }
+
+/** S141 备份演练：七个业务集合计数（-1=该键非数组，结构异常） */
+export const VERIFIED_KEYS = ['accounts', 'videos', 'comments', 'follows', 'replies', 'campaigns', 'drafts'] as const;
+
+export function countsOf(d: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!d || typeof d !== 'object') return out;
+  for (const k of VERIFIED_KEYS) out[k] = Array.isArray((d as Record<string, unknown>)[k]) ? ((d as Record<string, unknown>)[k] as unknown[]).length : -1;
+  return out;
+}
+
+export interface DiffRow { key: string; now: number; snap: number; lost: number }
+
+/** 丢失=备份比当前多（业务数据无正常删除路径，多出来=流失嫌疑）；备份少=备份后又有新增，属正常漂移 */
+export function diffCounts(cur: Record<string, number>, snap: Record<string, number>): DiffRow[] {
+  return VERIFIED_KEYS.map((k) => ({ key: k, now: cur[k] ?? -1, snap: snap[k] ?? -1, lost: Math.max(0, (snap[k] ?? 0) - (cur[k] ?? 0)) }));
+}

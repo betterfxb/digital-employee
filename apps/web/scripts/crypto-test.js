@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -317,6 +317,38 @@ const { silentDue } = require('./.tmp-crypto/lib/visitDue.js');
 check(silentDue({ status: '待回访', created_at: isoAt(NOWH - 15 * 86400000) }, 14, NOWH) === true, 'silent 15天无记录=沉默');
 check(silentDue({ status: '待回访', created_at: isoAt(NOWH - 14 * 86400000) }, 14, NOWH) === false && silentDue({ status: '已手动回复', created_at: isoAt(NOWH - 20 * 86400000), history: [{ at: isoAt(NOWH) }] }, 14, NOWH) === false, 'silent 恰14天不算/有新动作即解铃');
 check(silentDue({ status: '已转化', created_at: isoAt(NOWH - 60 * 86400000) }, 14, NOWH) === false && silentDue({ status: '无效', created_at: isoAt(NOWH - 60 * 86400000) }, 14, NOWH) === false, 'silent 已转化走复购口径/无效永不满');
+
+// 27) S140 月度复盘纯函数
+const { buildMonthReview } = require('./.tmp-crypto/lib/monthly.js');
+const MNOW = new Date(2026, 9, 15, 10, 0).getTime();
+const mIso = (y, mo, dd) => new Date(y, mo, dd, 9, 0).toISOString();
+const mf = [
+  { created_at: mIso(2026, 9, 10), history: [{ at: mIso(2026, 9, 10), act: '状态改为「已转化」；记成交 ¥300' }, { at: mIso(2026, 9, 12), act: '记成交 ¥100' }] },
+  { created_at: mIso(2026, 8, 20), history: [{ at: mIso(2026, 8, 25), act: '记成交 ¥50' }, { at: mIso(2026, 9, 8), act: '记成本 ¥80' }, { at: mIso(2026, 9, 3), act: '更新跟进纪要' }] },
+  { created_at: mIso(2026, 6, 1), history: [] },
+];
+const mr = buildMonthReview(mf, MNOW);
+check(mr.month === '2026-10' && mr.prevMonth === '2026-09', 'monthly 月键与上月（10月对9月）');
+const mm = (k) => mr.metrics.find((x) => x.key === k);
+check(mm('amount').cur === 400 && mm('amount').prev === 50 && mm('deals').cur === 2 && mm('deals').prev === 1, 'monthly 成交分段计数落对月（合并动作拆段）');
+check(mm('acts').cur === 4 && mm('leads').cur === 1 && mm('leads').prev === 1 && mm('cost').cur === 80 && mm('rep').cur === 1, 'monthly 动作/线索/成本/复购逐月分桶（窗口外全弃）');
+check(buildMonthReview([], new Date(2027, 0, 5).getTime()).prevMonth === '2026-12', 'monthly 跨年1月的上月是12月');
+check(buildMonthReview(mf, MNOW).metrics.length === 6, 'monthly 六项指标齐');
+
+// 28) S141 备份演练计数比对纯函数
+const { countsOf, diffCounts } = require('./.tmp-crypto/lib/repair.js');
+const cs = countsOf({ accounts: [1, 2], videos: [], comments: [1], follows: [1, 2, 3], replies: 'x', campaigns: [], drafts: [] });
+check(cs.accounts === 2 && cs.comments === 1 && cs.follows === 3 && cs.replies === -1, 'countsOf 七集合计数（非数组记-1）');
+const df1 = diffCounts({ accounts: 1, videos: 0, comments: 0, follows: 2, replies: 0, campaigns: 0, drafts: 0 }, { accounts: 1, videos: 3, comments: 1, follows: 2, replies: 0, campaigns: 0, drafts: 0 });
+check(df1.find((d) => d.key === 'videos').lost === 3 && df1.find((d) => d.key === 'comments').lost === 1 && df1.find((d) => d.key === 'follows').lost === 0, 'diffCounts 备份比当前多=流失嫌疑计数');
+check(diffCounts({ accounts: 1, videos: 3, comments: 1, follows: 2, replies: 0, campaigns: 0, drafts: 0 }, { accounts: 1, videos: 0, comments: 0, follows: 2, replies: 0, campaigns: 0, drafts: 0 }).every((d) => d.lost === 0), 'diffCounts 备份比当前少=正常漂移零警报');
+
+// 29) S142 客户分层纯函数
+const { tierOf } = require('./.tmp-crypto/lib/dealMath.js');
+check(tierOf({ status: '已转化', history: [{ at: 'x', act: '记成交 ¥600' }] }, 500) === 'A', 'tier 累计达线=A');
+check(tierOf({ status: '已转化', amount: 300 }, 500) === 'B', 'tier 成交未达线=B（含create兜底现值）');
+check(tierOf({ status: '待回访' }, 500) === 'C', 'tier 无成交=C培育');
+check(tierOf({ status: '待回访', history: [{ at: 'x', act: '记成交 ¥300' }, { at: 'x', act: '记成交 ¥300' }] }, 500) === 'A', 'tier 成交2次直升A（无视金额门槛）');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

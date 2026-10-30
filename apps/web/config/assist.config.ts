@@ -12,6 +12,8 @@ export const assistConfig = {
   revisitDays: 30,
   /** S137 沉默线索阈值（天）| 默认：14 | 范围：3–90 | 待回访/已手动回复超此天数无任何本机接触记录 */
   silentDays: 14,
+  /** S142 高价值客户门槛（累计成交元）| 默认：500 | 范围：100–100000 | 达档或成交≥2次即💎A档 */
+  tierHighAmount: 500,
   /** 蓝V指南锚点 | 联动：imEnabled=true后隐藏占位 */
   upgradeGuideUrl: '/messages#upgrade' as string,
 } as const;

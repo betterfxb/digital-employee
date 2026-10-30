@@ -49,6 +49,7 @@ check(num(files.settings, 'passwordMinLen') >= 6, 'settings密码长≥6');
 check(files.settings.includes('#1A1A18'), 'settings默认主题在候选内');
 check(num(files.assist, 'revisitDays') >= 7 && num(files.assist, 'revisitDays') <= 180, 'assist.revisitDays 7-180（S129）');
 check(num(files.assist, 'silentDays') >= 3 && num(files.assist, 'silentDays') <= 90, 'assist.silentDays 3-90（S137）');
+check(num(files.assist, 'tierHighAmount') >= 100 && num(files.assist, 'tierHighAmount') <= 100000, 'assist.tierHighAmount 100-10万（S142）');
 check(num(files.settings, 'weeklyGoalMax') >= 100000, 'settings.weeklyGoalMax ≥10万（S133 周目标上限）');
 check((files.compliance.match(/name:/g) || []).length >= 5, 'compliance规则≥5条（S130）');
 check(files.compliance.includes('why:') && files.compliance.includes('fix:') && !files.compliance.includes("why: ''") && !files.compliance.includes("fix: ''"), 'compliance每条带理由与建议（S130）');

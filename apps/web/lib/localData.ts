@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomBytes, createHash } from 'crypto';
 import { encryptToken, decryptToken } from './crypto';
-import { recoveryOrder, isSaneState } from './repair'; // S122 自愈选份/健全判定（纯函数可单测）
+import { recoveryOrder, isSaneState, countsOf } from './repair'; // S122 自愈选份/健全判定 + S141 计数（纯函数可单测）
 import { backupDir } from './autoBackup'; // S122 恢复候选目录
 import { mockAccounts, mockVideos, mockComments, seedSnapshot } from './mock';
 import type { Account, Video, CommentItem, AuthLogItem } from './types';
@@ -50,6 +50,11 @@ const state: LocalState = {
 /** S122 本进程启动时是否发生了自愈恢复（供 /api/data/health 与 Shell 黄条） */
 let recoveryInfo: { from: string; at: string } | null = null;
 export function getRecoveryInfo() { return recoveryInfo; }
+
+/** S141 备份演练：当前内存态七集合计数（内存=最新落盘态） */
+export function currentCounts(): Record<string, number> {
+  return countsOf(state);
+}
 
 /** S125 导入成功后盖时间戳并落盘（overview 端点透出，供新鲜度提醒） */
 export function markImportAt() { state.last_import_at = new Date().toISOString(); flushLocal(); }

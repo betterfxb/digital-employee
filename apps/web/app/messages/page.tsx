@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Checkbox, Drawer, Input, Popconfirm, Radio, Select, Table, Tag } from 'antd';
 import { parseRemind } from '@/lib/remind';
 import { visitDue, daysSinceTouch, silentDue } from '@/lib/visitDue'; // S129/S137
-import { parseDealHistory } from '@/lib/dealMath'; // S134
+import { parseDealHistory, tierOf } from '@/lib/dealMath'; // S134/S142
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
 import { tasksConfig } from '@/config/tasks.config';
@@ -33,6 +33,7 @@ export default function Messages() {
     setDetail(r); flash('成本已记', true); loadFollows();
   };
   const [ftag, setFtag] = useState('');
+  const [tierSel, setTierSel] = useState(''); // S142 分层筛选 A/B/C
   const [revisitMode, setRevisitMode] = useState(false); // S129 复购到期筛选
   const [silentMode, setSilentMode] = useState(false); // S137 沉默线索筛选
   const [tagLib, setTagLib] = useState<string[]>([]);
@@ -205,7 +206,7 @@ export default function Messages() {
     setRemindEdit(null); flash('提醒时间已更新', true); loadFollows();
   };
   /** S67 全选当前筛选结果（与行内复选共用 fsel） */
-  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)) && (!revisitMode || visitDue(f, assistConfig.revisitDays)) && (!silentMode || silentDue(f, assistConfig.silentDays))); // S129/S137 chip参与筛选
+  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)) && (!revisitMode || visitDue(f, assistConfig.revisitDays)) && (!silentMode || silentDue(f, assistConfig.silentDays)) && (!tierSel || tierOf(f, assistConfig.tierHighAmount) === tierSel)); // S129/S137/S142 筛选叠加
   /** S121 查重清理：按昵称分组活跃线索≥2条=疑似重复；推荐保留=已转化>有金额>最新建档；其余标无效（可逆，不引入删除） */
   const [dupMode, setDupMode] = useState(false);
   const dupGroups = (() => {
@@ -310,7 +311,7 @@ export default function Messages() {
   const followCols: ColumnsType<Follow> = [
     { title: '', key: 'sel', width: 36, render: (_, f) => <Checkbox checked={fsel.has(f.id)} onChange={() => toggleFsel(f.id)} /> },
     { title: '批次', key: 'batch', width: 80, onCell: () => ({ className: 'num' }), render: (_, f) => batchLabel.get(f.id) || '' },
-    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => { const inGroup = dupMode && (dupRedundantIds.has(f.id) || dupGroups.some((g) => g.keep.id === f.id)); return (<span>{inGroup && (dupRedundantIds.has(f.id) ? <span title="疑似重复：同名活跃线索中的次要项" style={{ marginRight: 4, opacity: 0.75 }}>⚠</span> : <span title="推荐保留项" style={{ marginRight: 4 }}>👑</span>)}{can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>}</span>); } },
+    { title: '对方', dataIndex: 'peer_nick', key: 'nick', render: (v: string, f) => { const inGroup = dupMode && (dupRedundantIds.has(f.id) || dupGroups.some((g) => g.keep.id === f.id)); const tr = f.status === '无效' ? '' : tierOf(f, assistConfig.tierHighAmount); return (<span>{inGroup && (dupRedundantIds.has(f.id) ? <span title="疑似重复：同名活跃线索中的次要项" style={{ marginRight: 4, opacity: 0.75 }}>⚠</span> : <span title="推荐保留项" style={{ marginRight: 4 }}>👑</span>)}{tr === 'A' && <span title={`高价值：累计成交≥${assistConfig.tierHighAmount}元或≥2次`} style={{ marginRight: 4 }}>💎</span>}{tr === 'B' && <span title="已成交未达高价值档" style={{ marginRight: 4 }}>✅</span>}{can('lead') ? <a onClick={() => openDetail(f)}>{v}</a> : <span>{v}</span>}</span>); } },
     { title: '联系方式', key: 'contact', width: 130, render: (_, f) => (
       <Popconfirm
         title="联系方式（电话/微信，仅存本机）"
@@ -495,6 +496,7 @@ export default function Messages() {
               <Select size="small" value={fsort} onChange={(v) => setFsort(v)} style={{ width: 106 }} options={[{ value: 'default', label: '默认顺序' }, { value: 'urgent', label: '催办紧急' }, { value: 'newest', label: '最新建档' }]} />
               <Select size="small" value={fstatus} onChange={(v) => { setFstatus(v); loadFollows(v); }} style={{ width: 110 }} options={[{ value: '', label: '全部状态' }, ...assistConfig.followStatuses.map((s) => ({ value: s, label: s }))]} />
               <Select size="small" value={ftag || undefined} onChange={(v) => setFtag(v || '')} style={{ width: 110 }} placeholder="按标签" allowClear options={tagLib.map((t) => ({ value: t, label: t }))} />
+              <Select size="small" value={tierSel || undefined} onChange={(v) => setTierSel(v || '')} style={{ width: 106 }} placeholder="客户分层" allowClear options={[{ value: 'A', label: '💎 高价值' }, { value: 'B', label: '✅ 已成交' }, { value: 'C', label: '🌱 培育中' }]} />
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
               <Button size="small" type={dupMode ? 'primary' : 'text'} onClick={() => setDupMode((v) => !v)} title="按昵称分组找重复线索，标无效不删除">查重</Button>
               <Button size="small" type={revisitMode ? 'primary' : 'text'} onClick={() => setRevisitMode((v) => !v)} title={`已转化且超${assistConfig.revisitDays}天没有接触记录的老客户`}>复购到期{(rows || []).filter((f) => visitDue(f, assistConfig.revisitDays)).length > 0 ? `(${(rows || []).filter((f) => visitDue(f, assistConfig.revisitDays)).length})` : ''}</Button>
@@ -647,6 +649,7 @@ export default function Messages() {
             <div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                 <Tag color={detail.status === '已转化' ? 'success' : detail.status === '待回访' ? 'warning' : 'default'}>{detail.status}</Tag>
+                {detail.status !== '无效' && <Tag color={tierOf(detail, assistConfig.tierHighAmount) === 'A' ? 'gold' : 'default'} title={`分层按累计成交计（高价值线 ¥${assistConfig.tierHighAmount}）`}>{tierOf(detail, assistConfig.tierHighAmount) === 'A' ? '💎 高价值' : tierOf(detail, assistConfig.tierHighAmount) === 'B' ? '✅ 已成交' : '🌱 培育中'}</Tag>}
                 {(detail.tags || []).map((t) => <Tag key={t} color="processing">{t}</Tag>)}
                 {detail.amount != null && <Tag color="gold">成交 ¥{detail.amount.toLocaleString()}</Tag>}
               </div>

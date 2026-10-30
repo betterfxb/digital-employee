@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { buildMonthReview } from '@/lib/monthly'; // S140
 import { App, Button, Modal, Segmented } from 'antd';
 import { downloadCsv } from '@/lib/csv';
 import { buildReport, type Report } from '@/lib/report';
@@ -16,6 +17,7 @@ export default function ReportPage() {
   const [hist, setHist] = useState<Record<string, Partial<BizSnapshot>>>({});
   /** S62 分享图（canvas 生成，微信可发的日报长图） */
   const [shareImg, setShareImg] = useState<string | null>(null);
+  const [mrows, setMrows] = useState<{ created_at?: string; history?: { at: string; act: string }[] }[] | null>(null); // S140 月度复盘源数据
 
   const snap = () => fetch('/api/report/snapshot', { method: 'POST' }).then((r) => r.json()).then((d) => setHist(d.history || {})).catch(() => {});
 
@@ -25,6 +27,7 @@ export default function ReportPage() {
       fetch('/api/comments?unread_only=0').then((r) => r.json()),
       fetch('/api/follows').then((r) => r.json()),
     ]).then(([v, c, f]) => {
+      setMrows((f.items || []) as { created_at?: string; history?: { at: string; act: string }[] }[]);
       setReport(buildReport({
         videos: (v.items || []) as Video[],
         comments: (c.items || []) as CommentItem[],
@@ -182,6 +185,39 @@ export default function ReportPage() {
             </div>
           </>
         )}
+        {/* S140 月度经营复盘：纯本机 ISO 事件月对月，与日/周报快照独立（报告生成失败不影响此块） */}
+        {mrows && (() => {
+          const mv = buildMonthReview(mrows, Date.now());
+          const fmt = (m: { cur: number; prev: number; money?: boolean }) => (m.money ? `¥${m.cur.toLocaleString()}` : `${m.cur.toLocaleString()}`);
+          const delta = (m: { cur: number; prev: number; money?: boolean }) => {
+            const d = m.cur - m.prev;
+            if (m.prev === 0 && m.cur === 0) return <span style={{ color: '#C8C5BE' }}>—</span>;
+            if (m.prev === 0) return <span style={{ color: '#1F4D3A' }}>新增</span>;
+            if (d === 0) return <span style={{ color: '#A8A5A0' }}>持平</span>;
+            const up = d > 0;
+            return <span className="num" style={{ color: up ? '#1F4D3A' : '#B4443C' }}>{up ? '▲' : '▼'} {m.money ? `¥${Math.abs(d).toLocaleString()}` : Math.abs(d).toLocaleString()}</span>;
+          };
+          const amt = mv.metrics.find((x) => x.key === 'amount')!;
+          const acts = mv.metrics.find((x) => x.key === 'acts')!;
+          return (
+            <div className="card" style={{ padding: 18, marginTop: 16 }}>
+              <b>月度经营复盘</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>{mv.month} vs {mv.prevMonth} · 全本机操作事件，与平台播放数据无关</span>
+              <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                {mv.metrics.map((m) => (
+                  <div key={m.key} style={{ border: '1px solid #F0EEEA', borderRadius: 6, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 12, color: '#6B6862' }}>{m.label}</div>
+                    <div className="num" style={{ fontSize: 20, fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(m)}</div>
+                    <div style={{ fontSize: 11, marginTop: 2 }}>上月 {m.money ? `¥${m.prev.toLocaleString()}` : m.prev.toLocaleString()} · <span style={{ whiteSpace: 'nowrap' }}>{delta(m)}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 12.5, color: '#6B6862', background: '#FCFBF9', border: '1px solid #E8E6E1', borderRadius: 4, padding: '8px 12px', marginTop: 12 }}>
+                {mv.month.slice(5)}月成交 ¥{amt.cur.toLocaleString()}，比上月{amt.cur > amt.prev ? `多 ¥${(amt.cur - amt.prev).toLocaleString()}` : amt.cur < amt.prev ? `少 ¥${(amt.prev - amt.cur).toLocaleString()}` : '持平'}；跟进动作 {acts.cur} 次（上月 {acts.prev} 次）——{acts.cur > acts.prev ? '这个月更勤' : acts.cur < acts.prev ? '节奏慢下来了' : '动作量持平'}。
+              </div>
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>口径：成交/成本取台账动作记录值；每客户历史保留最近20条，久远流水可能被截断——宁漏不造</div>
+            </div>
+          );
+        })()}
         {/* S62 分享图预览与下载 */}
         <Modal title="分享图预览（可直接保存发微信）" open={!!shareImg} onCancel={() => setShareImg(null)} footer={null} width={460}>
           {shareImg && (
