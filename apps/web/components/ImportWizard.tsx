@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { App, Button, Modal, Radio, Upload } from 'antd';
 import { downloadCsv } from '@/lib/csv';
-import { decodeTextBuffer, parseCsv, missingCols, missingColError } from '@/lib/csvParse';
+import { decodeTextBuffer, parseCsv, missingCols, missingColError, detectKind } from '@/lib/csvParse';
 
 /**
  * S32 导入向导：模板下载 → 拖拽上传 → 结果明细（建/更/跳+原因）
@@ -22,8 +22,9 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [result, setResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
+  const [autoSwitched, setAutoSwitched] = useState(false); // S145 本次导入发生过类型自动纠正
 
-  const close = () => { setStep(0); setResult(null); setErr(''); setBusy(false); onClose(); };
+  const close = () => { setStep(0); setResult(null); setErr(''); setBusy(false); setAutoSwitched(false); onClose(); };
 
   const handleFile = async (file: File) => {
     setErr('');
@@ -33,16 +34,21 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
     if (!csv.trim()) { setErr('文件是空的，请用模板填写后再上传'); return; }
     const rows = parseCsv(csv); // S79 逗号/制表符自动识别（Excel复制粘贴=TSV也能进）
     const head = rows[0] || [];
-    const missing = missingCols(kind, head);
+    // S145 表头自动识别：选错类型直接纠偏（识别不出=null 沿用手动选），结果页如实注明
+    const detected = detectKind(head);
+    const useKind = detected ?? kind;
+    if (detected && detected !== kind) setKind(detected);
+    setAutoSwitched(!!detected && detected !== kind);
+    const missing = missingCols(useKind, head);
     if (missing.length > 0) {
-      setErr(missingColError(`${TPL[kind].label}文件`, missing, head));
+      setErr(missingColError(`${TPL[useKind].label}文件`, missing, head));
       return;
     }
     const n = rows.length - 1;
     if (n > 200) { setErr(`单次最多 200 行，本文件 ${n} 行，请拆分后再传`); return; }
     setBusy(true);
     const r = await fetch('/api/import', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, csv }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: useKind, csv }),
     }).then((x) => x.json()).catch(() => null);
     setBusy(false);
     if (!r || r.code) { setErr(r?.message || '导入失败，请重试'); return; }
@@ -81,6 +87,11 @@ export function ImportWizard({ open, onClose, onDone }: { open: boolean; onClose
           <div style={{ fontSize: 13, color: '#6B6862', marginTop: 4 }}>
             条{TPL[kind].label}已入库{result?.updated ? `（其中更新 ${result.updated} 条）` : ''}
           </div>
+          {autoSwitched && (
+            <div style={{ fontSize: 12, color: '#4C6B57', background: '#F5FAF6', border: '1px dashed #C8D8CC', borderRadius: 4, padding: '6px 12px', marginTop: 10 }}>
+              已识别为【{TPL[kind].label}数据】自动导入——表头说了算，不用再操心选类型
+            </div>
+          )}
           {result && result.skipped > 0 && (
             <div style={{ fontSize: 12, color: '#8A6D1F', background: '#FBF3E4', border: '1px solid #EADFBE', borderRadius: 4, padding: '8px 12px', marginTop: 12, textAlign: 'left' }}>
               {kind === 'leads'

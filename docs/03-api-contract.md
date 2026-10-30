@@ -100,6 +100,7 @@ PATCH /api/settings {weekly_goal?} -> Settings（S133 周成交目标 0-weeklyGo
 PATCH /api/follows/:id {touch?} -> Follow（S138 记了联系 1-20字，只追加history动作「记了联系：x」刷新最近接触时间，不改业务字段——沉默/复购提醒的消除入口）
 PATCH /api/follows/:id {contact?} -> Follow（S115 联系方式≤32字仅本机存储，空串=清除，计入操作历史）
 GET  /api/data/backups/verify[?name=] -> {name,sane,parseable,lostTotal,diff[{key,label,now,snap,lost}]}（S141 备份演练：白名单读备份→健全验身→与内存态逐集合比数；lost=备份比当前多的条数=流失嫌疑，少=正常漂移）
+GET  /api/data/health -> 增 writable/counts/backups{count,latest}/last_import_at（S146 系统健康自检读数，供设置页体检单 evaluateHealth 纯函数判定 8 项 ✓⚠✗）
 GET  /api/data/health -> {recovery:{from,at}|null}（S122 数据自愈探针：local.json损坏时启动自动从backups/最新健全快照恢复并留corrupt取证文件；recovery非空时Shell顶栏黄条提示）
 GET  /api/stats/overview -> 增 last_import_at（S125 本机最近导入成功时刻，POST /api/import 成功时盖戳；新鲜度提醒与首跑引导的判定源，非平台字段）
 能力键新增 marketing（S83）：专业版专属；基础版白名单不含 → /marketing 页与侧栏显示ProLock（API按既有策略开放）；发证脚本无需改（白名单机制自动锁）

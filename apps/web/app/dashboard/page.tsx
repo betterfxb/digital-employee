@@ -9,6 +9,7 @@ import { buildFunnel, funnelDrop } from '@/lib/funnel'; // S124
 import { attribution } from '@/lib/attribution'; // S128
 import { parseDealHistory } from '@/lib/dealMath'; // S134
 import { buildHeartbeat } from '@/lib/heartbeat'; // S136
+import { buildKwMoney } from '@/lib/kwMoney'; // S144
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
@@ -526,6 +527,33 @@ export default function Dashboard() {
                   </div>
                 );
               })()}
+            </div>
+          );
+        })()}
+        {/* S144 关键词钱表：哪个词背后站着肯掏钱的客户——选题与置顶评论该埋的词，看钱下注 */}
+        {allComments.length > 0 && (() => {
+          const kw = buildKwMoney(allComments, followRows).slice(0, 8);
+          const withChain = kw.filter((r) => r.leads > 0);
+          if (kw.length === 0) return null;
+          return (
+            <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+              <b>关键词钱表</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>评论关键词 → 台账 → 成交的链路统计 · 按成交额倒序</span>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#A8A5A0', paddingBottom: 4, borderBottom: '1px solid #F0EEEA' }}>
+                  <span style={{ width: 24 }}>#</span><span style={{ flex: 1 }}>关键词</span><span style={{ width: 92, textAlign: 'right' }}>提及</span><span style={{ width: 78, textAlign: 'right' }}>进台账</span><span style={{ width: 64, textAlign: 'right' }}>成交</span><span style={{ width: 92, textAlign: 'right' }}>金额</span>
+                </div>
+                {kw.map((r, i) => (
+                  <div key={r.kw} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #F0EEEA', fontSize: 13 }}>
+                    <span className="num" style={{ width: 24, color: i < 3 && r.leads > 0 ? '#9A6B2F' : '#C8C5BE', fontWeight: 700 }}>{i + 1}</span>
+                    <a href={`/comments?kw=${encodeURIComponent(r.kw)}`} title="直达该词评论流" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.kw}</a>
+                    <span className="num" style={{ width: 92, textAlign: 'right', color: '#6B6862' }}>{r.comments}{r.hi > 0 && <span style={{ color: '#9A6B2F' }} title="其中高意向/留电话"> 意向{r.hi}</span>}</span>
+                    <span className="num" style={{ width: 78, textAlign: 'right' }}>{r.leads || '—'}</span>
+                    <span className="num" style={{ width: 64, textAlign: 'right', color: r.deals > 0 ? '#1F4D3A' : '#C8C5BE' }}>{r.deals || '—'}</span>
+                    <span className="num" style={{ width: 92, textAlign: 'right', fontWeight: 700, color: r.amount > 0 ? '#1A1A18' : '#C8C5BE' }}>{r.amount > 0 ? `¥${r.amount.toLocaleString()}` : '—'}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>口径：昵称匹配到人、按人去重记账金额（同一客户多条评论不重复计钱）；导入的老客户不进此链（无真实来源评论）{withChain.length === 0 ? ' · 暂无「评论→台账」链路数据，先在评论台登记跟进' : ''}</div>
             </div>
           );
         })()}

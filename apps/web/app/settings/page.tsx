@@ -4,6 +4,7 @@ import { App, Button, Input, Modal, Popconfirm, Slider, Switch, Table, Tag } fro
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
+import { evaluateHealth, healthVerdict } from '@/lib/healthCheck'; // S146
 
 /** S18 系统设置：店铺/服务/字体/主题/密码；调节即时预览，保存持久化并全局生效 */
 export default function Settings() {
@@ -70,6 +71,22 @@ export default function Settings() {
     setHasPw(false); setPwdAt(null); message.success('已取消访问密码');
   };
 
+  // ── S146 系统健康自检 ──
+  const [hcRows, setHcRows] = useState<{ key: string; label: string; level: 'ok' | 'warn' | 'bad'; msg: string; fix: string }[] | null>(null);
+  const [hcBusy, setHcBusy] = useState(false);
+  const runCheckup = async () => {
+    setHcBusy(true); setHcRows(null);
+    const [h, l] = await Promise.all([
+      fetch('/api/data/health').then((x) => x.json()).catch(() => null),
+      fetch('/api/license/status').then((x) => x.json()).catch(() => null),
+    ]);
+    setHcBusy(false);
+    setHcRows(evaluateHealth({
+      unreachable: !h, writable: !!h?.writable, recovery: (h?.recovery as { from: string; at: string } | null) ?? null,
+      counts: h?.counts ?? {}, backups: { count: h?.backups?.count ?? 0, latest: h?.backups?.latest ?? null },
+      lastImportAt: h?.last_import_at ?? null, lic: l && !l.code ? l : null,
+    }));
+  };
   // ── S37/S38 数据管理 ──
   const restoreRef = useRef<HTMLInputElement>(null);
   /** S64 恢复覆盖确认（preview 校验+计数 → 确认弹窗 → 才真恢复） */
@@ -194,6 +211,29 @@ export default function Settings() {
               )}
             </div>
             {hasPw && <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>启动/刷新时会先要求解锁；每个窗口标签独立解锁一次</div>}
+          </div>
+          <div className="card" style={{ padding: 18, marginTop: 16 }}>
+            <b>系统健康自检</b> <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400 }}>一键体检本机运行状况——有问题按提示处理或把结果读给服务商</span>
+            <div style={{ marginTop: 10 }}>
+              <Button size="small" type="primary" loading={hcBusy} onClick={runCheckup}>开始自检</Button>
+            </div>
+            {hcRows && (() => {
+              const v = healthVerdict(hcRows);
+              return (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: v.level === 'bad' ? '#B42318' : v.level === 'warn' ? '#8A6D1F' : '#1F4D3A', marginBottom: 8 }}>
+                    {v.level === 'bad' ? '⚠' : v.level === 'warn' ? '◔' : '✓'} {v.text}
+                  </div>
+                  {hcRows.map((r) => (
+                    <div key={r.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '5px 0', borderBottom: '1px solid #F0EEEA', fontSize: 12.5 }}>
+                      <span style={{ width: 70, flexShrink: 0, color: '#6B6862' }}>{r.label}</span>
+                      <span style={{ flex: 1, minWidth: 0, color: r.level === 'bad' ? '#B42318' : r.level === 'warn' ? '#8A6D1F' : '#1F4D3A' }}>{r.msg}</span>
+                      {r.fix && <span style={{ color: '#A8A5A0', maxWidth: 300 }}>{r.fix}</span>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>数据管理</b>

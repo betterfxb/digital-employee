@@ -103,6 +103,17 @@ export function missingColError(kindName: string, missing: string[], actualHeade
   return `${kindName}缺少必需列 ${missing.map((c) => `「${c}」`).join('')}。${aliasHint}。你文件的表头是：${actualHeader.map((h) => h.trim()).join(',') || '(空)'}`;
 }
 
+/**
+ * S145 表头自动识别导入类型：评论（需三列最严格）> 作品 > 客户名单（仅昵称最宽松）的确定性优先级。
+ * 返回 null=识别不出（保持手动选）。导入的评论文件天然也满足"客户名单"条件，故先测严格者。
+ */
+export function detectKind(headerRow: string[]): 'videos' | 'comments' | 'leads' | null {
+  const m = colMap(headerRow);
+  const order: ('videos' | 'comments' | 'leads')[] = ['comments', 'videos', 'leads'];
+  for (const k of order) if (REQUIRED_COLS[k].every((c) => m[c] !== undefined)) return k;
+  return null;
+}
+
 /** 日期归一：绝对日期（Excel常见形态）→ MM-DD；相对时间（刚刚/2小时前/昨天）原样；识别不了原样放行 */
 export function normalizeDateTime(s: string): string {
   const t = s.trim();

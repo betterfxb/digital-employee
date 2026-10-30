@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts lib/kwMoney.ts lib/healthCheck.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -349,6 +349,48 @@ check(tierOf({ status: '已转化', history: [{ at: 'x', act: '记成交 ¥600' 
 check(tierOf({ status: '已转化', amount: 300 }, 500) === 'B', 'tier 成交未达线=B（含create兜底现值）');
 check(tierOf({ status: '待回访' }, 500) === 'C', 'tier 无成交=C培育');
 check(tierOf({ status: '待回访', history: [{ at: 'x', act: '记成交 ¥300' }, { at: 'x', act: '记成交 ¥300' }] }, 500) === 'A', 'tier 成交2次直升A（无视金额门槛）');
+
+// 30) S144 关键词钱表纯函数
+const { buildKwMoney } = require('./.tmp-crypto/lib/kwMoney.js');
+const kc = [
+  { user_nick: '甲', intent: '高意向', keywords: ['多少钱', '下单'] },
+  { user_nick: '甲', intent: '高意向', keywords: ['多少钱'] },
+  { user_nick: '乙', intent: '咨询', keywords: ['多少钱'] },
+  { user_nick: '丙', intent: '高意向', keywords: ['上分'] },
+];
+const kf = [
+  { peer_nick: '甲', status: '已转化', amount: 298 },
+  { peer_nick: '乙', status: '待回访' },
+  { peer_nick: '丙', status: '已转化', amount: 999, source: 'import' }, // 导入线索不进钱链
+];
+const krows = buildKwMoney(kc, kf);
+const kQ = krows.find((r) => r.kw === '多少钱');
+check(kQ.comments === 3 && kQ.hi === 2 && kQ.leads === 2 && kQ.deals === 1 && kQ.amount === 298, 'kwmoney 同人多评去重记账（甲两评一笔成交298不重复计钱）');
+check(krows.find((r) => r.kw === '上分').leads === 0, 'kwmoney 导入线索无真实来源评论被排除');
+check(krows[0].kw === '多少钱', 'kwmoney 金额倒序首位');
+check(buildKwMoney([], []).length === 0 && buildKwMoney([{ user_nick: 'x', keywords: [] }], []).length === 0, 'kwmoney 空输入安全');
+
+// 31) S145 表头自动识别
+const { detectKind } = require('./.tmp-crypto/lib/csvParse.js');
+check(detectKind(['昵称', '评论内容', '所属视频']) === 'comments', 'detect 评论表头（别名归一后三列齐）');
+check(detectKind(['作品标题', '发布日期', '播放量']) === 'videos', 'detect 作品表头');
+check(detectKind(['昵称', '电话', '备注']) === 'leads', 'detect 客户名单（仅昵称可识别）');
+check(detectKind(['标题', '昵称', '内容', '视频标题']) === 'comments', 'detect 多型可匹配时严格者优先（评论>作品/名单）');
+check(detectKind(['日期', '销量', '备注']) === null, 'detect 认不出返回null沿用手动选');
+
+// 32) S146 体检判定纯函数
+const { evaluateHealth, healthVerdict } = require('./.tmp-crypto/lib/healthCheck.js');
+const HN = Date.UTC(2026, 9, 30, 12);
+const mkIn = (o) => ({ unreachable: false, writable: true, recovery: null, counts: { videos: 5, comments: 40, follows: 12 }, backups: { count: 3, latest: { name: 'auto-2026-10-30.json', mtime: new Date(HN - 86400000).toISOString() } }, lastImportAt: new Date(HN - 2 * 86400000).toISOString(), lic: { valid: true, mode: 'licensed', expires_at: '2027-10-01' }, now: HN, ...o });
+const good = evaluateHealth(mkIn({}));
+check(good.every((r) => r.level === 'ok') && healthVerdict(good).level === 'ok', 'healthcheck 全绿路径');
+const bad = evaluateHealth(mkIn({ writable: false, unreachable: true }));
+check(bad.filter((r) => r.level === 'bad').length === 2 && healthVerdict(bad).level === 'bad', 'healthcheck 盘不可写+失联=两项红');
+const warn = evaluateHealth(mkIn({ lastImportAt: new Date(HN - 30 * 86400000).toISOString(), lic: { valid: true, mode: 'licensed', expires_at: '2026-11-03' }, backups: { count: 0, latest: null } }));
+check(warn.some((r) => r.key === 'imp' && r.level === 'bad') && warn.some((r) => r.key === 'lic' && r.level === 'bad') && warn.some((r) => r.key === 'bcount' && r.level === 'warn'), 'healthcheck 导入30天红/授权3天红/零备份黄');
+check(healthVerdict(warn).text.indexOf('马上处理') > -1, 'healthcheck 结论优先报红');
+const rec = evaluateHealth(mkIn({ recovery: { from: 'auto-2026-10-28.json', at: new Date(HN).toISOString() } }));
+check(rec.some((r) => r.key === 'heal' && r.level === 'warn'), 'healthcheck 自愈发生过=黄条留证提醒');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

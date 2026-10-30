@@ -244,6 +244,7 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
     pass(br.s === 200 && br.j.created === true && /^manual-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(br.j.entry?.name || ''), 'S80 手动备份落盘命名规范');
     const dh = await get('/api/data/health');
     pass(dh.s === 200 && (dh.j.recovery === null || (typeof dh.j.recovery.from === 'string' && typeof dh.j.recovery.at === 'string')), 'S122 data/health 结构（recovery=null或{from,at}）');
+    pass(dh.s === 200 && dh.j.writable === true && typeof dh.j.counts?.videos === 'number' && typeof dh.j.counts?.follows === 'number' && typeof dh.j.backups?.count === 'number' && 'last_import_at' in dh.j, 'S146 health扩读数（writable/counts/backups/last_import_at）');
     // S141 备份验证：刚落的manual备份=当前态，健全且零流失（此断言必须在S80备份块之后跑）
     const bv = await get('/api/data/backups/verify');
     pass(bv.s === 200 && bv.j.sane === true && bv.j.parseable === true && Array.isArray(bv.j.diff) && bv.j.lostTotal === 0 && bv.j.diff.some((d) => d.key === 'follows' && d.label), 'S141 备份验证结构（sane+diff带中文label+零流失）');
