@@ -27,7 +27,7 @@ check(mapApiComment({ cid: 'c', text: 'hi' }).nick === '抖音用户', 'mapApiCo
 
 // 端点防漂移（douyin.config）
 const cfg = fs.readFileSync(path.join(__dirname, '..', 'config', 'douyin.config.ts'), 'utf8');
-check(cfg.includes('video/list') && cfg.includes('video/comment/list'), 'douyin.config 含数据拉取端点');
+check(cfg.includes('video/video_list') && cfg.includes('video/comment/list') && cfg.includes('platform/oauth/connect'), 'douyin.config 含数据拉取/OAuth端点（2026-10-30官方现行值）');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'PORT ALL GREEN' : `PORT ${fail} FAILED`);

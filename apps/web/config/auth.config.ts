@@ -15,7 +15,7 @@ export const authConfig = {
   /** 单租户最大绑定账号数 | 默认：5 | 范围：1–10 | 联动：超限提示解绑 */
   maxAccountsPerTenant: 5,
   /** 必选scope（按自用客服申报，改动需重审） */
-  requiredScopes: ['user_info', 'video.list', 'data'] as string[],
+  requiredScopes: (process.env.DOUYIN_SCOPES || 'user_info,video.list.bind,item.comment') as string,
   /** 授权日志保留(天) | 默认：90 | 范围：30–180 | 联动：日志页分页 */
   authLogRetentionDays: 90,
 } as const;

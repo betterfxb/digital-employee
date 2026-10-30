@@ -32,7 +32,7 @@ export function buildAuthorizeUrl(state: string): string | null {
     client_key: douyinConfig.clientKey,
     response_type: 'code',
     redirect_uri: douyinConfig.baseUrl + douyinConfig.redirectPath,
-    scope: authConfig.requiredScopes.join(','),
+    scope: authConfig.requiredScopes,
     state,
   });
   return `${douyinConfig.authUrl}?${q.toString()}`;
