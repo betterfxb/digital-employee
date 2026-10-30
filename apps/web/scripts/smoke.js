@@ -236,6 +236,14 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
       const g2 = await patch('/api/settings', { weekly_goal: -1 });
       const g3 = await patch('/api/settings', { weekly_goal: g0 === undefined ? 0 : g0 });
       pass(g1.s === 200 && g1.j.weekly_goal === 888888 && g2.s === 400 && g3.s === 200 && (await get('/api/settings')).j.weekly_goal === (g0 || 0), 'S133 weekly_goal往返+负值拒（测后复原）');
+      // S150 挂机锁往返：记原值→设15→非法拒→复原
+      {
+        const l0 = (await get('/api/settings')).j.lock_idle_minutes;
+        const l1 = await patch('/api/settings', { lock_idle_minutes: 15 });
+        const l2 = await patch('/api/settings', { lock_idle_minutes: 9999 });
+        const l3 = await patch('/api/settings', { lock_idle_minutes: l0 === undefined ? 0 : l0 });
+        pass(l1.s === 200 && l1.j.lock_idle_minutes === 15 && l2.s === 400 && l3.s === 200 && (await get('/api/settings')).j.lock_idle_minutes === (l0 || 0), 'S150 lock_idle往返+越界拒（测后复原）');
+      }
     }
     // S80 本地自动备份轮转三端点
     const bl = await get('/api/data/backups');

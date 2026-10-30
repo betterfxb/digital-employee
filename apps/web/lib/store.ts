@@ -58,6 +58,8 @@ export const settings = {
   auto_reply_enabled: false as boolean,
   /** S133 周成交目标（元，0=不启用今日目标进度卡） */
   weekly_goal: 0 as number,
+  /** S150 挂机自动锁定分钟数（0=关；仅已设访问密码时生效） */
+  lock_idle_minutes: 0 as number,
   /** S104 开机自启（桌面壳主进程跟随此标志管理登录项；浏览器版无效果是正常） */
   desktop_autostart: false as boolean,
   /** S75 自动化统一配置原始对象（读取一律经mergeAutoCfg规范化） */

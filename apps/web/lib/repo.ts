@@ -36,7 +36,7 @@ export interface AccountRepo { list(): Account[]; getActive(): string; getActive
 export interface TaskRepo { isPaused(type: string): boolean; setPaused(type: string, paused: boolean): void; lastRun(type: string): string | null }
 export interface SettingsRepo {
   get(): Record<string, unknown>;
-  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; desktop_autostart?: boolean; weekly_goal?: number; auto_config?: unknown; comment_views?: unknown }): Record<string, unknown>;
+  update(patch: { service_name?: string; font_size?: number; theme_color?: string; price_list?: unknown; auto_reply_enabled?: boolean; desktop_autostart?: boolean; weekly_goal?: number; lock_idle_minutes?: number; auto_config?: unknown; comment_views?: unknown }): Record<string, unknown>;
   /** S69 设置/取消访问密码（pw='' → 清除），返回 changed_at 或 null */
   setAccessPassword(pw: string): string | null;
 }
@@ -151,12 +151,13 @@ const memory: Repos = {
   settings: {
     get: () => {
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, weekly_goal: settings.weekly_goal, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, weekly_goal: settings.weekly_goal, lock_idle_minutes: settings.lock_idle_minutes, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
     },
     update: (patch) => {
       if (typeof patch.service_name === 'string') settings.service_name = patch.service_name;
       if (typeof patch.font_size === 'number') settings.font_size = patch.font_size;
       if (typeof patch.weekly_goal === 'number') settings.weekly_goal = patch.weekly_goal; // S133
+      if (typeof patch.lock_idle_minutes === 'number') settings.lock_idle_minutes = patch.lock_idle_minutes; // S150
       if (typeof patch.theme_color === 'string') settings.theme_color = patch.theme_color;
       if (Array.isArray(patch.price_list)) settings.price_list = patch.price_list as { tier: string; price: string }[];
       if (typeof patch.auto_reply_enabled === 'boolean') settings.auto_reply_enabled = patch.auto_reply_enabled;
@@ -165,7 +166,7 @@ const memory: Repos = {
       if (patch.comment_views !== undefined) settings.comment_views = sanitizeViews(patch.comment_views); // S93
       persistCollections();
       const acc = mockAccounts.find((a) => a.id === activeAccountId) || mockAccounts[0];
-      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, weekly_goal: settings.weekly_goal, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
+      return { shop_name: acc.nickname, service_name: settings.service_name, font_size: settings.font_size, theme_color: settings.theme_color, password_changed_at: settings.password_changed_at, price_list: settings.price_list, password_hash: settings.password_hash, auto_reply_enabled: settings.auto_reply_enabled, desktop_autostart: settings.desktop_autostart, weekly_goal: settings.weekly_goal, lock_idle_minutes: settings.lock_idle_minutes, auto_config: autoCfgOf(settings), comment_views: sanitizeViews(settings.comment_views) };
     },
     // S69 设置/取消访问密码（scrypt哈希，原文永不落盘）
     setAccessPassword: (pw) => {

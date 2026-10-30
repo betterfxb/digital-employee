@@ -31,6 +31,8 @@ export const settingsConfig = {
   passwordMinLen: 6,
   /** S133 周成交目标上限（元）| 默认：1000万 | 联动：0=不启用今日目标卡 */
   weeklyGoalMax: 10000000,
+  /** S150 挂机自动锁定最大分钟数 | 默认：120 | 联动：0=关闭；仅设了访问密码才生效 */
+  lockIdleMax: 120,
 } as const;
 
 export type SettingsConfig = typeof settingsConfig;

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Input, Modal, Popconfirm, Slider, Switch, Table, Tag } from 'antd';
+import { App, Button, Input, Modal, Popconfirm, Select, Slider, Switch, Table, Tag } from 'antd';
 import { settingsConfig } from '@/config/settings.config';
 import { applySettings } from '@/lib/settings-client';
 import { hasFeature, type ProFeature } from '@/lib/tiers';
@@ -15,6 +15,7 @@ export default function Settings() {
   const [theme, setTheme] = useState<string>(settingsConfig.themeDefault);
   const [pwdAt, setPwdAt] = useState<string | null>(null);
   const [hasPw, setHasPw] = useState(false);
+  const [lockIdle, setLockIdle] = useState(0); // S150 挂机自动锁定分钟（0=关）
   const [npw, setNpw] = useState('');
   const [cpw, setCpw] = useState('');
   const [prices, setPrices] = useState<{ tier: string; price: string }[]>([]);
@@ -39,6 +40,7 @@ export default function Settings() {
       setTheme(s.theme_color || settingsConfig.themeDefault);
       setPwdAt(s.password_changed_at || null);
       setHasPw(!!s.password_hash);
+    setLockIdle(Number(s.lock_idle_minutes) || 0); // S150
       if (Array.isArray(s.price_list)) setPrices(s.price_list);
       setAutostart(!!s.desktop_autostart); // S104
     }).catch(() => message.error('设置加载失败，请刷新重试'));
@@ -211,6 +213,17 @@ export default function Settings() {
               )}
             </div>
             {hasPw && <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>启动/刷新时会先要求解锁；每个窗口标签独立解锁一次</div>}
+            {/* S150 挂机自动锁定：离开收银台回来要先输密码，客户联系方式不裸奔 */}
+            {hasPw && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <span style={{ fontSize: 12, color: '#6B6862' }}>挂机自动锁定</span>
+                <Select<number> size="small" value={lockIdle} style={{ width: 130 }} onChange={async (v) => {
+                  const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lock_idle_minutes: v }) }).then((x) => x.json()).catch(() => null);
+                  if (r && !r.code) { setLockIdle(v); message.success(v === 0 ? '已关闭自动锁定' : `闲置 ${v} 分钟后自动锁定`); } else message.error(r?.message || '设置失败');
+                }} options={[{ value: 0, label: '不自动锁' }, { value: 5, label: '闲置 5 分钟' }, { value: 10, label: '闲置 10 分钟' }, { value: 15, label: '闲置 15 分钟' }, { value: 30, label: '闲置 30 分钟' }, { value: 60, label: '闲置 60 分钟' }]} />
+                <span style={{ fontSize: 11, color: '#A8A5A0' }}>没人动鼠标键盘到达时长即回到解锁屏（最多延迟1分钟生效）</span>
+              </div>
+            )}
           </div>
           <div className="card" style={{ padding: 18, marginTop: 16 }}>
             <b>系统健康自检</b> <span style={{ fontSize: 12, color: '#A8A5A0', fontWeight: 400 }}>一键体检本机运行状况——有问题按提示处理或把结果读给服务商</span>

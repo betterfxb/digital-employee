@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts lib/kwMoney.ts lib/healthCheck.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts lib/kwMoney.ts lib/healthCheck.ts lib/autolock.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -391,6 +391,14 @@ check(warn.some((r) => r.key === 'imp' && r.level === 'bad') && warn.some((r) =>
 check(healthVerdict(warn).text.indexOf('马上处理') > -1, 'healthcheck 结论优先报红');
 const rec = evaluateHealth(mkIn({ recovery: { from: 'auto-2026-10-28.json', at: new Date(HN).toISOString() } }));
 check(rec.some((r) => r.key === 'heal' && r.level === 'warn'), 'healthcheck 自愈发生过=黄条留证提醒');
+
+// 33) S150 挂机自动锁定谓词
+const { shouldLock } = require('./.tmp-crypto/lib/autolock.js');
+const AL0 = 1730000000000;
+check(shouldLock(AL0, AL0 + 15 * 60000, 15, true) === true && shouldLock(AL0, AL0 + 14.9 * 60000, 15, true) === false, 'autolock 15分钟界内外各如其分');
+check(shouldLock(AL0, AL0 + 999 * 60000, 0, true) === false, 'autolock 阈值0=永不锁（未启用）');
+check(shouldLock(AL0, AL0 + 999 * 60000, 15, false) === false, 'autolock 无访问密码永不锁（无锁可回）');
+check(shouldLock(AL0, AL0 + 59.9 * 60000, 60, true) === false && shouldLock(AL0, AL0 + 60 * 60000, 60, true) === true, 'autolock 60分钟恰满即锁（>=非>）');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

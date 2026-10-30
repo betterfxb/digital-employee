@@ -6,6 +6,7 @@ import { Button, Input, Select } from 'antd';
 import { appConfig } from '../config/app.config';
 import { loadAndApplySettings } from '../lib/settings-client';
 import { isDue, shouldNotifyReport, todayKey, daysUntilExpiry } from '../lib/remind';
+import { shouldLock } from '../lib/autolock'; // S150
 import { hasFeature } from '../lib/tiers';
 import type { LicenseState } from '../lib/license';
 import { ActivationGate } from './ActivationGate';
@@ -46,6 +47,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [unlockErr, setUnlockErr] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const prevUnread = useRef(0);
+  // S150 挂机自动锁定：活动打点 + 60秒随巡检复核（有密码且闲置超阈值→回解锁层）
+  const lastAct = useRef(Date.now());
+  const lockCfg = useRef({ idle: 0, hasPw: false });
+  useEffect(() => {
+    const mark = () => { lastAct.current = Date.now(); };
+    window.addEventListener('pointerdown', mark);
+    window.addEventListener('keydown', mark);
+    return () => { window.removeEventListener('pointerdown', mark); window.removeEventListener('keydown', mark); };
+  }, []);
   const nav = [
     { href: '/today', label: '今日工作台' },
     { href: '/auth', label: '授权管理' },
@@ -64,6 +74,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     // S69 有访问密码且本标签未解锁 → 显示解锁层（sessionStorage按标签会话）；S75 顺带取日报时点
     fetch('/api/settings').then((r) => r.json()).then((d) => {
       if (d?.password_hash && sessionStorage.getItem('unlock_ok') !== '1') setLocked(true);
+      lockCfg.current = { idle: Number(d?.lock_idle_minutes) || 0, hasPw: !!d?.password_hash }; // S150
       const rh = (d?.auto_config && typeof d.auto_config === 'object') ? Number((d.auto_config as { report_hour?: number }).report_hour) : NaN;
       if (Number.isFinite(rh)) setReportHour(rh);
     }).catch(() => {});
@@ -78,6 +89,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const tickDr = () => {
       fetch('/api/drafts?status=pending').then((r) => r.json()).then((d) => setDrCnt((d.items || []).length)).catch(() => { /* 角标自愈：失败下轮重试 */ });
       fetch('/api/follows').then((r) => r.json()).then((f) => setOdCnt(((f.items || []) as { status: string; next_remind_at: string }[]).filter((x) => ['待回访', '已手动回复'].includes(x.status) && isDue(x.next_remind_at)).length)).catch(() => { /* 同上 */ });
+      // S150 挂机锁复核：拉最新设置（改了阈值无需刷新页），闲置超阈且本标签已解锁则强制回锁
+      fetch('/api/settings').then((r) => r.json()).then((d) => {
+        lockCfg.current = { idle: Number(d?.lock_idle_minutes) || 0, hasPw: !!d?.password_hash };
+        if (shouldLock(lastAct.current, Date.now(), lockCfg.current.idle, lockCfg.current.hasPw)) {
+          sessionStorage.removeItem('unlock_ok');
+          setLocked(true);
+        }
+      }).catch(() => {});
     };
     tick(); tickDr();
     const id = setInterval(() => { tick(); tickDr(); }, 60000);
@@ -164,6 +183,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const r = await fetch('/api/auth/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: unlockPw }) }).then((x) => x.json()).catch(() => null);
       if (r?.unlocked) {
         sessionStorage.setItem('unlock_ok', '1');
+        lastAct.current = Date.now(); // S150 解锁即活跃，防下一巡检秒回锁
         setLocked(false); setUnlockPw('');
       } else setUnlockErr(r?.message || '解锁失败，请重试');
     } finally { setUnlocking(false); }

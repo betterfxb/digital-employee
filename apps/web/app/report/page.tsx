@@ -17,6 +17,7 @@ export default function ReportPage() {
   const [hist, setHist] = useState<Record<string, Partial<BizSnapshot>>>({});
   /** S62 分享图（canvas 生成，微信可发的日报长图） */
   const [shareImg, setShareImg] = useState<string | null>(null);
+  const [shareLabel, setShareLabel] = useState('经营日报'); // S151 分享图归属（日报/周报/月度复盘）
   const [mrows, setMrows] = useState<{ created_at?: string; history?: { at: string; act: string }[] }[] | null>(null); // S140 月度复盘源数据
 
   const snap = () => fetch('/api/report/snapshot', { method: 'POST' }).then((r) => r.json()).then((d) => setHist(d.history || {})).catch(() => {});
@@ -110,6 +111,55 @@ export default function ReportPage() {
     // 页脚
     ctx.fillStyle = '#A8A5A0'; ctx.font = `15px ${FONT}`;
     ctx.fillText('本报告由获客中台基于本机真实数据生成', 40, H - 34);
+    setShareLabel(kind === 'daily' ? '经营日报' : '经营周报');
+    setShareImg(cv.toDataURL('image/png'));
+  };
+
+  /** S151 月度复盘分享图：750宽微信长图（六指标宫格+环比结论+页脚），老板不用开软件 */
+  const genMonthShare = (mv: ReturnType<typeof buildMonthReview>) => {
+    const W = 750;
+    const cv = document.createElement('canvas');
+    const ctx = cv.getContext('2d');
+    if (!ctx) { message.error('当前环境不支持生成图片'); return; }
+    const FONT = '"Microsoft YaHei", "PingFang SC", sans-serif';
+    const H = 176 + Math.ceil(mv.metrics.length / 2) * 96 + 130 + 90;
+    cv.width = W; cv.height = H;
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1A1A18'; ctx.fillRect(0, 0, W, 120);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = `bold 34px ${FONT}`;
+    ctx.fillText(`获客中台 · 月度经营复盘 ${mv.month}`, 40, 58);
+    ctx.fillStyle = '#C9C4BC'; ctx.font = `17px ${FONT}`;
+    ctx.fillText(`${mv.month} vs ${mv.prevMonth} · 全本机操作事件`, 40, 94);
+    let y = 160;
+    mv.metrics.forEach((m, i) => {
+      const cx = 40 + (i % 2) * 345;
+      const cy = y + Math.floor(i / 2) * 96;
+      ctx.fillStyle = '#FCFBF9'; ctx.fillRect(cx, cy, 335, 86);
+      ctx.strokeStyle = '#E8E6E1'; ctx.strokeRect(cx, cy, 335, 86);
+      ctx.fillStyle = '#6B6862'; ctx.font = `17px ${FONT}`; ctx.fillText(m.label, cx + 16, cy + 26);
+      ctx.fillStyle = '#1A1A18'; ctx.font = `bold 27px ${FONT}`;
+      ctx.fillText(m.money ? `¥${m.cur.toLocaleString()}` : m.cur.toLocaleString(), cx + 16, cy + 57);
+      const dl = m.cur - m.prev;
+      ctx.fillStyle = '#A8A5A0'; ctx.font = `14px ${FONT}`;
+      ctx.fillText(`上月 ${m.money ? `¥${m.prev.toLocaleString()}` : m.prev.toLocaleString()} · ${dl > 0 ? `↑ +${m.money ? '¥' : ''}${dl.toLocaleString()}` : dl < 0 ? `↓ ${m.money ? '¥' : ''}${Math.abs(dl).toLocaleString()}` : '持平'}`, cx + 16, cy + 77);
+    });
+    y += Math.ceil(mv.metrics.length / 2) * 96 + 14;
+    const amt = mv.metrics.find((x) => x.key === 'amount');
+    const actsM = mv.metrics.find((x) => x.key === 'acts');
+    const concl = amt && actsM
+      ? `${mv.month.slice(0, 4)}年${+mv.month.slice(5, 7)}月成交 ¥${amt.cur.toLocaleString()}，比上月${amt.cur > amt.prev ? `多 ¥${(amt.cur - amt.prev).toLocaleString()}` : amt.cur < amt.prev ? `少 ¥${(amt.prev - amt.cur).toLocaleString()}` : '持平'}；跟进动作 ${actsM.cur} 次（上月 ${actsM.prev} 次）——${actsM.cur > actsM.prev ? '这个月更勤' : actsM.cur < actsM.prev ? '节奏慢下来了' : '动作量持平'}。`
+      : '';
+    ctx.fillStyle = '#FCFBF9'; ctx.fillRect(40, y, W - 80, 110);
+    ctx.strokeStyle = '#E8E6E1'; ctx.strokeRect(40, y, W - 80, 110);
+    ctx.fillStyle = '#33312D'; ctx.font = `18px ${FONT}`;
+    let line = ''; let ly = y + 34;
+    for (const ch of concl) {
+      if (ctx.measureText(line + ch).width > W - 120) { ctx.fillText(line, 60, ly); line = ch; ly += 30; } else line += ch;
+    }
+    if (line) ctx.fillText(line, 60, ly);
+    ctx.fillStyle = '#A8A5A0'; ctx.font = `15px ${FONT}`;
+    ctx.fillText('本图由获客中台基于本机真实操作记录生成 · 口径见应用内说明', 40, H - 34);
+    setShareLabel('月度复盘分享图');
     setShareImg(cv.toDataURL('image/png'));
   };
 
@@ -215,6 +265,8 @@ export default function ReportPage() {
                 {mv.month.slice(5)}月成交 ¥{amt.cur.toLocaleString()}，比上月{amt.cur > amt.prev ? `多 ¥${(amt.cur - amt.prev).toLocaleString()}` : amt.cur < amt.prev ? `少 ¥${(amt.prev - amt.cur).toLocaleString()}` : '持平'}；跟进动作 {acts.cur} 次（上月 {acts.prev} 次）——{acts.cur > acts.prev ? '这个月更勤' : acts.cur < acts.prev ? '节奏慢下来了' : '动作量持平'}。
               </div>
               <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>口径：成交/成本取台账动作记录值；每客户历史保留最近20条，久远流水可能被截断——宁漏不造</div>
+              {/* S151 月度分享图：店长按月给老板交作业的社交货币（同日报/周报 canvas 版式） */}
+              <Button size="small" style={{ marginTop: 10 }} onClick={() => genMonthShare(mv)}>生成分享图</Button>
             </div>
           );
         })()}
@@ -223,7 +275,7 @@ export default function ReportPage() {
           {shareImg && (
             <div style={{ textAlign: 'center' }}>
               <img src={shareImg} alt="经营报告分享图" style={{ width: '100%', border: '1px solid #E8E6E1' }} />
-              <a href={shareImg} download={`${kind === 'daily' ? '经营日报' : '经营周报'}-${new Date().toISOString().slice(0, 10)}.png`}>
+              <a href={shareImg} download={`${shareLabel}-${new Date().toISOString().slice(0, 10)}.png`}>
                 <Button type="primary" style={{ marginTop: 12 }}>下载图片</Button>
               </a>
               <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 8 }}>手机端可长按图片保存 · 图中数据均为本机真实聚合</div>

@@ -51,6 +51,7 @@ check(num(files.assist, 'revisitDays') >= 7 && num(files.assist, 'revisitDays') 
 check(num(files.assist, 'silentDays') >= 3 && num(files.assist, 'silentDays') <= 90, 'assist.silentDays 3-90（S137）');
 check(num(files.assist, 'tierHighAmount') >= 100 && num(files.assist, 'tierHighAmount') <= 100000, 'assist.tierHighAmount 100-10万（S142）');
 check(num(files.settings, 'weeklyGoalMax') >= 100000, 'settings.weeklyGoalMax ≥10万（S133 周目标上限）');
+check(num(files.settings, 'lockIdleMax') >= 60 && num(files.settings, 'lockIdleMax') <= 1440, 'settings.lockIdleMax 60-1440（S150 挂机锁上限）');
 check((files.compliance.match(/name:/g) || []).length >= 5, 'compliance规则≥5条（S130）');
 check(files.compliance.includes('why:') && files.compliance.includes('fix:') && !files.compliance.includes("why: ''") && !files.compliance.includes("fix: ''"), 'compliance每条带理由与建议（S130）');
 // 路由审计：无参GET + 无force-dynamic = 构建期静态快照，内存态读接口必挂（S12教训）
