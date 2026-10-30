@@ -33,3 +33,10 @@ export function daysSinceTouch(f: TouchFollow, now = Date.now()): number | null 
   const t = lastTouchAt(f);
   return t === null ? null : Math.floor((now - t) / DAY);
 }
+
+/** S137 沉默判定：待回访/已手动回复且 lastTouch 距今>days 天（登记本身算首次接触；已转化走复购口径不在此列） */
+export function silentDue(f: { status: string; created_at?: string; history?: { at: string }[] }, days: number, now = Date.now()): boolean {
+  if (!['待回访', '已手动回复'].includes(f.status)) return false;
+  const t = lastTouchAt(f);
+  return t !== null && now - t > days * DAY;
+}

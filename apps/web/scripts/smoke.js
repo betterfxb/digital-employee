@@ -220,6 +220,15 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
       costOk = k1.cost === 100.46 && k2.cost === 0 && kBad.s === 400;
     }
     pass(costOk, 'S132 成本PATCH往返（两位舍入/清零/负值拒）');
+    // S138 记了联系：动作入history（末条即证）；空/超长拒（历史只增不删，冒烟产物行可容）
+    let touchOk = false;
+    if (fl) {
+      const t1 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ touch: '冒烟联系测试' }) }); return rr.json(); })();
+      const t2 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ touch: '' }) }); return { s: rr.status }; })();
+      const t3 = await (async () => { const rr = await fetch(base + `/api/follows/${fl.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ touch: '超'.repeat(21) }) }); return { s: rr.status }; })();
+      touchOk = !t1.code && (t1.history || [])[0]?.act?.indexOf('记了联系：冒烟联系测试') === 0 && t2.s === 400 && t3.s === 400;
+    }
+    pass(touchOk, 'S138 记了联系动作往返（入history/空拒/超长拒）');
     // S133 周目标往返：记原值→设888888→验证→复原（自恢复纪律，双轮幂等）
     {
       const g0 = (await get('/api/settings')).j.weekly_goal;

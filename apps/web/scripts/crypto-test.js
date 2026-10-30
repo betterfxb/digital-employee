@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -301,6 +301,22 @@ check(parseDealHistory({ status: '已转化', history: [{ at: inWk, act: '记成
 const clv3 = parseDealHistory({ status: '已转化', amount: 50 });
 check(clv3.n === 1 && clv3.total === 50, 'clv 无动作史但已转化有金额=按现值记1次（create即成交兜底）');
 check(parseDealHistory({ status: '待回访', amount: 50 }).n === 0, 'clv 非已转化不算成交');
+
+// 26) S136 业务心跳逐日聚合
+const { buildHeartbeat } = require('./.tmp-crypto/lib/heartbeat.js');
+const NOWH = new Date(2026, 9, 29, 12, 0).getTime();
+const isoAt = (t) => new Date(t).toISOString();
+const hbEmpty = buildHeartbeat([], 14, NOWH);
+check(hbEmpty.length === 14 && hbEmpty[13].date === '2026-10-29' && hbEmpty[0].date === '2026-10-16', 'hb 14天连续日期补零（今日常为末位）');
+const hb1 = buildHeartbeat([{ status: '待回访', created_at: isoAt(NOWH - 2 * 86400000), history: [{ at: isoAt(NOWH), act: '状态改为「已转化」；记成交 ¥298' }] }], 14, NOWH);
+check(hb1[13].touches === 1 && hb1[13].deals === 1 && hb1[13].amount === 298 && hb1[11].leads === 1, 'hb 建档落建档日/动作与成交金额落动作日');
+check(hb1[0].leads === 0 && hb1[0].touches === 0, 'hb 无记录日为零不缺项');
+const hbOut = buildHeartbeat([{ status: '待回访', created_at: isoAt(NOWH - 20 * 86400000), history: [{ at: isoAt(NOWH - 20 * 86400000), act: '记成交 ¥999' }] }], 14, NOWH);
+check(hbOut.reduce((s, d) => s + d.leads + d.touches + d.amount, 0) === 0, 'hb 窗口外事件全忽略');
+const { silentDue } = require('./.tmp-crypto/lib/visitDue.js');
+check(silentDue({ status: '待回访', created_at: isoAt(NOWH - 15 * 86400000) }, 14, NOWH) === true, 'silent 15天无记录=沉默');
+check(silentDue({ status: '待回访', created_at: isoAt(NOWH - 14 * 86400000) }, 14, NOWH) === false && silentDue({ status: '已手动回复', created_at: isoAt(NOWH - 20 * 86400000), history: [{ at: isoAt(NOWH) }] }, 14, NOWH) === false, 'silent 恰14天不算/有新动作即解铃');
+check(silentDue({ status: '已转化', created_at: isoAt(NOWH - 60 * 86400000) }, 14, NOWH) === false && silentDue({ status: '无效', created_at: isoAt(NOWH - 60 * 86400000) }, 14, NOWH) === false, 'silent 已转化走复购口径/无效永不满');
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fail === 0 ? 'CRYPTO ALL GREEN' : `CRYPTO ${fail} FAILED`);

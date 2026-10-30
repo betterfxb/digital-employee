@@ -8,6 +8,7 @@ import { engagementPct, topHot, lowWarn } from '@/lib/videoStats';
 import { buildFunnel, funnelDrop } from '@/lib/funnel'; // S124
 import { attribution } from '@/lib/attribution'; // S128
 import { parseDealHistory } from '@/lib/dealMath'; // S134
+import { buildHeartbeat } from '@/lib/heartbeat'; // S136
 import { hasFeature, type ProFeature } from '@/lib/tiers';
 import { autoCfgOf } from '@/lib/autoCfg';
 import { ProLock } from '@/components/ProLock';
@@ -342,6 +343,42 @@ export default function Dashboard() {
                   <div style={{ fontSize: 11, color: '#A8A5A0' }}>{d}</div>
                 </div>
               ))}
+            </div>
+          );
+        })()}
+        {/* S136 业务心跳：本机ISO事件逐日聚合的14天曲线——生意在升温还是降温，一眼看穿 */}
+        {(() => {
+          const hb = buildHeartbeat(followRows, 14);
+          const mx = (k: 'leads' | 'touches' | 'amount') => Math.max(1, ...hb.map((d) => d[k]));
+          const rows: { k: 'leads' | 'touches' | 'amount'; label: string; color: string; fmt: (d: (typeof hb)[number]) => string }[] = [
+            { k: 'leads', label: '新线索', color: '#9A6B2F', fmt: (d) => `${d.leads} 条` },
+            { k: 'touches', label: '跟进动作', color: '#23415E', fmt: (d) => `${d.touches} 次` },
+            { k: 'amount', label: '成交金额', color: '#1F4D3A', fmt: (d) => (d.amount > 0 ? `¥${d.amount.toLocaleString()}` : '0') },
+          ];
+          const anyActivity = hb.some((d) => d.leads + d.touches + d.deals > 0);
+          return (
+            <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+              <b>业务心跳</b> <span style={{ fontSize: 12, color: '#A8A5A0' }}>近14天本机操作逐日聚合 · 与播放数据无关，你自己的勤懒全在图上</span>
+              {anyActivity ? (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {rows.map((r) => (
+                    <div key={r.k} style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
+                      <span style={{ width: 62, fontSize: 12, color: '#6B6862', flexShrink: 0 }}>{r.label}</span>
+                      {hb.map((d) => (
+                        <div key={d.date} title={`${d.date.slice(5)} · ${r.fmt(d)}`} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: 34 }}>
+                          <div style={{ height: Math.max(2, Math.round((34 * d[r.k]) / mx(r.k))), background: d[r.k] > 0 ? r.color : '#F0EEEA', borderRadius: 2 }} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 4, marginLeft: 66 }}>
+                    {hb.map((d, i) => <span key={d.date} className="num" style={{ flex: 1, fontSize: 10, color: '#C8C5BE', textAlign: 'center' }}>{i % 3 === 2 ? d.date.slice(8) : ''}</span>)}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#A8A5A0', marginTop: 10, padding: '18px 0', textAlign: 'center' }}>近14天本机还没有操作记录——登记线索、改状态、记成交都会在这里落点。</div>
+              )}
+              <div style={{ fontSize: 11, color: '#A8A5A0', marginTop: 10 }}>口径：新线索=建档时间；跟进动作=每次台账操作；成交=「记成交」动作金额（登记即成交的按现值计入客户榜但不进此线，宁漏不造）</div>
             </div>
           );
         })()}

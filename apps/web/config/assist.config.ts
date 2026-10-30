@@ -10,6 +10,8 @@ export const assistConfig = {
   defaultRemindHour: 18,
   /** S129 老客复购回访阈值（天）| 默认：30 | 范围：7–180 | 已转化线索超此天数无接触即进回访提醒 */
   revisitDays: 30,
+  /** S137 沉默线索阈值（天）| 默认：14 | 范围：3–90 | 待回访/已手动回复超此天数无任何本机接触记录 */
+  silentDays: 14,
   /** 蓝V指南锚点 | 联动：imEnabled=true后隐藏占位 */
   upgradeGuideUrl: '/messages#upgrade' as string,
 } as const;

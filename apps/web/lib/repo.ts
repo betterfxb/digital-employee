@@ -23,7 +23,7 @@ export interface CommentRepo {
   setIntent(id: string, patch: IntentPatch): Record<string, unknown> | null;
   exists(id: string): boolean;
 }
-export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string; contact?: string; cost?: number }): Follow | null }
+export interface FollowRepo { list(status: string): Follow[]; create(input: FollowInput): Follow; update(id: string, patch: { status?: string; amount?: number; tags?: string[]; note?: string; next_remind_at?: string; contact?: string; cost?: number; touch?: string }): Follow | null }
 export interface CompetitorRepo { list(): Competitor[]; create(input: CompetitorInput): Competitor; update(id: string, patch: { play?: number; like?: number; remark?: string }): Competitor | null }
 export interface EventRepo {
   /** 接收事件，返回true=首次，false=重复（幂等） */
@@ -94,6 +94,7 @@ const memory: Repos = {
       if (patch.note !== undefined) acts.push('更新跟进纪要');
       if (patch.next_remind_at !== undefined && patch.next_remind_at !== f.next_remind_at) acts.push(`提醒时间改为「${patch.next_remind_at}」`);
       if (patch.contact !== undefined && patch.contact !== f.contact) acts.push('更新联系方式'); // S115
+      if (patch.touch !== undefined) acts.push(`记了联系：${patch.touch}`); // S138 提醒消失的喂入口：只记动作不改任何字段
       if (patch.status !== undefined) f.status = patch.status;
       if (patch.amount !== undefined) f.amount = patch.amount;
       if (patch.cost !== undefined) f.cost = patch.cost; // S132

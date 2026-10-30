@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { App, Button, Checkbox, Drawer, Input, Popconfirm, Radio, Select, Table, Tag } from 'antd';
 import { parseRemind } from '@/lib/remind';
-import { visitDue, daysSinceTouch } from '@/lib/visitDue'; // S129
+import { visitDue, daysSinceTouch, silentDue } from '@/lib/visitDue'; // S129/S137
 import { parseDealHistory } from '@/lib/dealMath'; // S134
 import type { ColumnsType } from 'antd/es/table';
 import { assistConfig } from '@/config/assist.config';
@@ -34,6 +34,7 @@ export default function Messages() {
   };
   const [ftag, setFtag] = useState('');
   const [revisitMode, setRevisitMode] = useState(false); // S129 复购到期筛选
+  const [silentMode, setSilentMode] = useState(false); // S137 沉默线索筛选
   const [tagLib, setTagLib] = useState<string[]>([]);
   const [tagEdit, setTagEdit] = useState<{ id: string; tags: string[] } | null>(null);
   const [newTag, setNewTag] = useState('');
@@ -90,12 +91,19 @@ export default function Messages() {
     const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ next_remind_at: '明天 09:00' }) }).then((x) => x.json()).catch(() => null);
     if (r && !r.code) { flash('已设明天 9 点提醒', true); loadFollows(); } else flash(r?.message || '操作失败');
   };
+  /** S138 记了联系：只追加历史动作刷新lastTouch——沉默/复购提醒即消，提醒闭环的喂入口 */
+  const markTouched = async (id: string) => {
+    const r = await fetch(`/api/follows/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ touch: '已联系' }) }).then((x) => x.json()).catch(() => null);
+    if (r && !r.code) { flash('已记联系，提醒即刻消掉', true); loadFollows(); if (detail && detail.id === id) setDetail(r); } else flash(r?.message || '操作失败');
+    setFctx(null);
+  };
   useEffect(() => {
     const usp = new URLSearchParams(window.location.search);
     const v = usp.get('view');
     const p = usp.get('peer');
     if (p) setFsearch(p);
     if (usp.get('revisit') === '1') setRevisitMode(true); // S129 今日工作台回访直达
+    if (usp.get('silent') === '1') setSilentMode(true); // S137 沉默直达
     if (v === 'board' || v === 'cal') { setFmode(v); try { localStorage.setItem('follow_view', v); } catch { /* 隐私模式忽略 */ } }
     else { try { const s = localStorage.getItem('follow_view'); if (s === 'board' || s === 'cal') setFmode(s); } catch { /* ignore */ } }
   }, []);
@@ -197,7 +205,7 @@ export default function Messages() {
     setRemindEdit(null); flash('提醒时间已更新', true); loadFollows();
   };
   /** S67 全选当前筛选结果（与行内复选共用 fsel） */
-  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)) && (!revisitMode || visitDue(f, assistConfig.revisitDays))); // S129 复购到期chip参与筛选
+  const fview = (rows || []).filter((f) => (!fsearch.trim() || f.peer_nick.includes(fsearch.trim())) && (!ftag || (f.tags || []).includes(ftag)) && (!revisitMode || visitDue(f, assistConfig.revisitDays)) && (!silentMode || silentDue(f, assistConfig.silentDays))); // S129/S137 chip参与筛选
   /** S121 查重清理：按昵称分组活跃线索≥2条=疑似重复；推荐保留=已转化>有金额>最新建档；其余标无效（可逆，不引入删除） */
   const [dupMode, setDupMode] = useState(false);
   const dupGroups = (() => {
@@ -490,6 +498,7 @@ export default function Messages() {
               <Button size="small" onClick={checkAllF} disabled={fview.length === 0}>{fsel.size === fview.length && fview.length > 0 ? '取消全选' : `全选${fview.length ? `(${fview.length})` : ''}`}</Button>
               <Button size="small" type={dupMode ? 'primary' : 'text'} onClick={() => setDupMode((v) => !v)} title="按昵称分组找重复线索，标无效不删除">查重</Button>
               <Button size="small" type={revisitMode ? 'primary' : 'text'} onClick={() => setRevisitMode((v) => !v)} title={`已转化且超${assistConfig.revisitDays}天没有接触记录的老客户`}>复购到期{(rows || []).filter((f) => visitDue(f, assistConfig.revisitDays)).length > 0 ? `(${(rows || []).filter((f) => visitDue(f, assistConfig.revisitDays)).length})` : ''}</Button>
+              <Button size="small" type={silentMode ? 'primary' : 'text'} onClick={() => setSilentMode((v) => !v)} title={`待回访/已回复但超${assistConfig.silentDays}天无任何本机接触记录`}>沉默{(rows || []).filter((f) => silentDue(f, assistConfig.silentDays)).length > 0 ? `(${(rows || []).filter((f) => silentDue(f, assistConfig.silentDays)).length})` : ''}</Button>
               {dupMode && (
                 <span style={{ fontSize: 12, color: dupGroups.length ? '#8A6D1F' : '#4C6B57', background: dupGroups.length ? '#FBF3E4' : '#F5FAF6', border: `1px solid ${dupGroups.length ? '#EADFBE' : '#C8D8CC'}`, borderRadius: 4, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   {dupGroups.length ? `${dupGroups.length} 组同名活跃线索，共 ${dupGroups.reduce((s, g) => s + g.rest.length, 0)} 条疑似重复（保留项=已转化>有金额>最新建档）` : '未发现同名重复，台账是干净的'}
@@ -543,6 +552,7 @@ export default function Messages() {
                   ))}
                   <div style={{ borderTop: '1px solid #F0EEEA', margin: '4px 0' }} />
                   <div onClick={() => { urgeTomorrow(fctx.f.id); setFctx(null); }} style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>催办：明天 9 点提醒</div>
+                  <div onClick={() => markTouched(fctx.f.id)} style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', color: '#1F4D3A' }}>✓ 记了联系（沉默/回访提醒即消）</div>
                   <div onClick={() => { setFctx(null); if (can('lead')) openDetail(fctx.f); else message.info('线索档案属专业版'); }} style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', color: can('lead') ? '#1A1A18' : '#A8A5A0' }}>{can('lead') ? '打开档案' : '打开档案（专业版）'}</div>
                 </div>
               </>
@@ -645,7 +655,7 @@ export default function Messages() {
                 <div>下次提醒：{detail.next_remind_at}</div>
                 <div>来源视频：{videos.find((v) => v.id === detail.source_video_id)?.title || detail.source_video_id}</div>
                 {/* S129 最近接触：本机可信ISO事件（建档/任一操作），无任何记录不瞎猜 */}
-                <div>最近联系：{(() => { const d = daysSinceTouch(detail); return d === null ? <span style={{ color: '#A8A5A0' }}>本机无接触记录</span> : d === 0 ? <span>今天</span> : <span className="num">{d} 天前</span>; })()}{detail.status === '已转化' && visitDue(detail, assistConfig.revisitDays) && <span style={{ color: '#9A6B2F', marginLeft: 8 }}>· 超{assistConfig.revisitDays}天，该回访了</span>}</div>
+                <div>最近联系：{(() => { const d = daysSinceTouch(detail); return d === null ? <span style={{ color: '#A8A5A0' }}>本机无接触记录</span> : d === 0 ? <span>今天</span> : <span className="num">{d} 天前</span>; })()}{detail.status === '已转化' && visitDue(detail, assistConfig.revisitDays) && <span style={{ color: '#9A6B2F', marginLeft: 8 }}>· 超{assistConfig.revisitDays}天，该回访了</span>}{detail.status !== '无效' && <Button size="small" type="text" style={{ marginLeft: 8, color: '#1F4D3A' }} onClick={() => markTouched(detail.id)}>✓ 记了联系</Button>}</div>
                 {/* S132 成本记账：成交单记交付成本后看板出净利；S134 累计成交按本机记账动作计 */}
                 {detail.status === '已转化' && (() => {
                   const clv = parseDealHistory(detail);

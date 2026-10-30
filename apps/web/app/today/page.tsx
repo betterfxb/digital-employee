@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { isDue, daysUntilExpiry, todayKey } from '@/lib/remind';
-import { visitDue } from '@/lib/visitDue'; // S129
+import { visitDue, silentDue } from '@/lib/visitDue'; // S129/S137
 import { sumWeekDone } from '@/lib/dealMath'; // S133
 import { assistConfig } from '@/config/assist.config';
 
@@ -55,6 +55,7 @@ export default function Today() {
   const dueToday = follows.filter((x) => isActive(x) && x.status !== '已转化' && !isDue(x.next_remind_at) && /^今天\s*\d{1,2}:\d{2}/.test(x.next_remind_at || ''));
   const unregistered = comments.filter((c) => ['高意向', '留电话'].includes(c.intent) && c.is_read_local && !follows.some((f) => f.peer_nick === c.user_nick && isActive(f)));
   const revisitDue = follows.filter((x) => visitDue(x, assistConfig.revisitDays)); // S129 已转化超期无接触
+  const silentLeads = follows.filter((x) => silentDue(x, assistConfig.silentDays)); // S137 未成交且超期无接触
   const dealToday = follows.filter((x) => x.status === '已转化' && x.created_at && x.created_at.slice(0, 10) === today);
   const amountToday = dealToday.reduce((s, x) => s + (x.amount || 0), 0);
   const licDays = lic && lic.valid && lic.mode === 'licensed' ? daysUntilExpiry(lic.expires_at) : null;
@@ -68,6 +69,7 @@ export default function Today() {
     { key: 'drafts', title: '草稿待你确认', n: drafts, sub: '复制话术去抖音发送', href: '/tasks', urgent: drafts > 0, cta: '去任务中心' },
     { key: 'unreg', title: '看过但没登记的高意向', n: unregistered.length, sub: '读过了没建档，容易漏', href: '/comments?intent=' + encodeURIComponent('高意向'), urgent: unregistered.length > 0, cta: '去补登记' },
     { key: 'revisit', title: '老客户该回访了', n: revisitDue.length, sub: `成交后超${assistConfig.revisitDays}天没接触，复购是零成本收入`, href: '/messages?revisit=1', urgent: false, cta: '去回访' },
+    { key: 'silent', title: '沉默线索该捞了', n: silentLeads.length, sub: `超${assistConfig.silentDays}天没碰过还没成交，多半在犹豫`, href: '/messages?silent=1', urgent: false, cta: '去捞回' },
   ];
 
   return (

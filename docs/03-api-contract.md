@@ -97,6 +97,7 @@ POST /api/import {kind:leads, csv} -> {created,skipped}（S118 存量客户名�
 POST /api/import {kind:leads} 新建行带 source:'import'（S128 归因排除标记：导入线索无真实来源作品，作品带货榜整行不计；GET /api/follows 透出该字段）
 PATCH /api/follows/:id {cost?} -> Follow（S132 成交成本 0-10亿两位舍入，净利=amount-cost 允许负；计入操作历史「记成本」）
 PATCH /api/settings {weekly_goal?} -> Settings（S133 周成交目标 0-weeklyGoalMax 整数，0=不启用今日目标卡；GET settings 透出）
+PATCH /api/follows/:id {touch?} -> Follow（S138 记了联系 1-20字，只追加history动作「记了联系：x」刷新最近接触时间，不改业务字段——沉默/复购提醒的消除入口）
 PATCH /api/follows/:id {contact?} -> Follow（S115 联系方式≤32字仅本机存储，空串=清除，计入操作历史）
 GET  /api/data/health -> {recovery:{from,at}|null}（S122 数据自愈探针：local.json损坏时启动自动从backups/最新健全快照恢复并留corrupt取证文件；recovery非空时Shell顶栏黄条提示）
 GET  /api/stats/overview -> 增 last_import_at（S125 本机最近导入成功时刻，POST /api/import 成功时盖戳；新鲜度提醒与首跑引导的判定源，非平台字段）
