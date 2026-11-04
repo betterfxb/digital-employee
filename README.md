@@ -1,6 +1,10 @@
 # 抖音获客中台（非蓝V版）
 
 > 只看自己号（T+1）+ 管自己视频评论 + 私信人工辅助。禁爬虫/RPA自动私信。文档见 `docs/`，记忆见 `MEMORY.md`。
+>
+> **🔄 新接手（人或 Agent）先读 [`docs/16-handoff.md`](docs/16-handoff.md)**——仓库地图/铁律/六套门禁/封包SOP/发证/抖音接入现状/未决事项，十分钟上手。
+
+> ⚠️ 端口纪律：本机 3001 被其它服务占用，**起服务一律 `next start -p 3021`** 并 `SMOKE_BASE=http://localhost:3021`；e2e 用 3022 且必须串行独占。
 
 ## 运行（apps/web，Next.js单体，mock数据）
 ```powershell
