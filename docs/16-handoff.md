@@ -469,6 +469,8 @@ node scripts/license-gen.js issue --customer 客户名 --days 0 --bind "cpuHash.
 | 3021 | 本项目验证服务 | 起服/跑 smoke/journey 都在这；`SMOKE_BASE=http://localhost:3021` |
 | 3022 | e2e-flow 临时 | 自起自停；**e2e 必须串行独占** |
 
+**Git push**：本机 22 端口被代理 fake-ip（198.18.0.11）掐断，已用 `~/.ssh/config` 把 `github.com` 指到 `ssh.github.com:443` 绕行（2026-11-09 修，永久生效）。若某天 push 再报 `Connection closed by ... port 22`，先 `ssh -T -p 443 git@ssh.github.com` 探活，配置丢了照此重建。
+
 停/起 3021：
 ```powershell
 # 停
