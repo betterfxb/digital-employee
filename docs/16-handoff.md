@@ -63,14 +63,14 @@
 ### 2.1 版本与仓库
 | 项 | 值 |
 |---|---|
-| 当前版本 | **1.16.1**（源：`apps/desktop/package.json`，侧栏底部 vX.Y.Z 与之一致） |
+| 当前版本 | **1.16.2**（源：`apps/desktop/package.json`，侧栏底部 vX.Y.Z 与之一致） |
 | HEAD | `9216cfa` "S153 close: v1.16.1 hotfix package sealed + tagged" |
 | 远端 | `git@github.com:betterfxb/digital-employee.git`（main，已同步，unpushed=0） |
-| Tags | 16 个：v1.1.0…v1.16.1（**无 v1.7.1/v1.8.0——从未出货，内容并入 v1.9.0，属正常**） |
+| Tags | 17 个：v1.1.0…v1.16.2（**无 v1.7.1/v1.8.0——从未出货，内容并入 v1.9.0，属正常**） |
 | 跟踪文件 | 193 个：apps 167 / docs 16（+本文件=17）/ root 4 / screenshots 4 / prisma 1 / prototype 1 |
 | 工作区 | 干净，**唯一游离物：根目录 `monkey-moto.html`**（untracked+unignored=漏网，用户文件，见 §12） |
-| dist | `apps/desktop/dist/获客中台-Setup-1.16.1.exe`（+blockmap+win-unpacked），**唯一包，旧版已清** |
-| BUILD_ID | `BwCGmQFsh9ieDwuFj2UI6`（`apps/web/.next` 与 `resources/standalone` 一致=包内即当前码） |
+| dist | `apps/desktop/dist/获客中台-Setup-1.16.2.exe`（+blockmap+win-unpacked），**唯一包，旧版已清** |
+| BUILD_ID | `tKY-5BmjNJg6L92wvAjRX`（`apps/web/.next` 与 `resources/standalone` 一致=包内即当前码） |
 
 ### 2.2 六套门禁（2026-11-05 实跑，全绿）
 | 套件 | 命令 | 前置 | 计数 |
@@ -405,7 +405,7 @@ node scripts/license-gen.js issue --customer 客户名 --days 0 --bind "cpuHash.
 
 ## 10. 客户交付要点（详版在 docs/14）
 
-- **当前应发：v1.16.1**（v1.16.0 含 live 端点错拼已废，勿发）。
+- **当前应发：v1.16.2**（v1.16.0 含 live 端点错拼已废，勿发）。
 - 20 分钟演示剧本：激活→导入他自己的真数据→看意向→生成话术→跟进台账→自动化三重门讲解→指南页。
 - FAQ 应答表（docs/14 §三）：为什么扫码不能直登/安全吗/能自动回复吗/换电脑/未知发布者/私信灰的…。
 - 测试期话术基调：**"现在体验的是完整工作流+他自己的真实数据；官方自动通道等入驻审核通过后开通。"** 切勿承诺扫码立即可用。

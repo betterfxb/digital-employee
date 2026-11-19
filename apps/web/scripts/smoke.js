@@ -38,6 +38,10 @@ const post = async (p, body, headers = {}) => { const r = await fetch(base + p, 
   try { const { s, j } = await post('/api/comments/read', { all_video_id: 'smoke-v9' }); pass(s === 200 && j.updated === 'all', 'POST read all_video'); } catch (e) { pass(false, 'POST read all_video'); }
   try { const { s, j } = await post('/api/follows', { peer_nick: '冒烟', source_video_id: 'v1' }); pass(s === 200 && !!j.id && j.status === '待回访', 'POST follow valid'); } catch (e) { pass(false, 'POST follow valid'); }
   try { const { s, j } = await get('/api/scripts/templates?intent=%E9%AB%98%E6%84%8F%E5%90%91&nick=%E5%88%80%E5%8F%8B&product=%E8%B7%91%E5%88%80'); pass(s === 200 && j.items.length > 0 && j.items[0].content.includes('刀友') && j.items[0].content.includes('跑刀'), 'GET templates filled'); } catch (e) { pass(false, 'GET templates filled'); }
+
+  // S163  humanized reply drafts: no double-space robot join, nickname not repeated across segments
+  try { const { s: gs, j: gj } = await post('/api/scripts/generate', { content: '这单多少钱怎么下单', intent: '高意向', nick: '刀友', product: '跑刀' });
+    pass(gs === 200 && gj.items.length > 0 && gj.items.every((d) => !d.content.includes('  ')), 'POST generate humanized no space-join'); } catch (e) { pass(false, 'POST generate humanized no space-join'); }
   try { const { s, j } = await post('/api/tasks/control', { type: 'commentPoll', action: 'pause' }); pass(s === 200 && j.paused === true, 'POST task pause'); } catch (e) { pass(false, 'POST task pause'); }
   try { const { s, j } = await post('/api/tasks/control', { type: 'commentPoll', action: 'resume' }); pass(s === 200 && j.paused === false, 'POST task resume'); } catch (e) { pass(false, 'POST task resume'); }
   try { const { s, j } = await post('/api/tasks/control', { type: 'nope', action: 'pause' }); pass(s === 400 && j.code === 'FATAL', 'POST task invalid FATAL'); } catch (e) { pass(false, 'POST task invalid'); }

@@ -12,10 +12,12 @@ const T: TemplateItem[] = [
   { id: 't-h1-1', intent: '高意向', scene: '破冰', content: '在的{nick}，{product}今天还有档期，发我段位+想玩的模式，直接给你排。' },
   { id: 't-h1-2', intent: '高意向', scene: '破冰', content: '{nick}你好，{product}在接单中，说下你的段位和需求，帮你算个准价。' },
   { id: 't-h1-3', intent: '高意向', scene: '破冰', content: '来了{nick}，{product}档期实时更新，现在下单今晚就能安排。' },
+   { id: 't-h1-4', intent: '高意向', scene: '破冰', content: '哎{nick}来啦，{product}这会儿能排，说说段位和想打的，我给你看档期。' },
   { id: 't-h2-1', intent: '高意向', scene: '报价', content: '{product}按单/按星报价，{nick}说下段位，报个准价给你。' },
   { id: 't-h2-2', intent: '高意向', scene: '报价', content: '{nick}具体看段位和模式——当前段位发我，价格当场算。' },
   { id: 't-h2-3', intent: '高意向', scene: '报价', content: '{product}价格好说{nick}，不同档位不同价，先说需求不踩坑。' },
   { id: 't-h2-4', intent: '高意向', scene: '报价', content: '{nick}，{product}参考价：{price}。段位发我，按最省的方案报准。' },
+   { id: 't-h2-5', intent: '高意向', scene: '报价', content: '{nick}价好商量，你把段位发我，按你的情况给个实在价，不乱报。' },
   { id: 't-h3-1', intent: '高意向', scene: '下单引导', content: '{nick}下单很简单：发段位→确认价格→开打，全程可跟进度。' },
   { id: 't-h3-2', intent: '高意向', scene: '下单引导', content: '{nick}直接私我就行，把段位和模式发来，马上给你排单。' },
   { id: 't-h3-3', intent: '高意向', scene: '下单引导', content: '{nick}点我主页私信，发个段位就开整，不用等。' },
@@ -35,6 +37,7 @@ const T: TemplateItem[] = [
   { id: 't-c1-1', intent: '咨询', scene: '破冰', content: '你好{nick}，问的是{product}吧，给你介绍下玩法和价格。' },
   { id: 't-c1-2', intent: '咨询', scene: '破冰', content: '{nick}你好，在的~{product}正在接单，想了解哪块？' },
   { id: 't-c1-3', intent: '咨询', scene: '破冰', content: '来了{nick}，{product}的问题尽管问，知无不言。' },
+   { id: 't-c1-4', intent: '咨询', scene: '破冰', content: '嗨{nick}，{product}的事我懂，想先了解哪块，价格还是流程都行。' },
   { id: 't-c2-1', intent: '咨询', scene: '报价', content: '{product}按段位和单量报价{nick}，你发下段位帮你算。' },
   { id: 't-c2-2', intent: '咨询', scene: '报价', content: '{nick}价格区间好说，先说你的需求，给你匹配最划算的。' },
   { id: 't-c2-3', intent: '咨询', scene: '报价', content: '不同档位不同价{nick}，把段位发我，报准价。' },
@@ -48,6 +51,7 @@ const T: TemplateItem[] = [
   { id: 't-c5-1', intent: '咨询', scene: '下单引导', content: '{nick}想深入了解的话点我主页私信，方案和价目发你细看。' },
   { id: 't-c5-2', intent: '咨询', scene: '下单引导', content: '详细内容我私你{nick}，评论区说不全~' },
   { id: 't-c5-3', intent: '咨询', scene: '下单引导', content: '{nick}私信我发你完整方案，看满意了再决定。' },
+   { id: 't-c5-4', intent: '咨询', scene: '下单引导', content: '{nick}细聊更清楚，我主页私信发你，看完再定不急。' },
   // ── 留电话 ──
   { id: 't-p1-1', intent: '留电话', scene: '留资引导', content: '收到{nick}，稍后联系你，留意陌生来电~' },
   { id: 't-p1-2', intent: '留电话', scene: '留资引导', content: '{nick}已记下，专员几分钟内联系你，请保持电话畅通。' },
@@ -140,6 +144,24 @@ function toneFix(s: string, tone: string): string {
 }
 
 /**
+ * S163 拟人化后处理（纯函数可测）：真人私聊不会在每条分段里重复喊 nickname。
+ * 规则：首段保留；后续段若以 nickname 开头则去掉该前缀（避免“X，X下单很简单…”的机器人腔）；
+ *       段间用自然空串连接（模板本身已带句号/语气），不引入空格拼接感。
+ * 仅改“读起来像不像人”，不改任何发送逻辑、不碰风控、不自动外发。
+ */
+export function humanizeDraft(segs: string[], nick: string): string {
+  const clean = segs.filter((x) => !!x && x.trim().length > 0);
+  if (clean.length === 0) return '';
+  const n = (nick || '').trim();
+  const out = clean.map((seg, i) => {
+    if (i === 0 || !n) return seg;
+    // 去掉后续段开头的重复昵称（含紧跟的逗号/顿号）
+    return seg.replace(new RegExp('^' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[,，、]?'), '');
+  });
+  return out.join('');
+}
+
+/**
  * S28 三段式 + S33 升级：破冰 + 核心回应（按关注点选场景） + 行动引导
  * 出4个候选供人工挑选（3个不同核心场景 + 1个主场景换口吻）；简洁口吻只出核心+行动两段。
  * 合规：人工确认后发送，不做自动外呼。
@@ -168,13 +190,9 @@ export function generateReply(o: { content: string; intent: string; nick: string
 
   const compose = (a: TemplateItem | null, b: TemplateItem, c: TemplateItem | null, label: string, id: string, t2: string): ReplyDraft => {
     const segs = [a, b, c].filter(Boolean) as TemplateItem[];
-    return {
-      id,
-      label,
-      content: segs.map((x) => toneFix(fill(x.content, nick, product, video, price), t2))
-        .filter((x, i, arr) => x && arr.indexOf(x) === i)
-        .join(' '),
-    };
+    const parts = segs.map((x) => toneFix(fill(x.content, nick, product, video, price), t2))
+      .filter((x, i, arr) => x && arr.indexOf(x) === i);
+    return { id, label, content: humanizeDraft(parts, nick) };
   };
 
   const openerFor = (t: string) => (t === '简洁' ? null : openerT);

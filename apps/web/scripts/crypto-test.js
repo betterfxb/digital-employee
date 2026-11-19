@@ -9,7 +9,7 @@ const check = (ok, name) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if
 // 0) 编译真模块
 const tmp = path.join(__dirname, '.tmp-crypto');
 fs.rmSync(tmp, { recursive: true, force: true });
-execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts lib/kwMoney.ts lib/healthCheck.ts lib/autolock.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
+execSync('npx tsc lib/crypto.ts lib/tokenVault.ts lib/machineId.ts lib/remind.ts lib/leadScore.ts lib/report.ts lib/tiers.ts lib/bizTrend.ts lib/backupCrypto.ts lib/accessPw.ts lib/autoReply.ts lib/autoCfg.ts lib/csvParse.ts lib/marketing.ts lib/commentViews.ts lib/videoStats.ts lib/repair.ts lib/funnel.ts lib/attribution.ts lib/visitDue.ts lib/compliance.ts lib/dealMath.ts lib/heartbeat.ts lib/monthly.ts lib/templates.ts lib/kwMoney.ts lib/healthCheck.ts lib/autolock.ts --outDir scripts/.tmp-crypto --module commonjs --target es2020 --skipLibCheck --esModuleInterop --rootDir .', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
 const { encryptToken, decryptToken } = require('./.tmp-crypto/lib/crypto.js');
 const vault = require('./.tmp-crypto/lib/tokenVault.js');
 const { matchBind, fingerprint, machineCode } = require('./.tmp-crypto/lib/machineId.js');
@@ -199,6 +199,13 @@ check(lowWarn([{ id: 'x', play: 10, like: 0, comment: 0, share: 0 }]).size === 0
 check(nextGapMs(0) === 60000 && nextGapMs(0.5) === 150000 && nextGapMs(0.999999) >= 239000, 'areply 冷却60-240秒边界');
 check(replyGate('mock', false, '').gate.includes('live') && replyGate('live', false, 'https://x').gate.includes('能力'), 'areply 通道门先于能力门');
 check(replyGate('live', true, '').gate.includes('能力') && replyGate('live', true, 'https://x').ready === true, 'areply 能力空拒与三门就绪');
+
+// S163 文案拟人化纯函数（合法：只改读感，不改发送/不碰风控）
+const { humanizeDraft, generateReply } = require('./.tmp-crypto/lib/templates.js');
+check(humanizeDraft(['在的刀友，本店接单中。', '刀友下单很简单，发段位就行。'], '刀友') === '在的刀友，本店接单中。下单很简单，发段位就行。', 'tpl 拟人化：首段留昵称+后续段去重复昵称');
+check(humanizeDraft(['', null, '   ', '你好。']) === '你好。', 'tpl 拟人化：空段过滤');
+check(generateReply({ content: '加V代练', intent: '垃圾', nick: 'x', product: 'y' }).length === 1, 'tpl 垃圾意图仍恰好1条（J4不破）');
+check(generateReply({ content: '这单多少钱', intent: '高意向', nick: '刀友', product: '跑刀' }).every((d) => !d.content.includes('  ')), 'tpl 候选无空格拼接机器人腔');
 
 // 20) S122 数据自愈纯函数
 const { recoveryOrder, isSaneState } = require('./.tmp-crypto/lib/repair.js');
